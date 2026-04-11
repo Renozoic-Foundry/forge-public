@@ -1,0 +1,43 @@
+name: browser-test
+display_name: "Browser Test Automation"
+description: "Automated browser testing for UI-facing acceptance criteria"
+version: 1
+category: devtools
+requires: []
+conflicts: []
+
+recommendation:
+  when: "Projects with web UI components that need visual verification"
+  not_when: "Backend-only or CLI projects with no web interface"
+
+files:
+  - .forge/bin/forge-browser-test.sh
+  - .forge/bin/forge-browser-test.ps1
+  - .forge/templates/browser-test-template.js
+
+injects:
+  - target: .claude/commands/close.md
+    marker: browser-test
+  - target: .forge/commands/close.md
+    marker: browser-test
+  - target: .claude/commands/implement.md
+    marker: browser-test
+  - target: .forge/commands/implement.md
+    marker: browser-test
+
+onboarding:
+  phase: features
+  prompt: "Enable browser test automation for UI verification?"
+  explain: |
+    Automatically detects UI-facing acceptance criteria in specs and
+    generates browser test scripts. Captures screenshots and videos
+    as evidence during /implement and verifies them during /close.
+
+    Requires: Node.js, Playwright (installed automatically on first run).
+
+    Skip this if: your project has no web UI, or you have your own
+    browser testing setup.
+
+    Files added: 3 (test runner scripts + template)
+    Command modifications: close.md (visual evidence gate), implement.md (test generation)
+  default: false

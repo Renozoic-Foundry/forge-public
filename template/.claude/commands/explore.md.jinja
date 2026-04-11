@@ -1,0 +1,114 @@
+---
+name: explore
+description: "Pre-spec investigation — produces research artifacts before committing to a full spec"
+model_tier: sonnet
+workflow_stage: planning
+---
+# Framework: {{ project_name }}
+# Model-Tier: sonnet
+Run a lightweight pre-spec investigation on a topic. Produces a research artifact at `docs/research/explore-<topic-slug>.md` before committing to a full spec.
+
+If $ARGUMENTS is `?` or `help`:
+  Print:
+  ```
+  /explore — Pre-spec investigation for topics that need research before committing to a spec.
+  Usage: /explore <topic>
+  Arguments:
+    topic (required) — the topic, question, or hypothesis to investigate.
+  Behavior:
+    - Creates a research artifact at docs/research/explore-<topic-slug>.md
+    - Investigates the topic: reads relevant files, searches codebase, checks external patterns
+    - Documents findings in a structured format (question, approach, findings, recommendation)
+    - Recommendation is one of: spec it, defer, drop
+    - Optionally graduates to a spec via /spec --from-explore <topic>
+  Where it fits:
+    /brainstorm     "What should I work on?"     → Agent looks inward at project signals
+    /interview      "Help me think through X"    → Agent asks questions, user discovers
+    /explore        "Is this idea viable?"       → Agent investigates, produces research artifact
+    /spec           "I know what I want"         → Agent writes the spec, fast
+  Lifecycle state: produces a `proposed` artifact — optional entry point before `draft`.
+  See: docs/process-kit/spec-driven-harness-loop.md
+  ```
+  Stop — do not execute any further steps.
+
+---
+
+## [mechanical] Step 1 — Parse topic
+
+Extract the topic from $ARGUMENTS. If no topic is provided, ask the user:
+"What topic or question would you like to investigate?"
+
+Generate a URL-safe slug from the topic (lowercase, hyphens for spaces, strip special characters).
+
+## [mechanical] Step 2 — Check for existing research
+
+Check if `docs/research/explore-<topic-slug>.md` already exists.
+- If it exists: report "Existing research found at docs/research/explore-<topic-slug>.md" and ask whether to update it or start fresh.
+- If not: proceed to Step 3.
+
+## [mechanical] Step 3 — Investigate
+
+Conduct a lightweight investigation of the topic:
+
+1. **Codebase search**: Search the project for files, patterns, and prior art related to the topic.
+2. **Spec and backlog check**: Search `docs/specs/README.md` and `docs/backlog.md` for existing specs or backlog items covering this topic.
+3. **Signal check**: Search `docs/sessions/signals.md` for related signals.
+4. **Process docs check**: Search `docs/process-kit/` for relevant documentation.
+5. **Research archive check**: Search `docs/research/` for prior research on related topics.
+
+Synthesize findings into a structured assessment.
+
+## [mechanical] Step 4 — Write research artifact
+
+Create `docs/research/explore-<topic-slug>.md` with the following structure:
+
+```markdown
+# Explore: <Topic>
+
+- Date: YYYY-MM-DD
+- Status: proposed
+- Investigator: Claude
+
+## Question / Hypothesis
+
+<What we are trying to determine. One or two sentences.>
+
+## Investigation Approach
+
+<What sources were checked and what methods were used.>
+- <source 1>
+- <source 2>
+
+## Findings
+
+- <finding 1>
+- <finding 2>
+- <finding 3>
+
+## Prior Art
+
+<Existing specs, signals, or research that relate to this topic.>
+
+## Recommendation
+
+**<spec it | defer | drop>**
+
+<One paragraph justification for the recommendation.>
+
+## References
+
+- <link or file path 1>
+- <link or file path 2>
+```
+
+## [decision] Step 5 — Present findings and next action
+
+Present a summary of findings and the recommendation to the user.
+
+> **Choose** — type a number or keyword:
+> | # | Action | What happens |
+> |---|--------|--------------|
+> | **1** | `/spec --from-explore <topic>` | Graduate to a full spec, pre-populated with explore findings |
+> | **2** | `stop` | Research complete — no further action needed |
+>
+> _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_

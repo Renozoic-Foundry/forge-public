@@ -1,0 +1,51 @@
+command: onboarding
+type: slash-command
+
+structure:
+  required_sections:
+    - "## [mechanical] Step 0"
+    - "## [decision] Phase 1"
+    - "## [decision] Phase 2"
+    - "## [decision] Phase 3"
+    - "## [decision] Phase 4"
+    - "## [mechanical] Phase 5"
+  required_strings:
+    - ".forge/onboarding.yaml"
+    - ".forge/feature-files.yaml"
+    - "pending"
+    - "in-progress"
+    - "complete"
+    - "CLAUDE.md"
+    - ".copier-answers.yml"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 600
+  min_lines: 80
+
+references:
+  files_must_exist:
+    - ".forge/onboarding.yaml"
+    - ".forge/feature-files.yaml"
+  commands_must_exist:
+    - "now"
+    - "spec"
+    - "forge"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "sonnet"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "onboarding"
+    model_tier: "sonnet"
+    workflow_stage: "lifecycle"

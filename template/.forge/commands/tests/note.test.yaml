@@ -1,0 +1,40 @@
+command: note
+type: slash-command
+
+structure:
+  required_strings:
+    - "scratchpad.md"
+    - "[validate]"
+    - "[session]"
+    - "[evolve]"
+    - "[ ]"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 100
+  min_lines: 10
+
+references:
+  files_must_exist: []
+  commands_must_exist:
+    - "close"
+    - "session"
+    - "evolve"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "haiku"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "note"
+    model_tier: "haiku"
+    workflow_stage: "session"

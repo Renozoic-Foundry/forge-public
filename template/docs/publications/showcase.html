@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Showcase — {{ PROJECT_NAME }}</title>
+<style>
+  /* ── Theme custom properties ── */
+  :root {
+    --color-bg: #ffffff;
+    --color-text: #1a1a2e;
+    --color-heading: #16213e;
+    --color-accent: #0f3460;
+    --color-accent-light: #e8eef6;
+    --color-border: #d1d5db;
+    --color-muted: #6b7280;
+    --color-attribution-bg: #f0f4f8;
+    --color-disclaimer-bg: #fef9e7;
+    --color-disclaimer-border: #f0c929;
+    --color-hero-bg: #16213e;
+    --color-hero-text: #ffffff;
+    --color-card-bg: #f9fafb;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-heading: var(--font-body);
+    --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+    --max-width: 64rem;
+    --spacing: 1.5rem;
+  }
+
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--color-text);
+    background: var(--color-bg);
+    line-height: 1.7;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: var(--color-hero-bg);
+    color: var(--color-hero-text);
+    padding: 4rem var(--spacing);
+    text-align: center;
+  }
+  .hero h1 { font-size: 2.5rem; margin-bottom: 0.75rem; color: var(--color-hero-text); }
+  .hero .tagline { font-size: 1.25rem; opacity: 0.85; max-width: 40rem; margin: 0 auto; }
+  .hero .meta { margin-top: 1.5rem; font-size: 0.9rem; opacity: 0.65; }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 2rem var(--spacing);
+  }
+
+  /* ── Typography ── */
+  h2 { font-size: 1.5rem; color: var(--color-heading); margin-top: 2.5rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.125rem; color: var(--color-accent); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+  p { margin-bottom: 1rem; }
+  ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+  li { margin-bottom: 0.25rem; }
+  code { font-family: var(--font-mono); background: var(--color-accent-light); padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+
+  /* ── Feature cards ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+  .card h3 { margin-top: 0; }
+
+  /* ── Audience variants ── */
+  .audience-technical,
+  .audience-executive,
+  .audience-influencer { display: none; }
+
+  body.variant-technical .audience-technical { display: block; }
+  body.variant-executive .audience-executive { display: block; }
+  body.variant-influencer .audience-influencer { display: block; }
+  .audience-all { display: block; }
+
+  /* ── Highlight stat row ── */
+  .stat-row {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 2rem 0;
+  }
+  .stat {
+    text-align: center;
+    padding: 1.5rem 2rem;
+    background: var(--color-accent-light);
+    border-radius: 8px;
+    min-width: 10rem;
+  }
+  .stat .value { font-size: 2.25rem; font-weight: 700; color: var(--color-accent); }
+  .stat .label { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.25rem; }
+
+  /* ── Screenshots / visuals placeholder ── */
+  .visual-placeholder {
+    background: var(--color-accent-light);
+    border: 2px dashed var(--color-border);
+    border-radius: 8px;
+    padding: 3rem;
+    text-align: center;
+    color: var(--color-muted);
+    margin: 1.5rem 0;
+  }
+
+  /* ── Attribution ── */
+  .attribution {
+    background: var(--color-attribution-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-top: 3rem;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+  .attribution h2 { font-size: 1rem; margin-top: 0; margin-bottom: 0.5rem; color: var(--color-heading); }
+
+  /* ── Disclaimer ── */
+  .disclaimer {
+    background: var(--color-disclaimer-bg);
+    border: 1px solid var(--color-disclaimer-border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-top: 1.5rem;
+    margin-bottom: 2rem;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+  .disclaimer h2 { font-size: 1rem; margin-top: 0; margin-bottom: 0.5rem; color: var(--color-heading); }
+</style>
+</head>
+
+<!--
+  AUDIENCE VARIANT: Add one of these classes to <body>:
+    variant-technical   — Architecture depth and implementation detail
+    variant-executive   — Value delivered and business outcomes
+    variant-influencer  — Story arc and shareability
+-->
+<body class="variant-technical">
+
+  <!-- ── Hero ── -->
+  <div class="hero">
+    <h1>{{ PROJECT_NAME }}</h1>
+    <div class="tagline">{{ PROJECT_TAGLINE }}</div>
+    <div class="meta">{{ AUTHOR_NAME }} · {{ SHOWCASE_DATE }}</div>
+  </div>
+
+  <div class="container">
+
+    <!-- ── Overview (all audiences) ── -->
+    <div class="audience-all">
+      <h2>Overview</h2>
+      <p>{{ PROJECT_OVERVIEW }}</p>
+
+      <div class="visual-placeholder">
+        [ Screenshot or diagram — replace this placeholder ]
+      </div>
+    </div>
+
+    <!-- ── Technical audience ── -->
+    <div class="audience-technical">
+      <h2>Architecture</h2>
+      <p>{{ ARCHITECTURE_DESCRIPTION }}</p>
+
+      <h2>Key Features</h2>
+      <div class="card-grid">
+        <div class="card">
+          <h3>{{ FEATURE_1_TITLE }}</h3>
+          <p>{{ FEATURE_1_DESCRIPTION }}</p>
+        </div>
+        <div class="card">
+          <h3>{{ FEATURE_2_TITLE }}</h3>
+          <p>{{ FEATURE_2_DESCRIPTION }}</p>
+        </div>
+        <div class="card">
+          <h3>{{ FEATURE_3_TITLE }}</h3>
+          <p>{{ FEATURE_3_DESCRIPTION }}</p>
+        </div>
+      </div>
+
+      <h2>Technology Stack</h2>
+      <ul>
+        <li>{{ TECH_1 }}</li>
+        <li>{{ TECH_2 }}</li>
+        <li>{{ TECH_3 }}</li>
+      </ul>
+    </div>
+
+    <!-- ── Executive audience ── -->
+    <div class="audience-executive">
+      <h2>Value Delivered</h2>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="value">{{ STAT_1_VALUE }}</div>
+          <div class="label">{{ STAT_1_LABEL }}</div>
+        </div>
+        <div class="stat">
+          <div class="value">{{ STAT_2_VALUE }}</div>
+          <div class="label">{{ STAT_2_LABEL }}</div>
+        </div>
+        <div class="stat">
+          <div class="value">{{ STAT_3_VALUE }}</div>
+          <div class="label">{{ STAT_3_LABEL }}</div>
+        </div>
+      </div>
+
+      <h2>Business Outcomes</h2>
+      <ul>
+        <li>{{ OUTCOME_1 }}</li>
+        <li>{{ OUTCOME_2 }}</li>
+        <li>{{ OUTCOME_3 }}</li>
+      </ul>
+    </div>
+
+    <!-- ── Influencer audience ── -->
+    <div class="audience-influencer">
+      <h2>The Problem</h2>
+      <p>{{ PROBLEM_NARRATIVE }}</p>
+
+      <h2>The Solution</h2>
+      <p>{{ SOLUTION_NARRATIVE }}</p>
+
+      <h2>Why You Should Care</h2>
+      <p>{{ WHY_CARE }}</p>
+    </div>
+
+    <!-- ── Attribution (mandatory) ── -->
+    <div class="attribution">
+      <h2>Attribution</h2>
+      <p>
+        This work builds on established methodologies:
+        <strong>Knowledge-Centered Service (KCS) v6</strong> for knowledge reuse and continuous improvement;
+        <strong>Stage-Gate</strong> for phased delivery with quality checkpoints;
+        and the <strong>AI-Assisted Integration Framework (AAIF)</strong> (Linux Foundation) for agent-driven development practices.
+        The FORGE framework synthesizes these foundations into a spec-driven, evidence-gated workflow.
+      </p>
+    </div>
+
+    <!-- ── Disclaimer (mandatory) ── -->
+    <div class="disclaimer">
+      <h2>Disclaimer</h2>
+      <p>
+        This content is experimental and provided for informational purposes only.
+        It has not been independently audited or verified.
+        Mention of any methodology, framework, or tool does not constitute an endorsement
+        by its authors or maintainers. Use your own judgment before applying any
+        practices described here.
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>

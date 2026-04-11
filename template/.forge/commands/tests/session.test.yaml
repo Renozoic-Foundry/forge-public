@@ -1,0 +1,46 @@
+command: session
+type: slash-command
+
+structure:
+  required_sections:
+    - "## "
+  required_strings:
+    - "docs/sessions/"
+    - "_template.md"
+    - "scratchpad.md"
+    - "error-log.md"
+    - "insights-log.md"
+    - "evolve loop review"
+    - "registry.md"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 200
+  min_lines: 20
+
+references:
+  files_must_exist:
+    - "docs/sessions/_template.md"
+  commands_must_exist:
+    - "close"
+    - "implement"
+    - "now"
+    - "spec"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "haiku"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "session"
+    model_tier: "haiku"
+    workflow_stage: "session"

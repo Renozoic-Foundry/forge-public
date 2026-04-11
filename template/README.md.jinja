@@ -1,0 +1,43 @@
+# {{ project_name }}
+
+{{ project_description }}
+
+## Getting Started
+
+1. Run `/now` to see the current project state
+2. Run `/spec <description>` to create your first spec
+3. Run `/implement <spec-number>` to start building
+
+## How This Project Works
+
+This project uses [FORGE](https://github.com/bwcarty/forge-public) (Framework for Organized Reliable Gated Engineering) for spec-driven, evidence-gated development.
+
+**Two hard rules:**
+1. Every change has a matching spec
+2. Every session ends with a session log
+
+### Specs as Context Anchors
+
+Specs are more than task descriptions — they are **context anchors** that persist decision context across AI sessions, team changes, and time. When a new session begins, the spec carries forward the *why* behind each decision, not just the *what*. This means context survives session boundaries instead of being lost and rediscovered. Martin Fowler's writing on context anchoring (2026) validated this pattern, though FORGE has practiced it from the start: every spec is a living document that prevents context loss in AI-assisted workflows.
+
+### Key Commands
+
+```bash
+{{ test_command }}
+{{ lint_command }}
+```
+
+## Project Structure
+
+```
+docs/
+  specs/          # Versioned spec files
+  sessions/       # Session logs and signals
+  decisions/      # Architecture decision records
+  backlog.md      # Scored and ranked backlog
+  process-kit/    # Runbooks, rubrics, checklists
+```
+
+## License
+
+<!-- customize: add your license -->

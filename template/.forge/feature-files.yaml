@@ -1,0 +1,49 @@
+# DEPRECATED — superseded by .forge/modules/*/module.yaml (Spec 139)
+# Retained as fallback for projects that haven't upgraded to the module system.
+# New features should be defined as modules, not added here.
+#
+# .forge/feature-files.yaml
+# Feature-to-file mapping for onboarding Phase 2 (Spec 073).
+# When a user declines a feature during onboarding, all listed files/directories
+# are deleted. Directory entries (ending with /) are removed recursively.
+
+feature_files:
+  nanoclaw:
+    description: "NanoClaw — Async Gate Decisions"
+    files:
+      - "docker-compose.nanoclaw.yml"
+      - ".forge/adapters/nanoclaw.sh"
+      - ".forge/bin/forge-configure-nanoclaw.sh"
+      - ".forge/bin/forge-configure-nanoclaw.ps1"
+      - ".forge/bin/forge-setup-nanoclaw.sh"
+      - ".forge/bin/forge-setup-nanoclaw.ps1"
+      - ".forge/templates/nanoclaw-skill.json"
+      - ".claude/commands/configure-nanoclaw.md"
+      - ".claude/commands/nanoclaw.md"
+    agents_md_sections:
+      - "NanoClaw Integration"
+      - "Swarm Budget Ceilings"  # only if nanoclaw is the only consumer
+    claude_md_sections: []
+
+  compliance:
+    description: "Compliance Profiles — Regulatory Traceability"
+    files:
+      - "docs/compliance/"
+    agents_md_sections:
+      - "Compliance profile rules"
+    claude_md_sections:
+      - "Compliance profile rules"
+
+  publications:
+    description: "Publications — Article & Deck Templates"
+    files:
+      - "docs/publications/"
+    agents_md_sections: []
+    claude_md_sections: []
+
+  devcontainer:
+    description: "Dev Container — Codespace Configuration"
+    files:
+      - ".devcontainer/"
+    agents_md_sections: []
+    claude_md_sections: []

@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FORGE Handoff Artifact",
+  "type": "object",
+  "required": ["role", "spec_id", "timestamp", "status"],
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": ["spec-author", "devils-advocate", "implementer", "validator"]
+    },
+    "spec_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "failed", "blocked"]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "gate_decision": {
+      "type": "string",
+      "enum": ["PASS", "CONDITIONAL_PASS", "FAIL"]
+    },
+    "validation_result": {
+      "type": "string",
+      "enum": ["PASS", "FAIL"]
+    },
+    "token_usage": { "type": "integer", "default": 0 },
+    "cost_usd": { "type": "number", "default": 0.0 },
+    "duration_seconds": { "type": "integer", "default": 0 },
+    "notes": { "type": "string", "default": "" }
+  }
+}

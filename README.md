@@ -17,7 +17,7 @@ These capabilities are built into every FORGE project out of the box:
 - **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
 - **Role-separated agents** — 16 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **33 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
+- **29 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
 - **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
 
 ### Enhancing features (opt-in)
@@ -98,6 +98,8 @@ cd my-project
 ```
 
 Then open the project in your AI-assisted IDE and run `/now` (Claude Code) or let your assistant read `AGENTS.md`.
+
+**Want the full walkthrough?** See the [Getting Started tutorial](docs/getting-started.md) — zero to first closed spec in a single session. Or read the [Concept Overview](docs/concept-overview.md) to understand what FORGE is and why it exists.
 
 ### What onboarding configures
 
@@ -229,7 +231,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 209 specs across 49 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 218 specs across 50 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

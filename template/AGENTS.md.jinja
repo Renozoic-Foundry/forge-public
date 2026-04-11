@@ -1,0 +1,756 @@
+# Framework: FORGE
+# AGENTS.md — AAIF-compliant agent configuration
+# Standard: Agentic AI Foundation (AAIF), Linux Foundation, 2025
+
+## Agent Identity
+
+- **Name**: Claude Code
+- **Provider**: Anthropic
+- **Role**: AI development partner for spec-driven iterative delivery
+- **Framework**: FORGE (Framework for Organized Reliable Gated Engineering)
+- **Primary instructions**: [CLAUDE.md](CLAUDE.md) (project-specific operating contract)
+
+## Project Context
+
+{{ project_description }}
+
+```yaml
+# Strategic scope — used by /matrix to evaluate spec fit (Spec 110)
+# Defines what this project IS and IS NOT. /matrix classifies draft specs
+# as on-mission, borderline, or scope-creep based on this definition.
+# If absent, /matrix infers scope from CLAUDE.md project description.
+forge.strategic_scope: |
+  This project is a spec-driven development workflow template.
+  Core loop: spec → implement → close → learn (with evidence gates).
+  In scope: spec lifecycle, gates, evidence capture, process enforcement,
+  signal-driven improvement, template bootstrapping via Copier.
+  Out of scope: runtime infrastructure (scheduling, dispatch — that's NanoClaw),
+  code analysis engines (that's MCP servers), IDE extensions or web apps
+  (those are separate products), AI model features (those are upstream).
+```
+
+```yaml
+# Session context briefing — controls /now "Last time on [project]" section (Spec 105)
+# When true (default), /now reads recent session logs, signals, and scratchpad
+# to provide a continuity brief at session start. Set false to skip.
+forge.context.session_briefing: true
+```
+
+## Capabilities
+
+- Code generation, modification, and refactoring
+- Test authoring and execution
+- Process management (spec lifecycle, signal capture, session logging)
+- Documentation authoring and maintenance
+- Git operations (commit, status, diff, log — no force push without explicit request)
+- Research and codebase exploration
+
+## Bounded Autonomy
+
+### Granted (no confirmation needed)
+
+**Onboarding gate**: If `.forge/onboarding.yaml` exists with `status: pending` or `status: in-progress`, execute the onboarding flow before any other work. This is a one-time guided setup that configures the project for the team's needs.
+
+During an active `/implement` execution:
+- Edit source code, tests, and configuration within spec scope
+- Run tests and linter (`{{ test_command }}`, `{{ lint_command }}`)
+- Update spec tracking files (README.md index, CHANGELOG.md, backlog.md)
+- Update spec status through lifecycle states
+- Create new files required by the spec
+- Add entries to signals log, session logs, scratchpad
+
+At any time:
+- Read any file in the project
+- Search codebase (grep, glob)
+- Run non-destructive git commands (status, diff, log, branch)
+- Create or update spec documents (`docs/specs/`)
+- Create or update session documents (`docs/sessions/`)
+
+### Requires Confirmation
+
+- **Destructive git operations**: force push, reset --hard, branch deletion
+- **Push to remote**: always ask before `git push`
+- **PR creation**: always ask before `gh pr create`
+- **Out-of-scope changes**: edits to files not covered by the active spec
+- **Schema-breaking changes**: removing or reordering existing fields
+- **Dependency additions**: new entries in project dependencies (optional deps exempt during `/implement`)
+
+### Authorization-required commands
+
+The following commands require **explicit user invocation in the current message**. They must never be executed because a session summary, "pending tasks" list, prior conversation context, or "logical next step" inference implies they are due. A new, unambiguous user instruction is required every time:
+
+- `/close` — terminal lifecycle state; commits, pushes, and writes gate evidence
+- `/forge stoke` — modifies project files via copier update
+- `git push` (standalone, outside `/implement` scope)
+- Destructive git operations: `reset --hard`, `revert`, force push, `branch -D`
+
+**Context compaction rule**: After any context compaction boundary (session summary injected), treat ALL authorization-required commands as unissued. A summary describing them as "pending" or "the logical next step" is informational context — not authorization. Surface them to the user and wait for an explicit instruction.
+
+### Prohibited
+
+- Skip git hooks (`--no-verify`)
+- Commit secrets, credentials, or `.env` files
+- Modify git config
+- Execute destructive shell commands without explicit request
+
+## Delegation Contract
+
+When the human invokes `/implement NNN`:
+1. Agent receives autonomy bounded by the spec's scope section
+2. Agent may edit any file listed in the spec's Implementation Summary
+3. Agent must flag immediately if work would exceed spec scope
+4. Autonomy ends when `/implement` completes (status → `implemented`)
+
+When the human invokes `/close NNN`:
+1. Agent auto-chains: status transition → `/retro` → `/matrix`
+2. Agent pauses only at the final "pick next" decision point
+3. Human makes the decision; agent executes
+
+Outside of active commands:
+1. Agent may only edit spec documents and session files (edit-gate rule)
+2. Implementation files require an active `/implement` execution
+3. Agent flags: "This needs a spec first" for unspecced changes
+
+## Signal Capture
+
+Agent automatically captures signals at lifecycle transitions:
+- **`/close`** → triggers inline retro (content, process, architecture signals)
+- **`/note [signal]`** → mid-session signal capture (replaces deprecated `/harvest`)
+- **`/note [bug]`** → structured bug reports with severity and routing (replaces deprecated `/bug`)
+- **`/note`** → quick observations routed to scratchpad
+
+All signals feed into `docs/sessions/signals.md` and inform `/matrix` re-scoring.
+
+## Evidence Gates
+
+See [CLAUDE.md — Evidence gates](CLAUDE.md) for the gate table and transition rules. Gate failures produce structured feedback identifying what is missing.
+
+## Workflow Map (authoritative docs)
+
+- Spec lifecycle and index: `docs/specs/README.md`, `docs/specs/CHANGELOG.md`
+- Prioritized backlog (scored, ranked): `docs/backlog.md`
+- Session logs: `docs/sessions/` (template: `docs/sessions/_template.md`)
+- Signals log: `docs/sessions/signals.md`
+- Human validation runbook: `docs/process-kit/human-validation-runbook.md`
+- Scoring rubric: `docs/process-kit/scoring-rubric.md`
+- Architecture decisions: `docs/decisions/`
+
+## Command Index
+
+Commands are defined in `.forge/commands/` (canonical source) and synced to agent-specific
+directories by `forge-sync-commands.sh`. For agents without native command support, invoke
+by name: "Run the /implement workflow for Spec 001."
+
+### FORGE CLI (Spec 130)
+
+The `bin/forge` script provides a CLI entry point for any AI agent or CI pipeline:
+
+```bash
+bin/forge <command> [spec-number] [--plain|--json]
+```
+
+The CLI auto-detects the active agent runtime (Claude Code, Aider, generic) and dispatches
+accordingly. Use `--plain` to output the assembled prompt to stdout for piping to any LLM CLI.
+Use `--json` for structured output suitable for CI/script consumption.
+
+On Windows, use `bin\forge.ps1` for native PowerShell support.
+
+### Planning & Discovery
+
+| Command | Description | Model Tier |
+|---------|-------------|-----------|
+| /explore | Pre-spec investigation — produces research artifacts before committing to a full spec | sonnet |
+| /interview | Socratic elicitation for thinking through problems | sonnet |
+| /brainstorm | Discover spec opportunities from signals and roadmap | haiku |
+| /spec | Create a new spec from the template | sonnet |
+| /decision | Create a new Architecture Decision Record (ADR) | sonnet |
+| /revise | Revise an existing spec based on feedback or correction | sonnet |
+| /spec-gate | ~~DEPRECATED~~ — enforcement moved to AGENTS.md pre-edit hook | sonnet |
+| /matrix | Update and present the prioritization matrix | haiku |
+
+### Implementation & Testing
+
+| Command | Description | Model Tier |
+|---------|-------------|-----------|
+| /implement | Build a spec end-to-end with evidence gates | sonnet |
+| /test | Run the test suite and report results | sonnet |
+| /trace | Generate bidirectional traceability matrix from spec annotations | sonnet |
+| /tab | Initialize or close a multi-tab session for parallel development | sonnet |
+| /parallel | Run multiple specs in parallel using git worktrees | sonnet |
+
+### Review & Validation
+
+| Command | Description | Model Tier |
+|---------|-------------|-----------|
+| /close | Close a spec: confirm validation, capture signals, update priorities | sonnet |
+| /retro | ~~DEPRECATED~~ — functionality inline in /close chain | sonnet |
+| /harvest | ~~DEPRECATED~~ — replaced by /note [signal] | sonnet |
+| /handoff | ~~DEPRECATED~~ — absorbed by /now "review" option | sonnet |
+| /evolve | Run the KCS Evolve Loop review | sonnet |
+
+### Session Management
+
+| Command | Description | Model Tier |
+|---------|-------------|-----------|
+| /now | Review current project state and suggest next action | haiku |
+| /session | Create or update the session log | haiku |
+| /note | Add a scratchpad note for the next process checkpoint | haiku |
+| /bug | ~~DEPRECATED~~ — replaced by /note [bug] | haiku |
+| /insights | Mine FORGE process data for cross-session insights | haiku |
+
+### Lifecycle
+
+| Command | Description | Model Tier |
+|---------|-------------|-----------|
+| /forge | Unified FORGE lifecycle — subcommands: init, stoke, status, help | sonnet |
+| /onboarding | First-session interactive project configuration (also: /forge init) | sonnet |
+| /scheduler | Run multi-agent scheduler for dependency-aware parallel execution | sonnet |
+
+### Configuration
+
+| Command | Description | Model Tier |
+|---------|-------------|-----------|
+| /config-change | Propose and apply changes to agent configuration files | sonnet |
+| /configure-nanoclaw | Configure NanoClaw hardware key enrollment and messaging | sonnet |
+| /nanoclaw | Manage the NanoClaw container — start, stop, status, logs | sonnet |
+| /skills | ~~DEPRECATED~~ — replaced by /forge help and bin/forge list | haiku |
+
+**Manual invocation (Codex, generic agents):** If your agent does not support slash commands,
+paste the content of `.forge/commands/<name>.md` into your conversation, or instruct your agent:
+"Follow the /implement workflow from AGENTS.md for Spec NNN."
+
+## Autonomy Levels (L0–L4)
+
+FORGE defines five autonomy levels that govern how much latitude the AI agent has during a session. The default is **L1**. Levels can be overridden per lane or per spec in the frontmatter (`Autonomy: L2`).
+
+| Level | Name | Human Involvement | Description |
+|-------|------|-------------------|-------------|
+| **L0** | Full Manual | Human performs all work; agent advises only | Agent may answer questions, suggest approaches, and review code. Agent does NOT edit files, run commands, or create specs. |
+| **L1** | Human-Gated (default) | Agent drives; human approves every gate | Agent writes specs, implements code, runs tests. Human must approve each state transition (`proposed → draft`, `draft → in-progress`, `in-progress → implemented`, `implemented → closed`). Push, PR, deploy all require explicit confirmation. |
+| **L2** | Supervised Autonomy | Agent auto-chains mechanical steps; human approves decisions | Agent may auto-chain steps annotated `[mechanical]` (e.g., update index, run tests, update changelog). Human approval required at `[decision]` points (spec approval, validation, priority selection). |
+| **L3** | Trusted Autonomy | Agent completes full spec cycle; human reviews asynchronously | Agent may implement, test, and mark `implemented` without waiting for human at each gate. Human reviews async via `/close`. Devil's Advocate gate is mandatory. Budget ceilings enforced. |
+| **L4** | Full Autonomy | Agent operates end-to-end; human intervenes on exception only | Agent may create specs, implement, validate, and close. Kill switch and budget ceilings are the only hard stops. Reserved for mature projects with high test coverage and established trust. |
+
+### Human Involvement Matrix
+
+| Activity | L0 | L1 | L2 | L3 | L4 |
+|----------|----|----|----|----|-----|
+| Spec creation | Human | Agent (human approves) | Agent (human approves) | Agent | Agent |
+| Implementation | Human | Agent | Agent | Agent | Agent |
+| Test execution | Human | Agent | Agent | Agent | Agent |
+| State transitions | Human | Human approval each | Human at `[decision]` only | Async review | Agent (exception-based) |
+| Push / PR | Human | Human approval | Human approval | Agent (human notified) | Agent |
+| Deploy | Human | Human approval | Human approval | Human approval | Agent (with rollback) |
+
+### Gate Requirements by Level
+
+| Gate | L0–L1 | L2 | L3–L4 |
+|------|-------|----|-------|
+| Spec completeness (`draft → in-progress`) | Human confirms | Human confirms | Auto-validated by checklist |
+| Delivery (`in-progress → implemented`) | Human confirms ACs | Human confirms ACs | Devil's Advocate review required; auto-validated |
+| Validation (`implemented → closed`) | Human confirms | Human confirms | Human async review (L3) / auto with exception reporting (L4) |
+
+### Gate Enforcement Modes (Spec 160)
+
+FORGE gate checks are categorized as machine-verifiable, human-judgment-required, or confidence-gated (see `docs/process-kit/gate-categories.md`). Three enforcement modes determine how approval happens:
+
+| Mode | When Used | Approval Mechanism |
+|------|-----------|-------------------|
+| **Delegated** | L3/L4 + all ACs machine-verifiable + no human-judgment checks | Agent validates and closes autonomously. Three-layer evidence trail. |
+| **Chat** | Default. Human judgment needed, no regulatory burden of proof. | Human reviews Review Brief in conversation. |
+| **PAL** | High-trust workflows requiring hardware-authenticated approval. | Review Brief via NanoClaw, hardware key tap, cryptographic signature. *(Coming soon — see roadmap)* |
+
+**Review Brief**: /close outputs a structured Review Brief with three sections:
+- **Machine-Verified** — checks the AI verified autonomously (no human action needed)
+- **Needs Your Review** — items requiring human judgment, prioritized by risk
+- **Machine-Handled** — items verified by AI, not shown unless requested
+
+**Trust calibration**: /evolve tracks human correction rates for machine-verified checks and recommends category adjustments when patterns emerge.
+
+### Example Workflows
+
+**L1 (default) — Bug fix:**
+1. Human reports bug → Agent creates spec → Human approves
+2. Agent implements fix → Agent runs tests → Human reviews diff
+3. Human confirms ACs met → Agent updates status → Human approves push
+
+{% if include_advanced_autonomy %}
+**L2 — Standard feature:**
+1. Human picks spec from backlog → Agent auto-chains: status update, implementation, tests, index update
+2. Agent pauses at: "ACs satisfied — confirm?" → Human approves
+3. Agent auto-chains: changelog, session log, push prompt → Human approves push
+
+**L3 — Trusted batch work:**
+1. Agent picks top backlog spec → implements → runs Devil's Advocate checklist → marks `implemented`
+2. Human reviews async, runs `/close` when satisfied
+3. Budget ceiling breach → automatic pause and notification
+{% endif %}
+
+### Claude Code Permission Mode Mapping (Spec 117)
+
+FORGE autonomy levels map to Claude Code's native permission modes. This mapping is applied during `/onboarding` and can be updated via `/config-change`.
+
+| FORGE Level | Claude Code Mode | Rationale |
+|-------------|-----------------|-----------|
+| L0–L1 | `default` | Human approves every tool call — maximum oversight |
+| L2 | `auto` | Agent auto-executes safe tools; human approves risky ones |
+| L3–L4 | `bypassPermissions` | Agent operates freely within budget/kill-switch bounds |
+
+The mapping writes `defaultMode` to `.claude/settings.json`. Existing projects are unaffected until `/onboarding` is re-run or `/config-change` updates the autonomy level.
+
+### Trust Model Configuration
+
+Configure the project's autonomy defaults in this section. Override per-spec by adding `Autonomy: LN` to spec frontmatter. Default: L1 (human-gated). Lane overrides and graduation criteria are in the Runtime Configuration YAML block below.
+
+{% if include_advanced_autonomy %}
+### Auto-Progression Configuration
+
+Auto-progression controls which command chains (Spec 019) are allowed at each autonomy level. The chaining mechanism reads this section to decide whether to auto-chain or pause.
+
+```yaml
+# Auto-progression defaults (edit in AGENTS.md)
+auto_progression:
+  L0:
+    chains_enabled: false
+    # No chaining — human performs all work
+  L1:
+    chains_enabled: false
+    # No chaining — human approves every gate (current default)
+  L2:
+    chains_enabled: true
+    pause_at_gates: true          # Pause at [decision] steps
+    allowed_chains:
+      - implement -> close        # /implement chains to /close on success
+      - close -> implement_next   # /close chains to /implement next on success
+    max_chain_depth: 3            # Max commands in a single chain before forced pause
+    require_confirmation_at:
+      - implement_next            # Always confirm which spec to pick
+  L3:
+    chains_enabled: true
+    pause_at_gates: false         # Only pause on FAIL or budget breach
+    allowed_chains:
+      - implement -> close
+      - close -> implement_next
+      - brainstorm -> spec        # Can auto-create specs from recommendations
+    max_chain_depth: 10
+    require_confirmation_at: []   # No mandatory pauses (budget ceiling is the safeguard)
+  L4:
+    chains_enabled: true
+    pause_at_gates: false
+    allowed_chains:
+      - implement -> close
+      - close -> implement_next
+      - brainstorm -> spec
+      - spec -> implement         # Full autonomous cycle
+    max_chain_depth: unlimited
+    require_confirmation_at: []
+```
+
+**Reading auto-progression at runtime**: The chaining mechanism (Command Chain Declaration in each command) checks:
+1. Current autonomy level (from `default_autonomy` or spec-level override)
+2. Whether `chains_enabled` is true for that level
+3. Whether the specific chain is in `allowed_chains`
+4. Whether `pause_at_gates` applies (or `--pause-at-gates` flag overrides)
+5. Whether `max_chain_depth` has been reached
+
+If any check fails, the chain halts and reports which condition stopped it.
+{% endif %}
+
+### Budget Ceilings per Lane
+
+Budget ceilings prevent runaway resource consumption. When a ceiling is breached, the agent pauses, reports current state, and waits for human authorization to continue.
+
+| Lane | Token Limit | Cost Ceiling | Time Limit | Max Retries | Escalation |
+|------|-------------|-------------|------------|-------------|------------|
+| `hotfix` | 50K tokens | $2.00 | 30 min | 3 | Pause + notify |
+| `small-change` | 100K tokens | $5.00 | 1 hour | 5 | Pause + notify |
+| `standard-feature` | 300K tokens | $15.00 | 4 hours | 10 | Pause + notify |
+| `process-only` | 50K tokens | $2.00 | 30 min | 3 | Pause + notify |
+
+**Escalation procedure:** On budget breach, agent must:
+1. Save all work in progress (commit to branch if possible)
+2. Log breach details in session log (ceiling hit, work completed so far, work remaining)
+3. Pause and notify human with summary
+4. Wait for explicit authorization to continue with extended budget or scope reduction
+
+{% if include_advanced_autonomy %}
+### Swarm Budget Ceilings (Spec 042)
+
+When running `/parallel` (multi-agent), a swarm-level budget ceiling applies across ALL agents:
+
+| Config | Default | Description |
+|--------|---------|-------------|
+| `swarm_ceiling_usd` | 5.00 | Maximum total spend across all parallel agents |
+| `swarm_ceiling_tokens` | 500,000 | Maximum total tokens (alternative ceiling) |
+| `allocation_strategy` | `equal` | `equal` = ceiling / N agents; `priority_weighted` = future |
+| Alert thresholds | 50%, 80%, 90% | Configurable per-threshold actions (notify / warn / halt) |
+
+Config file: `docs/sessions/swarm-budget.yaml`
+State file (auto-updated): `docs/sessions/swarm-budget-state.md`
+
+**Swarm halt procedure:** When 100% ceiling reached, all agents are halted immediately, worktrees preserved. Human must authorize continuation with extended budget or reduced scope.
+
+**NanoClaw alerts:** Set `notify_via: nanoclaw` in `docs/sessions/swarm-budget.yaml` to receive threshold alerts as push notifications.
+{% endif %}
+
+### Agent Role Separation
+
+In multi-agent configurations (L3+), roles are separated so no agent can advance its own work:
+
+| Role | Responsibility | Cannot |
+|------|---------------|--------|
+| **Spec Author** | Writes and revises specs | Implement or validate own specs |
+| **Devil's Advocate** | Reviews specs for gaps, risks, blind spots | Author or implement the spec under review |
+| **Implementer** | Delivers code and tests per spec | Write the spec being implemented or validate own work |
+| **Validator** | Independently verifies ACs, tests, schema, file scope, no secrets | Author, review, or implement the spec being validated |
+| **Orchestrator** | Routes work, enforces budgets, triggers gates | Perform any of the above roles for a given spec |
+
+In single-agent setups (L0–L2), Claude fills all roles sequentially but must explicitly switch hats (e.g., "Switching to Devil's Advocate review") and apply each role's checklist independently.
+
+{% if include_advanced_autonomy %}
+### Role Separation Levels (Spec 099)
+
+The `forge.roles.separation` setting controls whether role isolation is structural (same conversation, different checklists) or architectural (different processes):
+
+| Level | DA | Implementer | Validator | Use case |
+|-------|-----|-------------|-----------|----------|
+| `none` | Main conversation | Main conversation | Main conversation | Default — backward compatible |
+| `context-scoped` | Isolated subagent | Main conversation | Isolated subagent | Lane A recommended — independent judgment for review roles |
+| `full` | Isolated subagent | Isolated subagent (worktree) | Isolated subagent | Lane B / regulated — full process isolation |
+
+**Context isolation matrix:**
+
+| Role | Receives | Does NOT receive |
+|------|----------|-----------------|
+| Devil's Advocate (subagent) | Spec file, codebase read access | Conversation history, implementation plans |
+| Implementer (main context) | Full conversation context | N/A — context is an advantage |
+| Implementer (full, subagent) | Spec file, codebase, role instructions | Prior conversation, other role outputs |
+| Validator (subagent) | Spec file, codebase, test results | Implementer reasoning, DA findings, commit messages |
+
+Subagent role agents receive explicit tool exclusions: "You do NOT have Write, Edit, or NotebookEdit tools." All role invocations are logged to `docs/sessions/agent-file-registry.md`.
+{% endif %}
+
+## Runtime Configuration
+
+Configure the FORGE agent runtime. Parsed by `.forge/lib/config.sh`.
+
+{% raw %}
+```yaml
+forge:
+  methodology: none              # scrum | safe | kanban | devops | safety-critical | none
+                                 # Adapts command output language to match team methodology
+                                 # Set during /onboarding (Phase 1, step 10d) — language only, no behavioral change
+  lane: A                        # A (Lane B compliance engine is on the roadmap — not yet available)
+  gate:
+    provider: prompt             # prompt | pal | auto
+    timeout: 1800                # seconds (default 30 min)
+  roles:
+    separation: none         # none | context-scoped | full (Spec 099)
+                             # none: current behavior — all roles in main conversation
+                             # context-scoped: DA + validator as isolated subagents, implementer in main context
+                             # full: all roles as isolated subagents (implementer uses worktree)
+    devils_advocate:
+      enabled: true          # false to disable DA gate globally
+      skip_lanes: [hotfix]   # lanes that can bypass DA review
+      expiry_days: 7         # re-review if spec modified after this many days
+      model: sonnet          # model tier for DA subagent (when separation != none)
+    validator:
+      enabled: true          # false to disable validator gate globally
+      skip_lanes: []         # validator runs on all lanes by default
+      model: sonnet          # model tier for validator subagent (when separation != none)
+    implementer:
+      use_worktree: auto     # auto | always | never — worktree isolation for impl agents
+      max_parallel: 3        # max concurrent implementer agents
+      max_retries: 2         # retry count on test failure before escalating
+  review:
+    enabled: false            # false by default (backward compatible)
+    stages:
+      - spec_compliance
+      - code_quality
+    severity_threshold: major  # minimum severity to block: critical | major | minor
+    max_retries: 2            # fix attempts before escalating to human
+    skip_lanes: []            # lanes that skip review (e.g., [hotfix])
+    review_model: sonnet      # model tier for review agents
+    per_task_review: true     # review after each task (false = only at /close)
+    budget: null              # optional review time budget (e.g., "5 minutes")
+                              # when set, /close defers lower-priority Review Brief items
+                              # null = full review (all items presented)
+
+  review_velocity:
+    threshold: 0.6             # ratio of closed-without-human-evidence to total-closed that triggers warning
+    window: 5                  # number of recent sessions to check for closed specs
+
+  triggers:
+    enabled: true
+    mode: suggest              # suggest | auto | off
+    suppress_duplicates: true  # don't repeat same suggestion in a conversation
+    check_on_start: true       # check triggers at conversation start
+    trigger_map: .forge/templates/context-trigger-map.yaml
+
+  model_router:
+    enabled: true
+    mode: static               # static | dynamic — static preserves Spec 056 behavior
+    safety_floor: sonnet       # minimum tier for code-modifying commands
+    cost_tracking: true        # log per-command costs to metrics_dir
+    metrics_dir: .forge/metrics
+    escalation:
+      auto_detect: true        # detect poor outcomes and escalate tier
+      max_escalations: 1       # escalate at most once per command invocation
+    regret_reporting: true     # include regret rate in /evolve reports
+    metrics_retention_days: 30 # days to keep metrics files before archiving (Spec 102)
+    # Override: force a specific tier for all commands (for regulated environments)
+    # tier_override: sonnet
+
+  dispatch_rules:                # Spec 187 — intelligent role dispatch
+    enabled: false               # true to auto-invoke CxO roles based on spec characteristics
+    skip_threshold:              # specs matching ALL conditions skip extra dispatch (DA only)
+      effort: 1                  # E ≤ this value
+      risk: 1                    # R ≤ this value
+    roles:                       # dispatch conditions — role invoked when ANY condition matches
+      cto:
+        conditions: [cross_cutting]  # 3+ files changed
+      ciso:
+        conditions: [security]       # scope keywords: auth, credential, secret, token, permission, encrypt
+      cqo:
+        conditions: [high_risk]          # R ≥ 4
+      cefo:
+        conditions: [high_effort, process_only]  # E ≥ 4, or change-lane = process-only
+      cmo:
+        conditions: [external_facing]    # README, announcements, articles, presentations, public docs
+      cro:
+        conditions: [release_decision, license_change, high_risk]  # public release, license, R >= 4
+      creso:
+        conditions: [technology_adoption, vendor_change]  # new dependency, vendor alignment, framework eval
+    evolve_loop:                  # roles invoked during /evolve --full (F1-F4)
+      signal_analysis: [cqo]    # step 8 — signal pattern analysis
+      trust_calibration: [cqo]  # step 8b — trust calibration review
+      etc_calibration: [cefo]   # step 6b — E/TC calibration
+      regret_rate: [cefo]       # regret rate reporting
+    touchpoints:                 # lifecycle points where dispatch fires
+      - spec_review              # before /implement — advisory on spec quality
+      - da_gate                  # alongside DA gate — parallel advisory
+      - close_review             # during /close — closing advisory
+      - evolve_loop               # during /evolve --full F1-F4
+
+runtime:
+  adapter: native              # native | oci (oci requires Spec 004b)
+  # OCI-only settings (ignored in native mode):
+  # endpoint: unix:///var/run/docker.sock
+  # image: forge-agent:latest
+
+agent:
+  adapter: generic             # generic | claude-code
+  command: claude              # CLI command for the AI agent
+
+isolation:
+  network: none                # none | host
+  resource_limits:
+    memory: 2g
+    cpus: 2
+    timeout_seconds: 600
+
+multi_agent:                     # Spec 134 — concurrent session model
+  activity_log: docs/sessions/activity-log.jsonl
+  agent_tier_rules:              # behavioral rules for agents in parallel execution
+    write_activity_log: true     # agents append events to JSONL log
+    write_session_logs: false    # agents must NOT write to session logs (operator synthesizes)
+    write_backlog: false         # agents must NOT write to backlog.md
+    write_specs_readme: false    # agents must NOT write to specs/README.md
+    atomic_checkout: true        # check for existing spec-started before claiming
+
+spec_kit:
+  enabled: false               # true = /spec offers guided creation via Spec Kit MCP tools
+                               # Requires Spec Kit MCP server installed and configured in .mcp.json
+                               # When false (default), /spec uses manual FORGE template authoring
+  # MCP server setup: add to .mcp.json:
+  #   "speckit": { "command": "npx", "args": ["-y", "@anthropic/spec-kit-mcp"] }
+  # Output mapping: speckit.specify → Requirements, speckit.plan → Objective + Scope,
+  #                 speckit.tasks → Test Plan. See /spec --help for details.
+  fallback: manual             # "manual" = fall back to FORGE template if MCP unavailable
+                               # "error" = fail if MCP unavailable (strict mode)
+```
+{% endraw %}
+
+### Gate Provider Configuration
+
+The `gate.provider` field controls how FORGE gate approvals are authenticated:
+
+| Provider | Description | When to use |
+|----------|-------------|-------------|
+| `prompt` | Chat-based approval — no hardware auth. Human approves by replying in conversation. | Default. No additional setup required. |
+| `auto` | Use PAL if installed, fall back to prompt if not. Transparent upgrade path. | For users who have PAL installed. |
+
+> **Note:** PAL (hardware-authenticated gates via YubiKey) is on the roadmap but not yet publicly available. Use `prompt` for all current workflows.
+
+### Role-Based Agent Pipeline
+
+FORGE enforces separation of concerns through role-specific agents at each spec lifecycle stage:
+
+| Stage | Role | Permissions | When |
+|-------|------|------------|------|
+| Spec creation | spec-author | Write to docs/specs/ only | /spec |
+| Pre-implementation review | devils-advocate | Read-only, adversarial | /implement (before code) |
+| Implementation | implementer | Scoped writes, worktree isolation | /implement (after DA passes) |
+| Pre-closure verification | validator | Read-only, independent | /close (before status transition) |
+
+Role instructions are in `.claude/agents/`. Configuration is in the `forge.roles` block above.
+
+**Key isolation guarantees:**
+- Devil's advocate and validator agents cannot modify files — they produce structured JSON assessments only
+- Implementer agents work in git worktrees when `use_worktree` is `auto` or `always`
+- The validator does not receive the implementer's reasoning or conversation context — it judges independently
+- All role invocations are logged to `docs/sessions/agent-file-registry.md`
+
+### Role Registry
+
+The role registry maps each role instruction file to the command contexts where it is invoked. Commands read this block to determine which roles to activate — adding a new entry here is sufficient to wire a role into all matching contexts without changing command files.
+
+```yaml
+forge.role_registry:
+  - path: .claude/agents/spec-author.md
+    contexts: [spec]
+  - path: .claude/agents/devils-advocate.md
+    contexts: [implement, close]
+  - path: .claude/agents/implementer.md
+    contexts: [implement]
+  - path: .claude/agents/validator.md
+    contexts: [close]
+  - path: .claude/agents/maverick-thinker.md
+    contexts: [brainstorm, spec]
+  - path: .claude/agents/cto.md
+    contexts: [brainstorm, close]
+  - path: .claude/agents/cfo.md
+    contexts: [brainstorm]
+  - path: .claude/agents/ciso.md
+    contexts: [brainstorm]
+  - path: .claude/agents/cco.md
+    contexts: [brainstorm]
+  - path: .claude/agents/coo.md
+    contexts: [brainstorm]
+  - path: .claude/agents/cxo.md
+    contexts: [brainstorm]
+```
+
+Graceful degradation: if `.claude/agents/` is absent or `forge.role_registry` is not present in AGENTS.md, commands skip role invocation silently — no error, no partial output.
+
+{% if include_two_stage_review %}
+### Two-Stage Review Protocol
+
+FORGE supports an optional two-stage subagent review (Spec 083) that runs after implementation tasks and during `/close` validation. The review is **off by default** (`forge.review.enabled: false`) for backward compatibility.
+
+**Stage 1 — Spec Compliance Review** answers: "Did you build the right thing?"
+- Checks requirement coverage, acceptance criteria mapping, scope adherence, and contract preservation
+- Receives: the spec file, git diff of changes, and test results
+- Produces structured JSON findings with severity levels
+
+**Stage 2 — Code Quality Review** answers: "Did you build the thing right?"
+- Checks test quality, minimal implementation, error handling, security, naming, and YAGNI compliance
+- Receives: changed files (full content), test files, and test results
+- Does NOT receive the spec file (context isolation — reviews code on its own merits, without anchoring on intent)
+
+**Context isolation between stages:**
+- Stage 1 and Stage 2 reviewers operate independently and do not see each other's findings
+- Stage 2 deliberately lacks access to the spec to avoid anchoring bias — it evaluates code quality purely on its own merits
+- Both review agents are read-only (no Write, Edit, or Bash mutation tools)
+
+**Severity and escalation model:**
+
+| Severity | Action |
+|----------|--------|
+| `critical` | Block — implementer must fix before proceeding |
+| `major` | Block (configurable via `severity_threshold`) |
+| `minor` | Warn — log but do not block |
+| `info` | Log only |
+
+If the implementer fails to resolve findings after `max_retries` attempts, the review escalates to the human operator.
+
+**Enabling the review:**
+1. Set `forge.review.enabled: true` in the `forge:` config block above
+2. Optionally adjust `stages`, `severity_threshold`, `max_retries`, `skip_lanes`, and `per_task_review`
+3. Review checklists are in `.forge/templates/review-checklists/` (spec-compliance.md, code-quality.md)
+
+**When reviews run:**
+- With `per_task_review: true` (default): after each implementer subagent task during `/implement`
+- With `per_task_review: false`: only during `/close` as the validator's review protocol
+- The `/close` validator always runs the full two-stage review (full codebase diff since spec started)
+- Lanes listed in `skip_lanes` bypass review entirely
+{% endif %}
+
+### Adapter options
+
+**Runtime adapters:**
+- `native` — git worktree isolation. No container required. Default. Note: no filesystem permission enforcement (governance gap logged).
+- `oci` — OCI container isolation. Requires Spec 004b and an OCI-compatible runtime (Rancher Desktop, Podman, Docker Engine).
+
+**Agent adapters:**
+- `generic` — works with any CLI-invokable AI agent. Injects role instructions via AGENTS.md in the working directory. Default.
+- `claude-code` — optimized for Claude Code CLI. Uses system prompts and tool scoping.
+
+{% if include_nanoclaw %}
+### NanoClaw Integration (Phase 2)
+
+NanoClaw enables async gate decisions via messaging platforms (Telegram, WhatsApp, Slack). When enabled, gate decisions at L3+ are routed to the human's phone instead of blocking in the terminal.
+
+**Architecture:** FORGE uses a three-layer model for async gates:
+- **FORGE** orchestrates gate lifecycle (when to ask, what evidence, what to do with the answer)
+- **nanoclaw-forge bridge** (`ncforge` CLI) handles gate message formatting and IPC transport between FORGE and NanoClaw
+- **NanoClaw** routes messages to the human's phone and captures responses
+
+The bridge package (`nanoclaw-forge`) is the recommended way to connect FORGE gates to NanoClaw. Install it alongside NanoClaw:
+```bash
+pip install nanoclaw-forge    # installs the ncforge CLI
+ncforge version               # verify installation
+```
+
+**Prerequisites:**
+- NanoClaw instance running and accessible
+- `ncforge` CLI installed (`pip install nanoclaw-forge`) — recommended for gate message formatting and IPC transport
+- Authentication device enrolled (YubiKey, FIDO2 key, or mobile via NanoClaw)
+- Channel ID from the messaging platform
+
+{% raw %}
+```yaml
+nanoclaw:
+  enabled: true
+  data_dir: /path/to/nanoclaw/data      # NanoClaw's DATA_DIR (contains ipc/ directory)
+  chat_jid: "tg:YOUR_CHAT_ID"             # Messaging platform JID for gate messages
+  ipc_group: telegram_forge             # IPC directory name (default: telegram_forge)
+  channel: "YOUR_CHAT_ID"                 # Display channel identifier
+  auth_provider: yubikey                # Optional: yubikey, fido2, or mobile
+  timeout_seconds: 1800
+  retry_count: 2
+  fallback: halt
+  batch_size: 5                        # Pause for validation after every N specs implemented
+```
+{% endraw %}
+
+**Config fields:**
+- `data_dir` — **required**. Absolute path to NanoClaw's data directory (the `DATA_DIR` from NanoClaw's config). The adapter writes IPC files to `{data_dir}/ipc/{ipc_group}/messages/`.
+- `chat_jid` — **required**. The messaging platform JID (e.g., `tg:YOUR_CHAT_ID` for Telegram). Gate messages are addressed to this JID.
+- `ipc_group` — IPC directory namespace. Defaults to `telegram_forge`. Must match a registered group folder in NanoClaw.
+- `channel` — Display identifier for logging. Informational only.
+- `auth_provider` — Authentication backend for gate signatures. Optional; text-based approval works without it.
+- `batch_size` — Number of specs to implement before pausing for incremental validation (default: 5). At each checkpoint, a handoff checklist for the batch is sent via messaging. Implementation resumes only after operator approval.
+
+**Fallback options:**
+- `halt` — stop and wait for human to check in. Default, safest option.
+- `escalate` — attempt alternate notification channel (requires NanoClaw escalation config).
+
+**How it works:**
+1. FORGE reaches a gate (e.g., `/close` validation)
+2. If `nanoclaw.enabled: true`, the adapter writes a gate message as an IPC file
+3. NanoClaw's IPC watcher picks up the file and delivers it to the configured messaging channel
+4. Human reviews evidence summary on phone, replies with `approve XXXX` or `reject XXXX reason`
+5. NanoClaw parses the reply and writes a response file back to IPC
+6. FORGE adapter polls for the response file and applies the gate decision
+7. If no response within timeout: retry message → fallback (halt or escalate)
+
+Without NanoClaw enabled, FORGE operates in terminal mode (current behavior) — all gates are resolved in the conversation context.
+{% endif %}
+
+## Repo Conventions
+
+<!-- customize: replace with your project's conventions -->
+- Deterministic outputs: identical inputs → identical results
+- Parsing resilience: missing fields → `None`/empty, never crash
+- Ephemeral files stay out of git (`tmp/`, `node_modules/`, build artifacts)

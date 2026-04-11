@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .forge/bin/check-role-permissions.sh",
+            "timeout": 5000,
+            "statusMessage": "Checking FORGE role permissions..."
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=\"$CLAUDE_FILE_PATH\"; if [[ \"$FILE\" == template/* || \"$FILE\" == scripts/* || \"$FILE\" == copier.yml ]]; then if [[ ! -f .forge/state/implementing.json ]]; then echo \"EDIT-GATE: No active /implement session. Run /implement <spec> before editing $FILE\" >&2; exit 1; fi; fi; exit 0'",
+            "timeout": 3000,
+            "statusMessage": "Checking edit-gate..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "<!-- customize: replace with your project's test command for the appropriate file type -->"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "<!-- customize: replace with your project's test command -->"
+          }
+        ]
+      }
+    ]
+  }
+}

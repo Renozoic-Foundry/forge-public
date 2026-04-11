@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FORGE Session Handoff",
+  "description": "Machine-parseable session handoff artifact for automated context transfer between sessions and agents. Generated as a JSON sidecar alongside each markdown session log.",
+  "type": "object",
+  "required": ["session_id", "date", "decisions", "specs_touched", "gate_outcomes", "open_items", "next_actions"],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "Session identifier matching the log filename (e.g., 2026-03-27-001).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-\\d{3}$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Session date in ISO 8601 format (YYYY-MM-DD)."
+    },
+    "summary": {
+      "type": "string",
+      "description": "2-3 sentence summary: goal, what was completed, what is deferred."
+    },
+    "decisions": {
+      "type": "array",
+      "description": "Concrete choices about code, schema, process, or architecture made this session.",
+      "items": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Self-contained, searchable description of the decision."
+          },
+          "spec_id": {
+            "type": "string",
+            "description": "Related spec ID, if any."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "specs_touched": {
+      "type": "array",
+      "description": "Specs created, modified, or referenced this session.",
+      "items": {
+        "type": "object",
+        "required": ["spec_id", "status"],
+        "properties": {
+          "spec_id": {
+            "type": "string",
+            "description": "Spec identifier (e.g., 119)."
+          },
+          "title": {
+            "type": "string",
+            "description": "Spec title."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "in-progress", "implemented", "closed", "deprecated"],
+            "description": "Spec status at end of session."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["created", "implemented", "closed", "reviewed", "referenced"],
+            "description": "What was done with this spec during the session."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "gate_outcomes": {
+      "type": "array",
+      "description": "Gate decisions recorded this session.",
+      "items": {
+        "type": "object",
+        "required": ["spec_id", "gate", "result"],
+        "properties": {
+          "spec_id": {
+            "type": "string",
+            "description": "Spec that was gated."
+          },
+          "gate": {
+            "type": "string",
+            "description": "Gate name or type (e.g., implementation-gate, validation-gate)."
+          },
+          "result": {
+            "type": "string",
+            "enum": ["PASS", "CONDITIONAL_PASS", "FAIL"],
+            "description": "Gate decision outcome."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional context about the gate outcome."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "open_items": {
+      "type": "array",
+      "description": "Unresolved items carried forward: spec triggers, pain points, process improvements.",
+      "items": {
+        "type": "object",
+        "required": ["type", "description"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["spec-trigger", "pain-point", "process-improvement", "blocker", "other"],
+            "description": "Category of the open item."
+          },
+          "description": {
+            "type": "string",
+            "description": "What needs to be addressed."
+          },
+          "spec_id": {
+            "type": "string",
+            "description": "Related spec ID, if one was created."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "description": "Recommended actions for the next session, in priority order.",
+      "items": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "What to do (e.g., 'run /close 119', 'implement Spec 120')."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this action is recommended."
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Priority level."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "error_autopsies": {
+      "type": "array",
+      "description": "Error autopsies created this session (EA-NNN entries).",
+      "items": {
+        "type": "object",
+        "required": ["id", "title"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Error autopsy ID (e.g., EA-022).",
+            "pattern": "^EA-\\d{3}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "root_cause": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "chat_insights": {
+      "type": "array",
+      "description": "Chat insights recorded this session (CI-NNN entries).",
+      "items": {
+        "type": "object",
+        "required": ["id", "title"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Chat insight ID (e.g., CI-040).",
+            "pattern": "^CI-\\d{3}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

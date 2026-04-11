@@ -1,0 +1,46 @@
+{
+  "_deprecated": "This file is deprecated (Spec 074). The NanoClaw skill manifest has moved to the nanoclaw-forge bridge package. Install: pip install nanoclaw-forge. Register: ncforge skill install. This file is retained for backward compatibility and will be removed in a future FORGE version.",
+  "skill_id": "forge-gate",
+  "name": "FORGE Gate Decision",
+  "description": "Receives FORGE gate decisions and routes them for human review. Supports YubiKey NFC tap for approval.",
+  "version": "1.0.0",
+  "triggers": [
+    {
+      "type": "api",
+      "endpoint": "/api/skills/forge-gate/invoke",
+      "method": "POST"
+    }
+  ],
+  "responses": {
+    "endpoint": "/api/skills/forge-gate/responses/{challenge_nonce}",
+    "method": "GET"
+  },
+  "notifications": {
+    "endpoint": "/api/skills/forge-gate/notify",
+    "method": "POST"
+  },
+  "capabilities": {
+    "nfc_approval": true,
+    "natural_language_parsing": true,
+    "evidence_rendering": true,
+    "yubikey_hmac_sha1": true
+  },
+  "message_format": {
+    "gate_decision": {
+      "schema": "gate-message-schema.json",
+      "rendering": "human-readable with emoji indicators"
+    },
+    "response": {
+      "schema": "gate-response-schema.json",
+      "parsing": "natural language → structured decision"
+    }
+  },
+  "supported_decisions": ["approve", "reject", "query", "defer"],
+  "query_types": ["diff", "tests", "coverage", "log", "spec"],
+  "security": {
+    "station_key_verification": "optional (defense in depth)",
+    "mobile_key_signing": "required for approve",
+    "challenge_expiry_seconds": 1800,
+    "channel_binding": true
+  }
+}

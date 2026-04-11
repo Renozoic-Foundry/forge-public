@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FORGE Gate Decision Response",
+  "description": "Schema for human responses to gate decision messages. Includes YubiKey HMAC-SHA1 mobile key signature for approval authentication.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "gate_id",
+    "decision",
+    "challenge_nonce",
+    "timestamp"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "gate_id": {
+      "type": "string",
+      "pattern": "^GATE-[0-9]{3}-[a-z-]+-[0-9]+$",
+      "description": "Gate ID echoed from the gate decision message"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["approve", "reject", "query", "defer"],
+      "description": "Human decision on this gate"
+    },
+    "challenge_nonce": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Challenge nonce echoed from the gate decision message"
+    },
+    "mobile_signature": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "HMAC-SHA1 signature from mobile key (keychain NFC YubiKey). Required for approve decisions."
+    },
+    "mobile_key_id": {
+      "type": "string",
+      "description": "Public identifier of the mobile key that signed this response"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of response"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Required for reject decisions. Human-provided reason for rejection."
+    },
+    "query_type": {
+      "type": "string",
+      "enum": ["diff", "tests", "coverage", "log", "spec"],
+      "description": "Required for query decisions. Type of detail requested."
+    },
+    "resume_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional for defer decisions. When to re-present this gate."
+    },
+    "channel_id": {
+      "type": "string",
+      "description": "Source channel ID for channel binding verification"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "decision": { "const": "approve" } } },
+      "then": { "required": ["mobile_signature", "mobile_key_id"] }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "reject" } } },
+      "then": { "required": ["reason"] }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "query" } } },
+      "then": { "required": ["query_type"] }
+    }
+  ],
+  "definitions": {
+    "natural_language_patterns": {
+      "description": "Patterns for parsing natural language responses into structured decisions. Used by NanoClaw adapter, not for JSON validation.",
+      "type": "object",
+      "properties": {
+        "approve": {
+          "type": "string",
+          "description": "NFC tap triggers approve flow — no text pattern needed"
+        },
+        "reject": {
+          "type": "string",
+          "description": "Pattern: reject {challenge_display} {reason}",
+          "examples": ["reject X7K9 tests don't cover edge case"]
+        },
+        "query": {
+          "type": "string",
+          "description": "Pattern: show {query_type}",
+          "examples": ["show diff", "show tests", "show coverage"]
+        },
+        "defer": {
+          "type": "string",
+          "description": "Pattern: defer [until {ISO datetime}]",
+          "examples": ["defer", "defer until 2026-03-15T09:00:00Z"]
+        }
+      }
+    }
+  }
+}

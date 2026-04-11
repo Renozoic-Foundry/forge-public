@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deck — {{ PROJECT_NAME }}</title>
+<style>
+  /* ── Theme custom properties ── */
+  :root {
+    --color-bg: #ffffff;
+    --color-slide-bg: #ffffff;
+    --color-text: #1a1a2e;
+    --color-heading: #16213e;
+    --color-accent: #0f3460;
+    --color-accent-light: #e8eef6;
+    --color-border: #d1d5db;
+    --color-muted: #6b7280;
+    --color-attribution-bg: #f0f4f8;
+    --color-disclaimer-bg: #fef9e7;
+    --color-disclaimer-border: #f0c929;
+    --color-title-bg: #16213e;
+    --color-title-text: #ffffff;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-heading: var(--font-body);
+    --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+    --slide-max-width: 60rem;
+    --slide-padding: 3rem;
+  }
+
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--color-text);
+    background: #e5e7eb;
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+
+  /* ── Slide structure ── */
+  .slide {
+    max-width: var(--slide-max-width);
+    margin: 0 auto 2rem;
+    background: var(--color-slide-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    padding: var(--slide-padding);
+    min-height: 20rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+  }
+
+  .slide.title-slide {
+    background: var(--color-title-bg);
+    color: var(--color-title-text);
+    text-align: center;
+    min-height: 24rem;
+  }
+  .slide.title-slide h1 { color: var(--color-title-text); font-size: 2.5rem; margin-bottom: 1rem; }
+  .slide.title-slide .subtitle { font-size: 1.25rem; opacity: 0.85; }
+  .slide.title-slide .meta { color: rgba(255,255,255,0.7); margin-top: 2rem; font-size: 0.9rem; }
+
+  /* ── Typography ── */
+  h1 { font-size: 2rem; color: var(--color-heading); margin-bottom: 1.5rem; }
+  h2 { font-size: 1.75rem; color: var(--color-heading); margin-bottom: 1.25rem; }
+  h3 { font-size: 1.25rem; color: var(--color-accent); margin-bottom: 0.75rem; }
+  p { margin-bottom: 1rem; font-size: 1.125rem; }
+  ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; font-size: 1.125rem; }
+  li { margin-bottom: 0.5rem; }
+  code { font-family: var(--font-mono); background: var(--color-accent-light); padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+
+  /* ── Audience variants ── */
+  .audience-technical,
+  .audience-executive,
+  .audience-influencer { display: none; }
+
+  body.variant-technical .audience-technical { display: flex; }
+  body.variant-executive .audience-executive { display: flex; }
+  body.variant-influencer .audience-influencer { display: flex; }
+  .audience-all { display: flex; }
+
+  /* ── Key metric callout ── */
+  .metric-row {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+  }
+  .metric-card {
+    text-align: center;
+    padding: 1.5rem 2rem;
+    background: var(--color-accent-light);
+    border-radius: 8px;
+    min-width: 10rem;
+  }
+  .metric-card .value { font-size: 2.5rem; font-weight: 700; color: var(--color-accent); }
+  .metric-card .label { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.25rem; }
+
+  /* ── Attribution ── */
+  .slide.attribution-slide { font-size: 0.85rem; color: var(--color-muted); background: var(--color-attribution-bg); }
+  .slide.attribution-slide h2 { font-size: 1.25rem; color: var(--color-heading); }
+
+  /* ── Disclaimer ── */
+  .slide.disclaimer-slide { font-size: 0.8rem; color: var(--color-muted); background: var(--color-disclaimer-bg); border: 2px solid var(--color-disclaimer-border); }
+  .slide.disclaimer-slide h2 { font-size: 1.25rem; color: var(--color-heading); }
+
+  /* ── Slide counter ── */
+  .slide-number { text-align: right; font-size: 0.75rem; color: var(--color-muted); margin-top: auto; padding-top: 1rem; }
+
+  @media print {
+    body { background: white; padding: 0; }
+    .slide { box-shadow: none; border: 1px solid #eee; margin-bottom: 0; }
+  }
+</style>
+</head>
+
+<!--
+  AUDIENCE VARIANT: Add one of these classes to <body>:
+    variant-technical   — Architecture and implementation focus
+    variant-executive   — Business value and outcomes
+    variant-influencer  — Narrative and thought leadership angle
+-->
+<body class="variant-executive">
+
+  <!-- ── Slide 1: Title ── -->
+  <div class="slide title-slide audience-all">
+    <h1>{{ DECK_TITLE }}</h1>
+    <div class="subtitle">{{ DECK_SUBTITLE }}</div>
+    <div class="meta">
+      {{ AUTHOR_NAME }} · {{ PRESENTATION_DATE }} · {{ PROJECT_NAME }}
+    </div>
+  </div>
+
+  <!-- ── Slide 2: Agenda (all audiences) ── -->
+  <div class="slide audience-all">
+    <h2>Agenda</h2>
+    <ol>
+      <li>{{ AGENDA_ITEM_1 }}</li>
+      <li>{{ AGENDA_ITEM_2 }}</li>
+      <li>{{ AGENDA_ITEM_3 }}</li>
+      <li>{{ AGENDA_ITEM_4 }}</li>
+    </ol>
+    <div class="slide-number">2</div>
+  </div>
+
+  <!-- ── Technical slides ── -->
+  <div class="slide audience-technical">
+    <h2>Architecture Overview</h2>
+    <p>{{ ARCHITECTURE_OVERVIEW }}</p>
+    <div class="slide-number">3</div>
+  </div>
+
+  <div class="slide audience-technical">
+    <h2>Implementation Approach</h2>
+    <ul>
+      <li>{{ IMPL_POINT_1 }}</li>
+      <li>{{ IMPL_POINT_2 }}</li>
+      <li>{{ IMPL_POINT_3 }}</li>
+    </ul>
+    <div class="slide-number">4</div>
+  </div>
+
+  <!-- ── Executive slides ── -->
+  <div class="slide audience-executive">
+    <h2>Key Metrics</h2>
+    <div class="metric-row">
+      <div class="metric-card">
+        <div class="value">{{ METRIC_1_VALUE }}</div>
+        <div class="label">{{ METRIC_1_LABEL }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">{{ METRIC_2_VALUE }}</div>
+        <div class="label">{{ METRIC_2_LABEL }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="value">{{ METRIC_3_VALUE }}</div>
+        <div class="label">{{ METRIC_3_LABEL }}</div>
+      </div>
+    </div>
+    <div class="slide-number">3</div>
+  </div>
+
+  <div class="slide audience-executive">
+    <h2>Business Impact</h2>
+    <ul>
+      <li>{{ IMPACT_1 }}</li>
+      <li>{{ IMPACT_2 }}</li>
+      <li>{{ IMPACT_3 }}</li>
+    </ul>
+    <div class="slide-number">4</div>
+  </div>
+
+  <!-- ── Influencer slides ── -->
+  <div class="slide audience-influencer">
+    <h2>The Challenge</h2>
+    <p>{{ CHALLENGE_NARRATIVE }}</p>
+    <div class="slide-number">3</div>
+  </div>
+
+  <div class="slide audience-influencer">
+    <h2>The Insight</h2>
+    <p>{{ INSIGHT_NARRATIVE }}</p>
+    <div class="slide-number">4</div>
+  </div>
+
+  <!-- ── Closing slide (all audiences) ── -->
+  <div class="slide audience-all">
+    <h2>Next Steps</h2>
+    <ul>
+      <li>{{ NEXT_STEP_1 }}</li>
+      <li>{{ NEXT_STEP_2 }}</li>
+      <li>{{ NEXT_STEP_3 }}</li>
+    </ul>
+    <div class="slide-number">5</div>
+  </div>
+
+  <!-- ── Attribution (mandatory) ── -->
+  <div class="slide attribution-slide audience-all">
+    <h2>Attribution</h2>
+    <p>
+      This work builds on established methodologies:
+      <strong>Knowledge-Centered Service (KCS) v6</strong> for knowledge reuse and continuous improvement;
+      <strong>Stage-Gate</strong> for phased delivery with quality checkpoints;
+      and the <strong>AI-Assisted Integration Framework (AAIF)</strong> (Linux Foundation) for agent-driven development practices.
+      The FORGE framework synthesizes these foundations into a spec-driven, evidence-gated workflow.
+    </p>
+  </div>
+
+  <!-- ── Disclaimer (mandatory) ── -->
+  <div class="slide disclaimer-slide audience-all">
+    <h2>Disclaimer</h2>
+    <p>
+      This content is experimental and provided for informational purposes only.
+      It has not been independently audited or verified.
+      Mention of any methodology, framework, or tool does not constitute an endorsement
+      by its authors or maintainers. Use your own judgment before applying any
+      practices described here.
+    </p>
+  </div>
+
+</body>
+</html>

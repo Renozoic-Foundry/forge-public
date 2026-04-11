@@ -1,0 +1,47 @@
+command: interview
+type: slash-command
+
+structure:
+  required_sections:
+    - "## Question Quality Guidelines"
+    - "## [decision] Phase 1"
+    - "## [decision] Phase 2"
+    - "## [decision] Phase 3"
+    - "## [mechanical] Phase 4"
+    - "## [decision] Phase 5"
+  required_strings:
+    - "Socratic"
+    - "docs/sessions/"
+    - "transcript"
+    - "devil's advocate"
+    - "Routed to:"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 500
+  min_lines: 50
+
+references:
+  files_must_exist:
+    - "docs/process-kit/prd-interview.md"
+  commands_must_exist:
+    - "spec"
+    - "brainstorm"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "sonnet"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "interview"
+    model_tier: "sonnet"
+    workflow_stage: "planning"

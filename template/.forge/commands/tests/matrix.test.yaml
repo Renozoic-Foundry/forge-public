@@ -1,0 +1,45 @@
+command: matrix
+type: slash-command
+
+structure:
+  required_sections:
+    - "## "
+  required_strings:
+    - "backlog.md"
+    - "scoring-rubric.md"
+    - "BV"
+    - "STATUS DRIFT"
+    - "README.md"
+    - "arithmetic error"
+    - "manual override"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 200
+  min_lines: 20
+
+references:
+  files_must_exist:
+    - "docs/backlog.md"
+    - "docs/process-kit/scoring-rubric.md"
+    - "docs/specs/README.md"
+  commands_must_exist:
+    - "implement"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "haiku"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "matrix"
+    model_tier: "haiku"
+    workflow_stage: "planning"

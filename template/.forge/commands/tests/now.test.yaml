@@ -1,0 +1,45 @@
+command: now
+type: slash-command
+
+structure:
+  required_sections:
+    - "## "
+  required_strings:
+    - "backlog.md"
+    - "docs/sessions/"
+    - "CLAUDE.md"
+    - "docs/specs/README.md"
+    - "context-snapshot.md"
+    - "scratchpad.md"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 300
+  min_lines: 20
+
+references:
+  files_must_exist:
+    - "docs/backlog.md"
+    - "docs/specs/README.md"
+    - "docs/sessions/_template.md"
+  commands_must_exist:
+    - "handoff"
+    - "session"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "haiku"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "now"
+    model_tier: "haiku"
+    workflow_stage: "session"

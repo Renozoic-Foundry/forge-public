@@ -1,0 +1,43 @@
+command: handoff
+type: slash-command
+
+structure:
+  required_sections:
+    - "## "
+  required_strings:
+    - "human-validation-runbook.md"
+    - "Handoff Summary"
+    - "scratchpad"
+    - "context-snapshot.md"
+    - "/close"
+    - "/revise"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 200
+  min_lines: 15
+
+references:
+  files_must_exist:
+    - "docs/process-kit/human-validation-runbook.md"
+  commands_must_exist:
+    - "close"
+    - "revise"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "sonnet"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "handoff"
+    model_tier: "sonnet"
+    workflow_stage: "review"

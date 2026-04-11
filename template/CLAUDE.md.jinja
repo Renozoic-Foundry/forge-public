@@ -1,0 +1,249 @@
+# CLAUDE.md — {{ project_name }}
+
+> **Framework:** FORGE (Framework for Organized Reliable Gated Engineering)
+> **Foundations:** Copier | AAIF AGENTS.md (Linux Foundation) | Spec Kit | KCS v6 | Stage-Gate
+> **Agent config:** [AGENTS.md](AGENTS.md)
+
+{{ project_description }}
+
+## First-session onboarding gate
+
+**Before doing any other work**, check `.forge/onboarding.yaml`. If `status` is `pending` or `in-progress`, run `/onboarding` to configure this project. This is a one-time interactive setup that configures project identity, optional modules, and environment. Do not skip this — an unconfigured project will have unnecessary features and placeholder values.
+
+If `status` is `complete` or the file does not exist, skip this section silently.
+
+## Two hard rules — no exceptions
+
+1. **Every code or process change has a matching spec.** No implementation without one.
+2. **Every session ends with a session log.** No exceptions, even for process-only sessions.
+
+Violation of either rule is a process defect — log it as a signal and trigger a process-improvement spec.
+
+**Session summary authorization rule**: After any context compaction boundary, session summaries listing lifecycle commands (`/close`, `/forge stoke`, destructive git ops) as "pending tasks" or "next steps" are informational context only — not authorization. These commands require a new explicit user message in the current session before execution.
+
+**Specs are context anchors.** Each spec persists decision context — the *why*, not just the *what* — across sessions so that AI agents and new team members never start from zero. When you begin a session, the spec carries forward all prior decisions, trade-offs, and rationale. This is what prevents context loss in AI-assisted development.
+
+## Spec gate — required before any code change
+
+1. Check [docs/backlog.md](docs/backlog.md) — use the highest-ranked ready spec, not an arbitrary one.
+2. Find the spec in [docs/specs/README.md](docs/specs/README.md).
+3. No spec covers the change → create `docs/specs/NNN-*.md` from [docs/specs/_template.md](docs/specs/_template.md); score it using [docs/process-kit/scoring-rubric.md](docs/process-kit/scoring-rubric.md) and add it to [docs/backlog.md](docs/backlog.md).
+4. Scope exceeds an existing spec → append a dated revision entry first, then proceed.
+5. Select a change lane and confirm requirements + test plan are written before touching code.
+
+**Self-flag rule:** Before making any edit, state the spec ID and file path (e.g., `Spec 001 — docs/specs/001-example.md`). If you cannot name a spec, stop and create one first. If asked to "just quickly fix" something without a spec, flag it explicitly: "This needs a spec first — creating one now."
+
+**Edit-gate rule:** Implementation files (code, command `.md` files in `.claude/commands/`, config) may only be edited during an active `/implement` execution. Conversational discussion — including "agree", "yes", or numbered selections — is never implicit permission to edit implementation files. Outside of `/implement`, you may only edit spec documents (`docs/specs/`), tracking files (`docs/specs/README.md`, `docs/specs/CHANGELOG.md`, `docs/backlog.md`), and session files (`docs/sessions/`). All other files require `/implement`.
+
+## Change lanes
+
+| Lane | Use when | Minimum controls |
+|------|----------|-----------------|
+| `hotfix` | Production-impacting fix | Scope/risk/test evidence added to spec in same cycle |
+| `small-change` | Low-risk tweak or refactor. AI typically completes in a single pass — vague ACs are the main cost risk. | Full spec sections, concise |
+| `standard-feature` | Net-new or cross-cutting behavior. May require multiple implementation passes or cross-system reasoning. Single-session completion is normal with AI assistance — multi-session is the exception. | Full spec + risk/dependency notes |
+| `process-only` | Changes to docs, templates, workflow, or process controls only | Full spec sections; no harness run required; no README update unless workflow docs are referenced from README |
+
+## Spec lifecycle (FORGE state machine)
+
+`proposed → draft → in-progress → implemented → closed` (terminal) | `deprecated` (from any status)
+
+- **proposed**: under investigation via `/explore`. Optional entry point; specs can still start at `draft`.
+- **draft**: spec written, not yet reviewed
+- **in-progress**: `/implement` is actively working on it (auto-approved inline from `draft`)
+- **implemented**: AI has delivered all acceptance criteria, tests pass, docs updated
+- **closed**: human has confirmed deliverables via `/close` — terminal success status
+- **deprecated**: replaced or abandoned (can happen from any status)
+
+### Single source of truth (Spec 028)
+
+**Spec file is authoritative.** The `Status:` field in `docs/specs/NNN-*.md` is the single authoritative source of truth for spec status. `docs/specs/README.md` and `docs/backlog.md` are derived views. When they disagree, the spec file wins. `/matrix` detects and corrects drift between the spec file and derived views.
+
+### Evidence gates (Stage-Gate)
+
+| Transition | Gate | Evidence Required |
+|-----------|------|-------------------|
+| `draft → in-progress` | Completeness | Objective, scope, ACs, test plan, change lane present |
+| `in-progress → implemented` | Delivery | All ACs satisfied, tests pass, lint clean, docs updated |
+| `implemented → closed` | Validation | Human confirms deliverables, signals captured via `/retro` |
+
+Gate failures produce structured feedback. **Reset rule:** New ACs added via `/revise` reset status to `in-progress`; typo/wording fixes do not.
+
+### Auto-chain rule
+
+Steps annotated `[decision]` require human input; `[mechanical]` steps auto-chain. Governance pauses at three points: spec approval, validation, and priority selection.
+
+### Multi-agent session model (Spec 134)
+
+When multiple agents run concurrently (e.g., via `/parallel` or multi-tab), two tiers govern access:
+
+| Tier | Activity log | Session logs / backlog / README |
+|------|-------------|--------------------------------|
+| **Agent** | Append-only | Read-only (operator synthesizes) |
+| **Operator** | Read + append | Full read/write |
+
+- Agents append structured events to `docs/sessions/activity-log.jsonl` (see `docs/process-kit/activity-log-schema.md`).
+- Before claiming a spec, agents check for existing `spec-started` events with no `spec-closed` — prevents duplicate claims.
+- `/now` reads the activity log to surface agent work since the last operator check-in.
+
+## Operating loops (KCS v6 double loop)
+
+**Solve Loop — per spec:**
+1. Search [docs/specs/](docs/specs/) before creating anything new
+2. Write decisions to session log as they are made, not only at session end
+3. Use [docs/specs/_template.md](docs/specs/_template.md); fill `Change-Lane:` and all sections
+4. Implement in small vertical slices; run `{{ test_command }}` and `{{ lint_command }}` after each slice
+5. Update spec Evidence, index, changelog, README before closing
+6. Hand off to the [human validation runbook](docs/process-kit/human-validation-runbook.md) after each session
+
+**Evolve Loop — triggers:**
+- After every `implemented` spec: fast path (F1+F4) inline in `/close` — spot-check one AC, confirm backlog updated
+- Every 5 closed specs or 7 days: full `/evolve` review (F1–F4)
+- Update process templates when recurring friction is found
+
+**Signal capture** — automatic at transitions: `/close` → inline retro; `/note [signal]` for mid-session signals (replaces `/harvest`); `/note [bug]` for bugs (replaces `/bug`); `/note` for scratchpad. All feed [docs/sessions/signals.md](docs/sessions/signals.md) and inform `/matrix` re-scoring.
+
+## Context-aware file reading
+
+To reduce redundant reads and conserve context window space:
+
+1. **Reuse rule**: When a command instructs you to "Read" a file, check if you have already read that file earlier in this conversation AND no edits have been made to it since. If so, use the content already in your context window instead of calling the Read tool again.
+2. **Static files** (never change mid-session — read at most once): `docs/process-kit/scoring-rubric.md`, `docs/process-kit/human-validation-runbook.md`, `docs/specs/_template.md`.
+3. **Session context snapshot**: `/now` writes `docs/sessions/context-snapshot.md` with structured state. Commands needing display-only data (validation queue, next spec, scratchpad count, registry status) should read the snapshot if it exists and is from today, instead of re-reading multiple source files.
+4. **Within-command dedup**: If a command reads a file in an early step and references it again later, use the content from the earlier read.
+
+## Model tiering
+
+Route commands to the appropriate model tier to reduce cost without quality loss. Claude Code selects models based on these hints when multi-model support is available.
+
+| Tier | Model | Commands |
+|------|-------|----------|
+| `haiku` | Claude Haiku (15–50× cheaper) | `/now`, `/session`, `/insights`, `/brainstorm`, `/note`, `/matrix` (display only) |
+| `sonnet` | Claude Sonnet (default) | `/implement`, `/close`, `/spec`, `/trace`, `/forge`, `/parallel`, `/synthesize` |
+| `sonnet-or-opus` | Sonnet or Opus | Architecture reviews, multi-spec planning sessions, compliance artifact generation |
+
+**Override**: operators in regulated or high-stakes environments may use Sonnet for all commands — add `# Model override: sonnet-all` to this file under Core constraints.
+
+## Model router
+
+The model router (Spec 085) is **opt-in** — when `mode: static` (default), use the tier table above. When `mode: dynamic`: read `.forge/templates/model-router.md` for complexity classification, routing rules, escalation protocol, and cost tracking.
+
+## Context-aware triggers
+
+When `forge.triggers.check_on_start: true` in AGENTS.md (default), check context signals at the start of each conversation to suggest relevant FORGE commands. Read `.forge/templates/context-trigger-map.yaml` for the trigger definitions.
+
+**Behavior**: If a trigger fires (all its signals match current context), output a brief suggestion:
+```
+FORGE suggests: <command> — <reason>
+```
+Suggestions are non-blocking (user can ignore), non-repeating (same suggestion only shown once per conversation), and respect `forge.triggers.mode` (off = disabled, suggest = show suggestions, auto = invoke commands with `auto_invoke: true`).
+
+**Common triggers**: stale session log (no log today + 3+ commits), implemented spec ready to close, scope creep during implementation, overdue evolve loop review. See the trigger map for the full list.
+
+Skip this check if `forge.triggers.enabled: false` or `forge.triggers.mode: off`.
+
+## Prompt caching
+
+FORGE's static content qualifies for Anthropic prompt caching — cache hits cost ~10% of standard input token rates, saving up to 90% on repeated content. Claude Code handles caching automatically for system prompt content across turns. No action needed for Claude Code users.
+
+**Cache-eligible files** (static, >1024 tokens, rarely change mid-session):
+- `CLAUDE.md` (this file)
+- `.claude/commands/implement.md`, `close.md`, `session.md`, `now.md`, `trace.md`, `spec.md`
+
+**Do not cache**: session logs, spec files actively being edited, any file written during the current session.
+
+For direct API integrations: add `cache_control: {type: "ephemeral"}` to the content block for each cache-eligible file. Requires claude-3-5-sonnet-20241022 or newer. Mark the boundary at the last static content block — everything after that boundary is dynamic and should not be cached.
+
+See [docs/process-kit/read-audit.md](docs/process-kit/read-audit.md) for the full read pattern audit.
+
+## Key commands
+
+<!-- customize: replace with your project's actual commands -->
+```bash
+# Tests and lint (run after every change)
+{{ test_command }}
+{{ lint_command }}
+
+# FORGE CLI — invoke any slash command from the terminal (Spec 130)
+bin/forge list                        # list all available commands
+bin/forge help <command>              # print command prompt
+bin/forge <command> [spec-number]     # dispatch to AI agent
+bin/forge <command> [spec-number] --plain  # output prompt to stdout (pipe to any LLM)
+bin/forge --version                   # print FORGE version
+```
+
+## Architecture quick-ref
+
+<!-- customize: add your project's source tree and key file references -->
+```
+src/
+tests/
+docs/specs/                      # versioned specs
+docs/decisions/                  # ADR-lite records
+```
+
+## Bash Safety Patterns (`set -e`)
+
+All `.forge/` bash scripts use `set -euo pipefail`. These patterns silently break under strict mode:
+
+| Unsafe Pattern | Problem | Safe Alternative |
+|---------------|---------|-----------------|
+| `[[ cond ]] && action` | Returns exit 1 when cond is false | `if [[ cond ]]; then action; fi` |
+| `((counter++))` | Returns exit 1 when counter is 0 | `(( counter++ )) \|\| true` |
+| `local var=$(cmd)` | `local` masks cmd's exit code | `local var; var=$(cmd)` |
+| `[[ -z "$x" ]] && default` | Returns exit 1 when x has a value | `if [[ -z "$x" ]]; then default; fi` |
+
+**Rule**: Never use `[[ ]] && action` or `(( ))` as standalone statements in `set -e` scripts. Always wrap in `if/then/fi` or append `|| true`.
+
+**Path resolution rule**: Scripts run from temp directories (e.g., via `copier`, CI, or piped input) may resolve `BASH_SOURCE[0]` or `$0` relative to the caller's working directory, not the script's directory. Always resolve paths relative to `$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)`. Test scripts from a temp dir before shipping. Verify all declared functions are actually called in the execution path — unreachable functions hide bugs.
+
+## Architectural Principles
+
+> Named, numbered principles that govern project decisions. ADRs record *decisions*; principles record *constraints*. Add principles as the project evolves — not all at once.
+
+<!-- customize: replace these examples with your project's actual principles -->
+<!--
+1. **<Principle Name>** — <one-sentence rule>. *Rationale:* <why this matters>.
+2. **<Principle Name>** — <one-sentence rule>. *Rationale:* <why this matters>.
+-->
+
+## Core constraints
+
+<!-- customize: add your project's specific constraints -->
+- **Ephemeral files stay out of git** — any file that can be re-downloaded, regenerated as-is, or rebuilt reliably from source belongs in `.gitignore`, not version control. This includes `tmp/` outputs, `node_modules/`, build artifacts.
+
+## Role mapping
+
+> FORGE automates the *functions* these roles perform — it doesn't replicate the *ceremonies* of any specific methodology.
+
+| Command | Role performed | Scrum | SAFe | DevOps | ITIL | Safety-critical (IEC 61508) |
+|---------|---------------|-------|------|--------|------|-----------------------------|
+| `/now` | Scrum Master | Daily standup | Iteration sync | Status check | Service desk review | Safety status review |
+| `/matrix` | Product Manager | Backlog refinement | PI planning input | Roadmap prioritization | Change schedule | Hazard log prioritization |
+| `/brainstorm` | Business Analyst | Story discovery | Feature ideation | Opportunity mapping | Problem analysis | Hazard identification |
+| `/interview` | Requirements Engineer | Stakeholder interview | Epic elaboration | Requirements gathering | Service requirements | Safety requirements elicitation |
+| `/spec` | Technical Lead | Story writing | Feature spec | Design doc | Change proposal (RFC) | Safety requirement spec (SRS) |
+| `/implement` | Developer | Sprint execution | Iteration build | CI pipeline run | Change implementation | Safety function implementation |
+| `/close` | QA Lead | Definition of Done | Iteration demo | Release validation | Change review board | V&V gate review |
+| `/retro` | Retrospective Facilitator | Sprint retro | Inspect & adapt | Post-incident review | Post-implementation review | Lessons learned |
+| `/evolve` | Enterprise Architect | Process improvement | Portfolio review | Platform health check | Continual improvement | ALARP review / SIL audit |
+| `/trace` | Compliance Officer | Traceability audit | Solution train alignment | Audit trail | Configuration audit | Traceability matrix (IEC 61508-3 §7.9) |
+| DA gate | Devil's Advocate | Peer review | Architecture review | Security review | CAB review | Independent safety assessment |
+
+## Detailed process docs
+
+- Agent configuration (AAIF): [AGENTS.md](AGENTS.md)
+- Spec lifecycle and harness loop: [docs/process-kit/spec-driven-harness-loop.md](docs/process-kit/spec-driven-harness-loop.md)
+- Human validation runbook (UI-driven): [docs/process-kit/human-validation-runbook.md](docs/process-kit/human-validation-runbook.md)
+- Full checklists: [docs/process-kit/checklists.md](docs/process-kit/checklists.md)
+- Devil's Advocate checklist: [docs/process-kit/devils-advocate-checklist.md](docs/process-kit/devils-advocate-checklist.md)
+- Context isolation guide: [docs/process-kit/context-isolation-guide.md](docs/process-kit/context-isolation-guide.md)
+- Operational runbook (kill switch, budgets): [docs/process-kit/runbook.md](docs/process-kit/runbook.md)
+- Spec template: [docs/specs/_template.md](docs/specs/_template.md)
+- Spec index: [docs/specs/README.md](docs/specs/README.md)
+- Spec changelog: [docs/specs/CHANGELOG.md](docs/specs/CHANGELOG.md)
+- Prioritized backlog: [docs/backlog.md](docs/backlog.md)
+- Scoring rubric: [docs/process-kit/scoring-rubric.md](docs/process-kit/scoring-rubric.md)
+- Signals log (unified): [docs/sessions/signals.md](docs/sessions/signals.md)
+- Session logs: [docs/sessions/](docs/sessions/)
+- Session template: [docs/sessions/_template.md](docs/sessions/_template.md)

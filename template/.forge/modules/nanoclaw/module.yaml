@@ -1,0 +1,73 @@
+name: nanoclaw
+display_name: "Async Gate Delivery"
+description: "Route gate approval requests to messaging platforms (Telegram, WhatsApp, Slack) for async review"
+version: 1
+category: delivery
+requires: []
+conflicts: []
+
+recommendation:
+  when: "Autonomy Level 3+ with async review workflows, especially with non-Claude-Code agents"
+  not_when: "Teams that review gates directly in the IDE, or use Claude Code's native remote dispatch and scheduling"
+
+files:
+  - docker-compose.nanoclaw.yml
+  - .forge/adapters/nanoclaw.sh
+  - .forge/bin/forge-configure-nanoclaw.sh
+  - .forge/bin/forge-configure-nanoclaw.ps1
+  - .forge/bin/forge-setup-nanoclaw.sh
+  - .forge/bin/forge-setup-nanoclaw.ps1
+  - .forge/templates/nanoclaw-skill.json
+  - .claude/commands/configure-nanoclaw.md
+  - .claude/commands/nanoclaw.md
+  - .forge/commands/configure-nanoclaw.md
+  - .forge/commands/nanoclaw.md
+
+injects:
+  - target: .claude/commands/close.md
+    marker: nanoclaw
+  - target: .forge/commands/close.md
+    marker: nanoclaw
+  - target: .claude/commands/implement.md
+    marker: nanoclaw
+  - target: .forge/commands/implement.md
+    marker: nanoclaw
+  - target: .claude/commands/evolve.md
+    marker: nanoclaw
+  - target: .forge/commands/evolve.md
+    marker: nanoclaw
+  - target: .claude/commands/skills.md
+    marker: nanoclaw
+  - target: .forge/commands/skills.md
+    marker: nanoclaw
+  - target: .claude/commands/matrix.md
+    marker: nanoclaw
+  - target: .forge/commands/matrix.md
+    marker: nanoclaw
+  - target: AGENTS.md.jinja
+    marker: nanoclaw
+
+agents_md_sections:
+  - "NanoClaw Integration"
+  - "Swarm Budget Ceilings"
+
+onboarding:
+  phase: features
+  prompt: "Enable async gate decisions via messaging platforms?"
+  explain: |
+    Routes gate approval requests to your phone via Telegram, WhatsApp,
+    Slack, or other messaging platforms. Useful at Autonomy Level 3+ where
+    the agent works independently and you review/approve asynchronously.
+
+    Requires: Docker, a messaging platform account, nanoclaw-forge bridge package.
+
+    Skip this if: your team reviews gates directly in the IDE, or you use
+    Claude Code's native remote dispatch and scheduling features (which
+    provide similar functionality without additional infrastructure).
+
+    Files added: 11 (adapter, 2 commands, docker-compose, setup scripts, skill template)
+    AGENTS.md sections: 1 added (NanoClaw Integration)
+    Command modifications: close.md, implement.md, evolve.md, skills.md, matrix.md
+  default: false
+
+copier_variable: include_nanoclaw

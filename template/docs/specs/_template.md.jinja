@@ -1,0 +1,101 @@
+# Framework: FORGE
+# Spec NNN - <Title>
+
+- Status: draft
+- Change-Lane: `hotfix` | `small-change` | `standard-feature` | `process-only`
+- Priority-Score: <!-- BV=? E=? R=? SR=? → score=? (see docs/process-kit/scoring-rubric.md) -->
+<!-- - Approved-SHA: (set automatically by /implement — do not edit manually) -->
+- Trigger: <!-- error found in chat | error found in tests | user correction | agent recommendation | evolve loop review | harness failure | backlog promotion | other -->
+<!-- - Dependencies: NNN, NNN  (spec IDs this spec depends on — omit or "—" if none) -->
+- Owner: {{ default_owner }}
+- Author: <name>
+- Reviewer: {{ default_owner }}
+- Approver: {{ default_owner }}
+- Implementation owner: <name>
+- Last updated: YYYY-MM-DD
+
+## Objective
+
+<What problem this solves and desired outcome>
+
+## Scope
+
+In scope:
+- <item>
+
+Out of scope:
+- <item>
+
+## Requirements
+
+1. <requirement>
+
+## Acceptance Criteria
+
+1. <verifiable outcome>
+
+## Test Plan
+
+1. <test>
+
+### Cross-platform coverage
+<!-- If this spec modifies .sh scripts, include PowerShell equivalents below. Advisory — not a blocking gate. -->
+- bash: `<bash test command>`
+- PowerShell: `<equivalent PowerShell command>`
+
+## Compatibility / Deprecation Notes
+
+- <contract/schema/CLI compatibility notes, or "none">
+
+## ADR References
+
+- <path or "none">
+
+## Implementation Summary
+
+- Changed files:
+  - `<path>`
+
+## Reproduction Commands
+
+Commands needed to reproduce the verified state from scratch:
+
+```bash
+# Example — replace with actual commands
+{{ test_command }} tests/test_<module>.py
+```
+
+Human validation steps: see [human-validation-runbook.md](../process-kit/human-validation-runbook.md) sections: <list sections, e.g. A, C>
+
+## Shadow Validation
+
+<!-- Optional — remove this section if the spec is purely additive (new feature, new file, new command).
+     Use when the spec REPLACES existing behavior and you need confidence the replacement is equivalent.
+     See docs/process-kit/shadow-validation-guide.md for when to use each strategy.
+     See docs/process-kit/shadow-validation-checklist.md for step-by-step execution. -->
+
+<!-- Uncomment ONE strategy and fill in:
+**Strategy**: reference-comparison | dual-run | test-oracle-replay
+**Reference**: <what the new implementation is compared against>
+**Inputs**: <test inputs or production data sample>
+**Expected**: <what matching outputs look like>
+**Evidence**: <path to diff/comparison output, or "pending">
+-->
+
+## Delta (optional -- for canonical product spec updates)
+
+<!-- If this spec changes the canonical product spec, declare deltas here.
+     At /close, these markers are applied to the canonical spec.
+     Leave markers commented out if not applicable. -->
+<!-- ADDED: <section> -- <new requirement text> -->
+<!-- MODIFIED: <section>/<REQ-ID> -- <updated text> -->
+<!-- REMOVED: <section>/<REQ-ID> -- <reason> -->
+
+## Evidence
+
+- Tests/lint/output summary:
+  - <evidence>
+
+## Revision Log
+
+- YYYY-MM-DD: <revision summary>

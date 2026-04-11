@@ -1,0 +1,32 @@
+name: devcontainer
+display_name: "Dev Container Configuration"
+description: "VS Code dev container for consistent development environments"
+version: 1
+category: devtools
+requires: []
+conflicts: []
+
+recommendation:
+  when: "Teams using VS Code with Dev Containers or GitHub Codespaces"
+  not_when: "Teams with established local development environments"
+
+files:
+  - .devcontainer/
+
+injects: []
+
+onboarding:
+  phase: features
+  prompt: "Keep dev container configuration?"
+  explain: |
+    Provides a VS Code dev container configuration (devcontainer.json)
+    for consistent development environments across the team.
+
+    Works with VS Code Remote - Containers and GitHub Codespaces.
+
+    Skip this if: your team doesn't use dev containers or has their own
+    container configuration.
+
+    Files added: .devcontainer/ directory (2 files)
+    No command modifications.
+  default: true

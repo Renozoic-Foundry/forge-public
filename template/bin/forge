@@ -1,0 +1,375 @@
+#!/usr/bin/env bash
+# FORGE CLI — thin entry point for spec-driven workflows
+# Maps `forge <command> [args]` to .forge/commands/<command>.md prompts
+# and dispatches to the active AI agent runtime.
+#
+# Exit codes:
+#   0 — success
+#   1 — command not found
+#   2 — missing required arguments
+#   3 — agent dispatch failure
+#
+# Usage:
+#   forge <command> [spec-number] [flags]
+#   forge list                   — enumerate available commands
+#   forge help <command>         — print command description
+#   forge --version              — print FORGE version
+#   forge <command> N --plain    — output assembled prompt to stdout (no agent dispatch)
+#   forge <command> N --json     — output assembled prompt as JSON to stdout
+
+set -euo pipefail
+
+# --- Path resolution ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+FORGE_COMMANDS_DIR="${PROJECT_DIR}/.forge/commands"
+CLAUDE_COMMANDS_DIR="${PROJECT_DIR}/.claude/commands"
+
+# Resolve the commands directory — prefer .forge/commands, fall back to .claude/commands
+if [[ -d "${FORGE_COMMANDS_DIR}" ]]; then
+    COMMANDS_DIR="${FORGE_COMMANDS_DIR}"
+elif [[ -d "${CLAUDE_COMMANDS_DIR}" ]]; then
+    COMMANDS_DIR="${CLAUDE_COMMANDS_DIR}"
+else
+    echo "Error: No commands directory found." >&2
+    echo "Expected: .forge/commands/ or .claude/commands/" >&2
+    exit 3
+fi
+
+# --- Version ---
+FORGE_VERSION="1.0.0"
+
+# Try to read version from .copier-answers.yml if it exists
+COPIER_ANSWERS="${PROJECT_DIR}/.copier-answers.yml"
+if [[ -f "${COPIER_ANSWERS}" ]]; then
+    # Extract commit or version info if available
+    _ver=$(grep -E '^\s*_commit:' "${COPIER_ANSWERS}" 2>/dev/null | sed 's/.*: *//' || true)
+    if [[ -n "${_ver}" ]]; then
+        FORGE_VERSION="${_ver}"
+    fi
+fi
+
+# --- Helpers ---
+
+# Print version
+print_version() {
+    echo "FORGE CLI v${FORGE_VERSION}"
+}
+
+# Find the command file for a given command name
+# Supports both .md and .md.jinja extensions
+find_command_file() {
+    local cmd_name="$1"
+    local cmd_file="${COMMANDS_DIR}/${cmd_name}.md"
+    local cmd_file_jinja="${COMMANDS_DIR}/${cmd_name}.md.jinja"
+
+    if [[ -f "${cmd_file}" ]]; then
+        echo "${cmd_file}"
+    elif [[ -f "${cmd_file_jinja}" ]]; then
+        echo "${cmd_file_jinja}"
+    else
+        return 1
+    fi
+}
+
+# Extract description from command file frontmatter
+extract_description() {
+    local file="$1"
+    local desc
+    desc=$(sed -n '/^---$/,/^---$/{ /^description:/{ s/^description: *"*//; s/"*$//; p; } }' "${file}" 2>/dev/null || true)
+    if [[ -z "${desc}" ]]; then
+        desc="(no description)"
+    fi
+    echo "${desc}"
+}
+
+# Extract command name from frontmatter or filename
+extract_name() {
+    local file="$1"
+    local name
+    name=$(sed -n '/^---$/,/^---$/{ /^name:/{ s/^name: *"*//; s/"*$//; p; } }' "${file}" 2>/dev/null || true)
+    if [[ -z "${name}" ]]; then
+        # Fall back to filename without extension
+        name=$(basename "${file}" .md)
+        name=$(basename "${name}" .md.jinja)
+    fi
+    echo "${name}"
+}
+
+# Commands that require a spec number argument
+requires_spec_number() {
+    local cmd="$1"
+    case "${cmd}" in
+        implement|close|trace|revise|handoff|tab) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# List all available commands
+list_commands() {
+    echo "FORGE CLI — Available Commands"
+    echo "=============================="
+    echo ""
+
+    local files
+    files=$(find "${COMMANDS_DIR}" -maxdepth 1 -name '*.md' -o -name '*.md.jinja' | sort)
+
+    local max_name_len=0
+    local names=()
+    local descs=()
+
+    for file in ${files}; do
+        local name
+        name=$(extract_name "${file}")
+        names+=("${name}")
+        descs+=("$(extract_description "${file}")")
+        if [[ ${#name} -gt ${max_name_len} ]]; then
+            max_name_len=${#name}
+        fi
+    done
+
+    for i in "${!names[@]}"; do
+        printf "  %-${max_name_len}s  %s\n" "${names[$i]}" "${descs[$i]}"
+    done
+
+    echo ""
+    echo "Usage: forge <command> [spec-number] [--plain|--json]"
+    echo "       forge help <command>     — show full command prompt"
+    echo "       forge --version          — show version"
+}
+
+# Print help for a specific command
+help_command() {
+    local cmd_name="$1"
+    local cmd_file
+    if ! cmd_file=$(find_command_file "${cmd_name}"); then
+        echo "Error: Unknown command '${cmd_name}'." >&2
+        echo "Run 'forge list' to see available commands." >&2
+        exit 1
+    fi
+    cat "${cmd_file}"
+}
+
+# Detect the active AI agent runtime
+detect_agent() {
+    # Check for Claude Code
+    if command -v claude >/dev/null 2>&1; then
+        echo "claude-code"
+        return 0
+    fi
+
+    # Check for Aider
+    if command -v aider >/dev/null 2>&1; then
+        echo "aider"
+        return 0
+    fi
+
+    # Check for Cursor (typically runs as an IDE, not CLI)
+    if command -v cursor >/dev/null 2>&1; then
+        echo "cursor"
+        return 0
+    fi
+
+    # Check for Codex
+    if command -v codex >/dev/null 2>&1; then
+        echo "codex"
+        return 0
+    fi
+
+    # Generic / no agent detected
+    echo "generic"
+    return 0
+}
+
+# Assemble the prompt from a command file and arguments
+assemble_prompt() {
+    local cmd_file="$1"
+    local spec_number="${2:-}"
+    local prompt_content
+
+    prompt_content=$(cat "${cmd_file}")
+
+    # If a spec number is provided, add context
+    if [[ -n "${spec_number}" ]]; then
+        local spec_file
+        spec_file=$(find "${PROJECT_DIR}/docs/specs" -maxdepth 1 -name "${spec_number}-*.md" 2>/dev/null | head -1 || true)
+
+        local spec_context=""
+        if [[ -n "${spec_file}" && -f "${spec_file}" ]]; then
+            spec_context="
+
+---
+## Spec Context (auto-loaded by forge CLI)
+Spec file: ${spec_file}
+Spec number: ${spec_number}
+---"
+        fi
+
+        echo "${prompt_content}${spec_context}
+
+\$ARGUMENTS: ${spec_number}"
+    else
+        echo "${prompt_content}"
+    fi
+}
+
+# Dispatch the prompt to the detected agent
+dispatch_to_agent() {
+    local agent="$1"
+    local prompt="$2"
+
+    case "${agent}" in
+        claude-code)
+            # Use claude -p to send the prompt
+            if ! echo "${prompt}" | claude -p - 2>/dev/null; then
+                echo "Error: Claude Code dispatch failed." >&2
+                exit 3
+            fi
+            ;;
+        aider)
+            if ! echo "${prompt}" | aider --message-file - 2>/dev/null; then
+                echo "Error: Aider dispatch failed." >&2
+                exit 3
+            fi
+            ;;
+        generic|*)
+            # Output prompt to stdout for piping to any LLM CLI
+            echo "${prompt}"
+            ;;
+    esac
+}
+
+# --- Main ---
+
+# No arguments — show usage
+if [[ $# -eq 0 ]]; then
+    echo "FORGE CLI v${FORGE_VERSION}"
+    echo ""
+    echo "Usage: forge <command> [spec-number] [flags]"
+    echo ""
+    echo "Run 'forge list' for available commands."
+    echo "Run 'forge help <command>' for command details."
+    exit 0
+fi
+
+# Parse global flags
+COMMAND=""
+SPEC_NUMBER=""
+OUTPUT_FORMAT=""
+REMAINING_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version|-v)
+            print_version
+            exit 0
+            ;;
+        --plain)
+            OUTPUT_FORMAT="plain"
+            shift
+            ;;
+        --json)
+            OUTPUT_FORMAT="json"
+            shift
+            ;;
+        --help|-h)
+            if [[ -z "${COMMAND}" ]]; then
+                echo "FORGE CLI v${FORGE_VERSION}"
+                echo ""
+                echo "Usage: forge <command> [spec-number] [flags]"
+                echo ""
+                echo "Commands:"
+                echo "  list              List all available commands"
+                echo "  help <command>    Show full command prompt"
+                echo ""
+                echo "Flags:"
+                echo "  --plain           Output assembled prompt to stdout (no agent dispatch)"
+                echo "  --json            Output assembled prompt as JSON to stdout"
+                echo "  --version, -v     Print version"
+                echo "  --help, -h        Print this help"
+                exit 0
+            else
+                REMAINING_ARGS+=("$1")
+                shift
+            fi
+            ;;
+        *)
+            if [[ -z "${COMMAND}" ]]; then
+                COMMAND="$1"
+            elif [[ -z "${SPEC_NUMBER}" ]] && [[ "$1" =~ ^[0-9]+$ ]]; then
+                SPEC_NUMBER="$1"
+            else
+                REMAINING_ARGS+=("$1")
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Handle built-in commands
+case "${COMMAND}" in
+    list)
+        list_commands
+        exit 0
+        ;;
+    help)
+        if [[ -z "${SPEC_NUMBER}" ]] && [[ ${#REMAINING_ARGS[@]} -gt 0 ]]; then
+            # forge help implement — SPEC_NUMBER won't be set, but first remaining arg is the command name
+            help_command "${REMAINING_ARGS[0]}"
+        elif [[ -n "${SPEC_NUMBER}" ]]; then
+            # forge help 42 — spec number parsed where command name expected; unlikely but handle
+            echo "Error: 'forge help' expects a command name, not a number." >&2
+            echo "Usage: forge help <command>" >&2
+            exit 2
+        else
+            echo "Error: 'forge help' requires a command name." >&2
+            echo "Usage: forge help <command>" >&2
+            exit 2
+        fi
+        exit 0
+        ;;
+esac
+
+# Resolve the command file
+CMD_FILE=""
+if ! CMD_FILE=$(find_command_file "${COMMAND}"); then
+    echo "Error: Unknown command '${COMMAND}'." >&2
+    echo "Run 'forge list' to see available commands." >&2
+    exit 1
+fi
+
+# Check if spec number is required
+if requires_spec_number "${COMMAND}" && [[ -z "${SPEC_NUMBER}" ]]; then
+    echo "Error: Command '${COMMAND}' requires a spec number." >&2
+    echo "Usage: forge ${COMMAND} <spec-number>" >&2
+    exit 2
+fi
+
+# Assemble prompt
+PROMPT=$(assemble_prompt "${CMD_FILE}" "${SPEC_NUMBER}")
+
+# Handle output formats
+case "${OUTPUT_FORMAT}" in
+    plain)
+        echo "${PROMPT}"
+        exit 0
+        ;;
+    json)
+        # Use a portable JSON encoding approach
+        ESCAPED_PROMPT=$(echo "${PROMPT}" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" 2>/dev/null || \
+            echo "${PROMPT}" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+        cat <<ENDJSON
+{
+  "command": "${COMMAND}",
+  "spec_number": "${SPEC_NUMBER}",
+  "agent": "$(detect_agent)",
+  "prompt": ${ESCAPED_PROMPT}
+}
+ENDJSON
+        exit 0
+        ;;
+esac
+
+# Detect agent and dispatch
+AGENT=$(detect_agent)
+dispatch_to_agent "${AGENT}" "${PROMPT}"

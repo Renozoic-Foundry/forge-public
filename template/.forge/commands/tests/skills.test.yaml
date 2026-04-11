@@ -1,0 +1,75 @@
+command: skills
+type: slash-command
+
+structure:
+  required_sections:
+    - "## Typical Workflow"
+    - "## Commands by Stage"
+    - "### Planning & Discovery"
+    - "### Implementation & Testing"
+    - "### Review & Close"
+    - "### Session Management"
+    - "### Project Lifecycle"
+  required_strings:
+    - "/brainstorm"
+    - "/interview"
+    - "/matrix"
+    - "/spec"
+    - "/implement"
+    - "/test"
+    - "/trace"
+    - "/close"
+    - "/retro"
+    - "/evolve"
+    - "/handoff"
+    - "/now"
+    - "/session"
+    - "/note"
+    - "/forge"
+    - "/onboarding"
+    - "/skills"
+    - "/harvest"
+    - "/tab"
+    - "/parallel"
+    - "/bug"
+    - "/insights"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 200
+  min_lines: 40
+
+references:
+  commands_must_exist:
+    - "brainstorm"
+    - "interview"
+    - "matrix"
+    - "spec"
+    - "implement"
+    - "close"
+    - "now"
+    - "session"
+    - "note"
+    - "forge"
+    - "onboarding"
+    - "handoff"
+    - "evolve"
+    - "retro"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "haiku"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "skills"
+    model_tier: "haiku"
+    workflow_stage: "configuration"

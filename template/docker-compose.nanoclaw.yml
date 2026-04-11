@@ -1,0 +1,26 @@
+services:
+  nanoclaw:
+    image: ghcr.io/forge-framework/nanoclaw:latest
+    container_name: nanoclaw
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NANOCLAW_AUTH_PROVIDER=${NANOCLAW_AUTH_PROVIDER:-yubikey}
+      - NANOCLAW_CHANNEL=${NANOCLAW_CHANNEL:-}
+      - NANOCLAW_SKILL_ID=${NANOCLAW_SKILL_ID:-forge-gate}
+      - NANOCLAW_TIMEOUT=${NANOCLAW_TIMEOUT:-1800}
+      - NANOCLAW_RETRY_COUNT=${NANOCLAW_RETRY_COUNT:-2}
+      - NANOCLAW_FALLBACK=${NANOCLAW_FALLBACK:-halt}
+      - NANOCLAW_LOG_LEVEL=${NANOCLAW_LOG_LEVEL:-info}
+    volumes:
+      - ./.forge/secrets:/app/secrets:ro
+      - ./.forge/state/gates:/app/state/gates
+      - ./.forge/adapters:/app/adapters:ro
+      - ./.forge/templates:/app/templates:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

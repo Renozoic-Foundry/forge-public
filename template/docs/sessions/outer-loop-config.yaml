@@ -1,0 +1,38 @@
+# FORGE Automated Outer Loop Configuration
+# Spec 043 — Automated Outer Loop Runner
+# Docs: .claude/commands/outer-loop.md
+
+# Trigger mode
+# Options:
+#   manual           — /outer-loop must be invoked explicitly (default, Phase 1-3)
+#   on_spec_count    — runs automatically after N specs are closed since last run
+#   time             — runs automatically after N days since last run
+trigger: manual
+spec_count_threshold: 5       # used when trigger=on_spec_count
+time_interval_days: 30        # used when trigger=time
+
+# Notification delivery
+# Options:
+#   log-only       — results added to session log only (no push notification)
+#   nanoclaw       — results sent as NanoClaw digest message to operator
+notify_via: log-only
+
+# Human approval gate
+# Always true — proposed actions (new specs, score changes) always require human approval
+require_human_approval: true
+
+# Which review steps run in automated mode
+# All steps run in full periodic review; only F1+F4 run in fast-path (per-spec) mode
+auto_run_full_review: false   # true = full F1-F4 on each trigger; false = fast-path (F1+F4)
+
+# NanoClaw task ID (set by /configure-nanoclaw or mcp__nanoclaw__schedule_task)
+# Leave blank if notify_via=log-only
+nanoclaw_task_id: ""
+
+# Spec proposal generation (Spec 045 — Signal Pattern Analysis + Proposal Generation)
+# Max proposals generated per outer loop cycle (prevents noise)
+max_proposals_per_cycle: 5
+# Minimum occurrences for a signal pattern to trigger a proposal
+proposal_min_occurrences: 2
+# Minimum pattern severity to trigger a proposal (low | medium | high)
+proposal_min_severity: medium

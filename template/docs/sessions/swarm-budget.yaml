@@ -1,0 +1,31 @@
+# FORGE Swarm Budget Configuration
+# Spec 042 — Swarm Budget Management
+# Docs: .claude/commands/parallel.md
+
+# Swarm-level budget ceiling (applies across ALL concurrent agents)
+swarm_ceiling_usd: 5.00         # Maximum total spend for one /parallel run
+swarm_ceiling_tokens: 500000    # Maximum total input+output tokens (alternative ceiling)
+
+# Per-agent allocation strategy
+allocation_strategy: equal      # Options: equal (ceiling / N agents), priority_weighted (TBD)
+
+# Threshold alerts (as fraction of ceiling)
+alert_thresholds:
+  - threshold: 0.50             # 50% — info alert
+    action: notify              # notify = NanoClaw message; log = session log only
+  - threshold: 0.80             # 80% — warning alert
+    action: notify
+  - threshold: 0.90             # 90% — urgent alert, agent should wrap up
+    action: notify_and_warn
+  - threshold: 1.00             # 100% — ceiling reached
+    action: halt_all            # halt_all = stop all agents immediately
+
+# Notification channel
+notify_via: log-only            # Options: log-only, nanoclaw
+nanoclaw_task_id: ""            # Set if notify_via=nanoclaw
+
+# Cost estimation (used when actual API cost is not metered)
+# Estimated cost per 1M tokens: input=3.00 USD (Sonnet), output=15.00 USD (Sonnet)
+# Haiku: input=0.25 USD, output=1.25 USD per 1M tokens
+cost_per_1m_input_usd: 3.00
+cost_per_1m_output_usd: 15.00

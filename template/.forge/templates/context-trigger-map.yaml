@@ -1,0 +1,126 @@
+# Context-Aware Trigger Map (Spec 080)
+# Maps context signals to FORGE command suggestions.
+# Used by /forge and CLAUDE.md to detect when a command should be suggested or auto-invoked.
+# Config: AGENTS.md → forge.triggers
+version: 1
+
+triggers:
+  - name: spec-needed
+    description: "User is discussing a change with no matching spec"
+    signals:
+      - type: conversation
+        pattern: "let's add|we should change|I want to modify|new feature|can we build|we need to"
+      - type: file_absent
+        check: "no spec in docs/specs/ matches the topic under discussion"
+    suggests: /spec
+    auto_invoke: false
+    priority: high
+
+  - name: implementation-ready
+    description: "A spec exists at draft or in-progress and hasn't been implemented yet"
+    signals:
+      - type: spec_status
+        status: [draft, in-progress]
+      - type: conversation
+        pattern: "ready to implement|start building|let's code|begin implementation"
+    suggests: /implement
+    auto_invoke: false
+    priority: medium
+
+  - name: close-ready
+    description: "Implementation is complete, tests pass, ready for closure"
+    signals:
+      - type: spec_status
+        status: implemented
+      - type: conversation
+        pattern: "done|finished|all tests pass|implementation complete|ready to close"
+    suggests: /close
+    auto_invoke: false
+    priority: medium
+
+  - name: bug-detected
+    description: "User reports an error or test failure"
+    signals:
+      - type: conversation
+        pattern: "bug|error|broken|failing|crash|exception|traceback|doesn't work|not working"
+      - type: test_failure
+        check: true
+    suggests: /bug
+    auto_invoke: false
+    priority: high
+
+  - name: session-end
+    description: "User appears to be wrapping up work"
+    signals:
+      - type: conversation
+        pattern: "done for today|wrapping up|that's it|signing off|end of session|calling it|stopping here"
+    suggests: /session
+    auto_invoke: false
+    priority: low
+
+  - name: stale-session
+    description: "No session log exists for today despite significant work"
+    signals:
+      - type: file_absent
+        check: "no session log dated today in docs/sessions/"
+      - type: git_activity
+        check: "> 3 commits today"
+    suggests: /session
+    auto_invoke: false
+    priority: low
+
+  - name: process-concern
+    description: "User raises a process friction or improvement idea"
+    signals:
+      - type: conversation
+        pattern: "pain point|friction|annoying|tedious|should we change|process improvement|workflow issue"
+    suggests: /note [evolve]
+    auto_invoke: false
+    priority: medium
+
+  - name: scope-creep
+    description: "Work appears to go beyond current spec scope"
+    signals:
+      - type: conversation
+        pattern: "while we're at it|might as well|also add|one more thing|quick aside"
+      - type: spec_in_progress
+        check: true
+    suggests: /note
+    auto_invoke: false
+    priority: high
+
+  - name: exploration-needed
+    description: "User is unsure about approach or needs to think through options"
+    signals:
+      - type: conversation
+        pattern: "not sure|what if|should we|how should|which approach|trade-offs|options for"
+    suggests: /interview
+    auto_invoke: false
+    priority: medium
+
+  - name: status-check
+    description: "User asks about project state or what to do next"
+    signals:
+      - type: conversation
+        pattern: "where are we|what's next|project status|what should I|what do we"
+    suggests: /now
+    auto_invoke: false
+    priority: low
+
+  - name: backlog-review
+    description: "Multiple specs have been closed without a priority re-evaluation"
+    signals:
+      - type: specs_closed_since_matrix
+        threshold: 3
+    suggests: /matrix
+    auto_invoke: false
+    priority: low
+
+  - name: evolve-overdue
+    description: "Last evolve loop review was more than 7 days ago"
+    signals:
+      - type: days_since_evolve_loop
+        threshold: 7
+    suggests: /evolve
+    auto_invoke: false
+    priority: low

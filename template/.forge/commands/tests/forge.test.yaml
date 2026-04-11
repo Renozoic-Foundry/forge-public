@@ -1,0 +1,44 @@
+command: forge
+type: slash-command
+
+structure:
+  required_sections:
+    - "## Subcommand: light"
+    - "## Subcommand: stoke"
+  required_strings:
+    - ".copier-answers.yml"
+    - "copier"
+    - "onboarding.yaml"
+    - "legacy-upgrade"
+    - "greenfield"
+    - "brownfield"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 1200
+  min_lines: 100
+
+references:
+  files_must_exist:
+    - "docs/process-kit/human-validation-runbook.md"
+  commands_must_exist:
+    - "onboarding"
+    - "now"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "sonnet"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "forge"
+    model_tier: "sonnet"
+    workflow_stage: "lifecycle"

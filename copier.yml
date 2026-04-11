@@ -1,0 +1,73 @@
+# FORGE Copier Configuration
+# Spec 029 — Copier Migration (replaces cookiecutter.json)
+# Usage: copier copy /path/to/forge /path/to/new-project
+#        copier update  (from within a consumer project to pull upstream changes)
+
+_subdirectory: "template"
+_min_copier_version: "9.0.0"
+_templates_suffix: ".jinja"  # only files ending in .jinja are Jinja-processed; others copied verbatim
+
+# ---
+
+project_name:
+  type: str
+  help: "Project name (human-readable, e.g. 'My Project')"
+  default: "My Project"
+
+project_slug:
+  type: str
+  help: "Project slug (machine name, used for directory and package names)"
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+
+project_description:
+  type: str
+  help: "One-line project description"
+  default: "A short description of your project."
+
+author:
+  type: str
+  help: "Author name"
+  default: "Your Name"
+
+default_owner:
+  type: str
+  help: "Project owner name (used in spec frontmatter)"
+  default: "operator"
+
+test_command:
+  type: str
+  help: "Test command (e.g. 'pytest -q', 'npm test', 'cargo test')"
+  default: "pytest -q"
+
+lint_command:
+  type: str
+  help: "Lint command (e.g. 'ruff check .', 'eslint src/', 'cargo clippy')"
+  default: "ruff check ."
+
+use_wsl2:
+  type: bool
+  help: "Enable WSL2-specific instructions (Windows + WSL2 development)"
+  default: false
+
+harness_command:
+  type: str
+  help: "Optional harness command (integration/end-to-end test runner)"
+  default: "# No harness configured — customize in CLAUDE.md"
+
+# compliance_profile removed (Spec 205 — Lane B deferred from public release)
+# Hardcoded to "none" in all template conditionals until Lane B is ready.
+
+include_nanoclaw:
+  type: bool
+  help: "Include NanoClaw messaging integration in AGENTS.md"
+  default: false
+
+include_advanced_autonomy:
+  type: bool
+  help: "Include L3/L4 autonomy examples, swarm budgets, and auto-progression config in AGENTS.md"
+  default: false
+
+include_two_stage_review:
+  type: bool
+  help: "Include two-stage review protocol in AGENTS.md"
+  default: false

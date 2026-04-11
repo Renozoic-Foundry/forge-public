@@ -27,7 +27,7 @@ Windows users: use Git Bash for all shell operations. PowerShell wrappers are in
 4. Run bash validation: `bash scripts/validate-bash.sh`
 5. Verify command sync: `bash scripts/validate-command-sync.sh`
 
-See [CLAUDE.md](CLAUDE.md) for the full testing sequence.
+See `CLAUDE.md` (in your bootstrapped project) for the full testing sequence.
 
 ## Spec Lifecycle
 
@@ -56,7 +56,7 @@ bash scripts/validate-command-sync.sh
 bash scripts/smoke-test-runtime.sh
 ```
 
-Manual validation steps are in [`docs/process-kit/human-validation-runbook.md`](docs/process-kit/human-validation-runbook.md).
+Manual validation steps are in `docs/process-kit/human-validation-runbook.md` (available after bootstrapping a project from this template).
 
 ## Command Naming Guidelines
 

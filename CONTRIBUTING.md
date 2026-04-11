@@ -73,7 +73,7 @@ FORGE's power comes from its feedback loops. When you discover something in your
 
 ### 1. Signal Promotion
 
-When a signal captured via `/retro`, `/harvest`, or `/bug` in your project reveals a **framework-level improvement**, promote it:
+When a signal captured via `/close` or `/note` in your project reveals a **framework-level improvement**, promote it:
 
 1. Open an issue with the `signal-promotion` label
 2. Include the original SIG-NNN entry from your project's `docs/sessions/signals.md`

@@ -38,6 +38,21 @@ if [[ "$DRY_RUN" == "true" ]]; then
   echo ""
 fi
 
+# --- Pre-flight: validate public docs (Spec 219) ---
+VALIDATE_SCRIPT="${FORGE_SRC}/scripts/validate-public-docs.sh"
+if [[ -f "$VALIDATE_SCRIPT" ]]; then
+  echo "==> Pre-flight: validating public docs"
+  if ! bash "$VALIDATE_SCRIPT"; then
+    echo ""
+    echo "ERROR: Public docs validation failed. Fix errors before syncing."
+    exit 1
+  fi
+  echo ""
+else
+  echo "NOTE: validate-public-docs.sh not found — skipping docs validation"
+  echo ""
+fi
+
 # Sync a directory with delete semantics
 # Uses rsync if available (Linux/Mac), otherwise Python shutil (cross-platform)
 sync_dir() {
@@ -142,6 +157,7 @@ PUBLIC_SCRIPTS=(
   "validate-spec-index.sh"
   "validate-readme-stats.sh"
   "smoke-test-template.sh"
+  "gen-command-reference.sh"
 )
 mkdir -p "${FORGE_PUBLIC}/scripts"
 for script in "${PUBLIC_SCRIPTS[@]}"; do
@@ -160,6 +176,14 @@ echo ""
 echo "==> docs/ (public subset)"
 PUBLIC_DOC_FILES=(
   "docs/roadmap.md"
+  "docs/concept-overview.md"
+  "docs/getting-started.md"
+  "docs/command-reference.md"
+  "docs/example-spec.md"
+  "docs/faq.md"
+  "docs/agents-config-reference.md"
+  "docs/style-guide.md"
+  "docs/QUICK-REFERENCE.md"
 )
 for f in "${PUBLIC_DOC_FILES[@]}"; do
   if [[ -f "${FORGE_SRC}/${f}" ]]; then

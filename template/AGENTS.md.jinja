@@ -102,7 +102,7 @@ When the human invokes `/implement NNN`:
 4. Autonomy ends when `/implement` completes (status → `implemented`)
 
 When the human invokes `/close NNN`:
-1. Agent auto-chains: status transition → `/retro` → `/matrix`
+1. Agent auto-chains: status transition → signal capture → `/matrix`
 2. Agent pauses only at the final "pick next" decision point
 3. Human makes the decision; agent executes
 
@@ -165,7 +165,6 @@ On Windows, use `bin\forge.ps1` for native PowerShell support.
 | /spec | Create a new spec from the template | sonnet |
 | /decision | Create a new Architecture Decision Record (ADR) | sonnet |
 | /revise | Revise an existing spec based on feedback or correction | sonnet |
-| /spec-gate | ~~DEPRECATED~~ — enforcement moved to AGENTS.md pre-edit hook | sonnet |
 | /matrix | Update and present the prioritization matrix | haiku |
 
 ### Implementation & Testing
@@ -183,9 +182,6 @@ On Windows, use `bin\forge.ps1` for native PowerShell support.
 | Command | Description | Model Tier |
 |---------|-------------|-----------|
 | /close | Close a spec: confirm validation, capture signals, update priorities | sonnet |
-| /retro | ~~DEPRECATED~~ — functionality inline in /close chain | sonnet |
-| /harvest | ~~DEPRECATED~~ — replaced by /note [signal] | sonnet |
-| /handoff | ~~DEPRECATED~~ — absorbed by /now "review" option | sonnet |
 | /evolve | Run the KCS Evolve Loop review | sonnet |
 
 ### Session Management
@@ -195,7 +191,6 @@ On Windows, use `bin\forge.ps1` for native PowerShell support.
 | /now | Review current project state and suggest next action | haiku |
 | /session | Create or update the session log | haiku |
 | /note | Add a scratchpad note for the next process checkpoint | haiku |
-| /bug | ~~DEPRECATED~~ — replaced by /note [bug] | haiku |
 | /insights | Mine FORGE process data for cross-session insights | haiku |
 
 ### Lifecycle
@@ -213,7 +208,6 @@ On Windows, use `bin\forge.ps1` for native PowerShell support.
 | /config-change | Propose and apply changes to agent configuration files | sonnet |
 | /configure-nanoclaw | Configure NanoClaw hardware key enrollment and messaging | sonnet |
 | /nanoclaw | Manage the NanoClaw container — start, stop, status, logs | sonnet |
-| /skills | ~~DEPRECATED~~ — replaced by /forge help and bin/forge list | haiku |
 
 **Manual invocation (Codex, generic agents):** If your agent does not support slash commands,
 paste the content of `.forge/commands/<name>.md` into your conversation, or instruct your agent:

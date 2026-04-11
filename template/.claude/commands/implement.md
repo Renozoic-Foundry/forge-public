@@ -23,7 +23,7 @@ If $ARGUMENTS is `?` or `help`:
     - implemented / deprecated → stops and reports (already closed)
     - next → reads backlog, selects top-ranked draft, displays spec info, then proceeds without confirmation
   Approval trail: inline approval adds a revision entry + CHANGELOG entry.
-  After implementation: presents /handoff checklist inline, then reminds to /close.
+  After implementation: presents review brief inline, then reminds to /close.
   ```
   Stop — do not execute any further steps.
 
@@ -679,7 +679,7 @@ Scan the changed files list (from `git diff --name-only` against the spec baseli
    - `GATE [test-execution]: PASS/FAIL — <test results summary>`. On FAIL: `Remediation: fix failing tests before marking implemented.`
    - `GATE [post-implementation]: PASS/FAIL — <checklist summary>`. On FAIL: `Remediation: complete missing checklist items: <items>.`
 8. **Implementation retrospective**: Draft SIG-NNN entries for any errors, user corrections, or insights from this cycle. Show drafts, get confirmation, then append to `docs/sessions/signals.md` and update today's session log.
-9. **Inline handoff with Review Brief (Spec 160)**: Present the implementation results using the Review Brief format from `docs/process-kit/gate-categories.md`:
+9. **Inline review brief (Spec 160)**: Present the implementation results using the Review Brief format from `docs/process-kit/gate-categories.md`:
    a. Categorize each post-implementation check as machine-verifiable, human-judgment-required, or confidence-gated.
    b. Output the Review Brief:
       - **Machine-Verified**: All mechanical gates that passed (file presence, test execution, cross-reference sync, completeness, lint)

@@ -113,7 +113,7 @@ These capabilities are not tied to a single phase. They enhance the foundation. 
 ### Spec Kit Integration
 GitHub Spec Kit (github/spec-kit) was part of FORGE's original design. Its specify → plan → tasks pipeline replaces manual spec authoring with structured, agent-guided spec creation. FORGE wraps Spec Kit's output with lifecycle management, evidence gates, and learning capture that Spec Kit does not provide.
 
-**Integration seam:** Spec Kit's `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` feeds into FORGE's `/implement` → `/close` → `/retro` cycle. Spec Kit handles the front half (what to build), FORGE handles the back half (building it with evidence).
+**Integration seam:** Spec Kit's `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` feeds into FORGE's `/implement` → `/close` cycle. Spec Kit handles the front half (what to build), FORGE handles the back half (building it with evidence).
 
 ### MCP Documentation Servers
 Agents working from stale training data is a silent failure mode — especially dangerous for safety-critical work. MCP servers provide live, authoritative documentation:

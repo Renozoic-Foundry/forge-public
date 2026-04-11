@@ -65,7 +65,7 @@ Violation of either rule is a process defect — log it as a signal and trigger 
 |-----------|------|-------------------|
 | `draft → in-progress` | Completeness | Objective, scope, ACs, test plan, change lane present |
 | `in-progress → implemented` | Delivery | All ACs satisfied, tests pass, lint clean, docs updated |
-| `implemented → closed` | Validation | Human confirms deliverables, signals captured via `/retro` |
+| `implemented → closed` | Validation | Human confirms deliverables, signals captured inline |
 
 Gate failures produce structured feedback. **Reset rule:** New ACs added via `/revise` reset status to `in-progress`; typo/wording fixes do not.
 
@@ -225,7 +225,7 @@ All `.forge/` bash scripts use `set -euo pipefail`. These patterns silently brea
 | `/spec` | Technical Lead | Story writing | Feature spec | Design doc | Change proposal (RFC) | Safety requirement spec (SRS) |
 | `/implement` | Developer | Sprint execution | Iteration build | CI pipeline run | Change implementation | Safety function implementation |
 | `/close` | QA Lead | Definition of Done | Iteration demo | Release validation | Change review board | V&V gate review |
-| `/retro` | Retrospective Facilitator | Sprint retro | Inspect & adapt | Post-incident review | Post-implementation review | Lessons learned |
+| `/close` (retro) | Retrospective Facilitator | Sprint retro | Inspect & adapt | Post-incident review | Post-implementation review | Lessons learned |
 | `/evolve` | Enterprise Architect | Process improvement | Portfolio review | Platform health check | Continual improvement | ALARP review / SIL audit |
 | `/trace` | Compliance Officer | Traceability audit | Solution train alignment | Audit trail | Configuration audit | Traceability matrix (IEC 61508-3 §7.9) |
 | DA gate | Devil's Advocate | Peer review | Architecture review | Security review | CAB review | Independent safety assessment |

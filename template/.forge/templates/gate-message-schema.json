@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FORGE Gate Decision Message",
+  "description": "Schema for gate decision messages sent from FORGE to a human reviewer via messaging platform. Includes YubiKey HMAC-SHA1 station key signature for origin authentication.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "gate_id",
+    "spec_id",
+    "gate_type",
+    "timestamp",
+    "challenge_nonce",
+    "station_signature",
+    "evidence_summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Protocol schema version for forward compatibility"
+    },
+    "gate_id": {
+      "type": "string",
+      "pattern": "^GATE-[0-9]{3}-[a-z-]+-[0-9]+$",
+      "description": "Unique gate identifier: GATE-{spec_id}-{gate_type}-{sequence}",
+      "examples": ["GATE-033-delivery-1", "GATE-027-completeness-1"]
+    },
+    "spec_id": {
+      "type": "string",
+      "pattern": "^[0-9]{3}[a-z]?$",
+      "description": "Spec number this gate belongs to",
+      "examples": ["033", "004a"]
+    },
+    "gate_type": {
+      "type": "string",
+      "enum": ["completeness", "delivery", "validation"],
+      "description": "Which lifecycle gate this decision represents"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of gate decision generation"
+    },
+    "challenge_nonce": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Hex-encoded 32-byte random challenge concatenated with gate_id and timestamp hash"
+    },
+    "challenge_display": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{4}$",
+      "description": "Human-readable 4-character prefix of challenge for display (e.g., X7K9)"
+    },
+    "station_signature": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "HMAC-SHA1 signature from station key (desktop USB YubiKey) over the challenge"
+    },
+    "station_key_id": {
+      "type": "string",
+      "description": "Public identifier of the station key that signed this message"
+    },
+    "evidence_summary": {
+      "type": "object",
+      "required": ["test_result", "lint_result"],
+      "properties": {
+        "test_result": {
+          "type": "object",
+          "required": ["passed", "total", "status"],
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 },
+            "status": { "type": "string", "enum": ["pass", "fail", "skip"] }
+          }
+        },
+        "lint_result": {
+          "type": "object",
+          "required": ["clean", "tool"],
+          "properties": {
+            "clean": { "type": "boolean" },
+            "tool": { "type": "string" },
+            "issues": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        },
+        "files_changed": {
+          "type": "object",
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "insertions": { "type": "integer", "minimum": 0 },
+            "deletions": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "artifact_links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "path"],
+            "properties": {
+              "label": { "type": "string" },
+              "path": { "type": "string" }
+            }
+          },
+          "description": "Links to evidence artifacts (diffs, test output, etc.)"
+        }
+      }
+    },
+    "challenge_expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when this challenge expires"
+    },
+    "channel_id": {
+      "type": "string",
+      "description": "Enrolled messaging channel ID this gate is addressed to"
+    }
+  }
+}

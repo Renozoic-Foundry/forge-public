@@ -1,0 +1,52 @@
+command: close
+type: slash-command
+
+structure:
+  required_sections:
+    - "## "
+  required_strings:
+    - "spec"
+    - "GATE"
+    - "PASS"
+    - "FAIL"
+    - "closed"
+    - "implemented"
+    - "backlog.md"
+    - "CHANGELOG.md"
+    - "Chain-Next"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 600
+  min_lines: 50
+
+references:
+  files_must_exist:
+    - "docs/specs/README.md"
+    - "docs/specs/CHANGELOG.md"
+    - "docs/backlog.md"
+    - "docs/sessions/_template.md"
+    - "docs/process-kit/choice-block.md"
+  commands_must_exist:
+    - "retro"
+    - "implement"
+    - "brainstorm"
+    - "handoff"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "sonnet"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "close"
+    model_tier: "sonnet"
+    workflow_stage: "review"

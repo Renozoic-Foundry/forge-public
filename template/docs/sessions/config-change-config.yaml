@@ -1,0 +1,35 @@
+# FORGE Autonomy Config Change Protocol Configuration
+# Spec 046 — Autonomy Config Change Protocol
+# Docs: .claude/commands/config-change.md
+#
+# ⚠ HIGH RISK: changes to this file affect which config sections agents may modify.
+# Edit manually only — do not delegate this file to agent automation.
+
+# Sections of AGENTS.md / CLAUDE.md that agents may PROPOSE changes to
+allowed_sections:
+  - autonomy-levels          # AGENTS.md — autonomy level definitions
+  - model-tiering            # CLAUDE.md — model routing table
+  - test-commands            # CLAUDE.md — test/lint command config
+  - harness-command          # CLAUDE.md — integration test runner
+  - prompt-caching           # CLAUDE.md — caching config
+
+# Sections that are ALWAYS blocked — never allow agent proposals
+blocked_sections:
+  - two-hard-rules           # "Every change has a matching spec / Every session ends with a log"
+  - spec-gate                # The spec gate procedure
+  - change-lanes             # Lane definitions
+  - jinja2-escaping-rule     # Template escaping rules
+  - consumer-projects        # Consumer project registry
+
+# Minimum days between successive applied changes (cool-down period)
+# Purpose: prevents rapid config drift; forces review period between changes
+cool_down_days: 7
+
+# How proposals are delivered for approval
+# Options:
+#   inline    — presented in the conversation (default for local sessions)
+#   nanoclaw  — sent as NanoClaw message (required for detached/automated sessions)
+notify_via: inline
+
+# Path to audit log
+audit_log: docs/sessions/config-change-audit.md

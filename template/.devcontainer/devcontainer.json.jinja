@@ -1,0 +1,54 @@
+{
+  // FORGE devcontainer configuration
+  // Spec 066 — FORGE Workspace Write Access Requirements
+  //
+  // Ensures the project workspace is mounted read-write so FORGE agents
+  // can write spec files, session logs, and commits without hitting
+  // read-only filesystem errors.
+  //
+  // Customize the "image" field for your project's stack.
+  // For Python projects: "mcr.microsoft.com/devcontainers/python:3.11"
+  // For Node projects:   "mcr.microsoft.com/devcontainers/javascript-node:20"
+  // For generic:         "mcr.microsoft.com/devcontainers/base:ubuntu"
+
+  "name": "{{ project_name }}",
+
+  // Option A: use a pre-built image (simplest)
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+
+  // Option B: build from a Dockerfile (uncomment if you have one)
+  // "build": {
+  //   "dockerfile": "Dockerfile"
+  // },
+
+  // Workspace mount — explicitly set to read-write (rw).
+  // This is the critical setting that prevents read-only filesystem errors.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+
+  // VS Code extensions useful for FORGE projects
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",       // Claude Code agent
+        "davidanson.vscode-markdownlint", // Markdown linting
+        "eamodio.gitlens",             // Git history
+        "ms-python.python"             // Python support (remove if not a Python project)
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "files.trimTrailingWhitespace": true,
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // Forward ports if your project runs a local server
+  // "forwardPorts": [8000],
+
+  // Run after container is created
+  "postCreateCommand": "bash -c 'touch .forge/.write-check && rm .forge/.write-check && echo \"✅ Workspace write access: OK\" || echo \"❌ Workspace is read-only — see .devcontainer/README.md\"'",
+
+  // Run as non-root user (standard security practice)
+  "remoteUser": "vscode"
+}

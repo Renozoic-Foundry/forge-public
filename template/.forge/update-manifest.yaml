@@ -1,0 +1,120 @@
+# .forge/update-manifest.yaml
+# Controls how /forge init legacy-upgrade classifies files.
+# Categories: framework (overwrite), project (never touch), merge (intelligent merge)
+# See: Spec 072
+
+framework:
+  description: "FORGE-owned files — always overwrite during upgrade"
+  # Note: .claude/commands/ files require conflict detection before overwriting.
+  # If an existing file does NOT contain "# Framework: FORGE" in its first 5 lines,
+  # it is a project-specific command and must go through conflict resolution (Step L2b)
+  # rather than being silently overwritten.
+  paths:
+    - ".forge/"
+    - ".claude/commands/approve.md"
+    - ".claude/commands/bootstrap.md"
+    - ".claude/commands/brainstorm.md"
+    - ".claude/commands/bug.md"
+    - ".claude/commands/close.md"
+    - ".claude/commands/config-change.md"
+    - ".claude/commands/dependency-audit.md"
+    - ".claude/commands/forge.md"
+    - ".claude/commands/forge-stoke.md"
+    - ".claude/commands/handoff.md"
+    - ".claude/commands/harvest.md"
+    - ".claude/commands/implement.md"
+    - ".claude/commands/insights.md"
+    - ".claude/commands/matrix.md"
+    - ".claude/commands/note.md"
+    - ".claude/commands/now.md"
+    - ".claude/commands/evolve.md"
+    - ".claude/commands/parallel.md"
+    - ".claude/commands/retro.md"
+    - ".claude/commands/revise.md"
+    - ".claude/commands/scheduler.md"
+    - ".claude/commands/session.md"
+    - ".claude/commands/skills.md"
+    - ".claude/commands/spec-gate.md"
+    - ".claude/commands/spec.md"
+    - ".claude/commands/tab.md"
+    - ".claude/commands/test.md"
+    - ".claude/commands/trace.md"
+    - ".claude/commands/validate.md"
+    - ".claude/commands/configure-nanoclaw.md"
+    - ".claude/commands/nanoclaw.md"
+    - ".claude/commands/forge-init.md"
+    - "docs/process-kit/"
+    - "docs/publications/"
+    - "docs/compliance/"
+    - ".devcontainer/"
+    - ".claude/settings.json.template"
+    - "docker-compose.nanoclaw.yml"
+
+project:
+  description: "Project-owned files — never touch during upgrade"
+  paths:
+    - "docs/specs/[0-9]*.md"
+    - "docs/specs/README.md"
+    - "docs/specs/CHANGELOG.md"
+    - "docs/sessions/"
+    - "docs/backlog.md"
+    - "docs/decisions/*.md"
+    - "MEMORY.md"
+    - ".claude/session-state.json"
+    - ".claude/checkpoints/"
+    - ".claude/session-inputs/"
+    - ".env"
+    - ".env.*"
+    - "src/"
+    - "app/"
+    - "db/"
+    - "*.ps1"                     # project deploy/build scripts
+
+merge:
+  description: "Mixed framework + project content — section-based merge"
+  paths:
+    - "CLAUDE.md"
+    - "AGENTS.md"
+    - ".gitignore"
+    - ".mcp.json"
+
+obsolete:
+  description: "Old FORGE/EGID files superseded by current versions"
+  mappings:
+    ".claude/commands/forge-light.md": "renamed to forge-init.md (Spec 165 — same command, unified file name)"
+    ".claude/commands/egid.md": "replaced by forge.md"
+    ".claude/commands/confirm.md": "replaced by delegation guardrails in AGENTS.md"
+    ".claude/commands/delegate.md": "replaced by delegation guardrails in AGENTS.md"
+    ".claude/commands/revoke.md": "replaced by delegation guardrails in AGENTS.md"
+    ".claude/commands/status.md": "replaced by now.md"
+    ".claude/commands/infer.md": "replaced by insights.md"
+    ".claude/commands/sync.md": "replaced by /forge stoke"
+    ".claude/commands/triage.md": "replaced by bug.md"
+    ".claude/commands/housekeeping.md": "functionality merged into /close and /session"
+    ".claude/commands/audit.md": "replaced by config-change.md"
+    "docs/workflow/egid-flowchart.md": "replaced by docs/process-kit/spec-driven-harness-loop.md"
+    "docs/workflow/egid-workflow.html": "replaced by docs/publications/"
+    "docs/workflow/executive-reporting.md": "replaced by docs/process-kit/runbook.md"
+    "docs/workflow/inference-playbook.md": "replaced by docs/process-kit/parallelism-guide.md"
+    "docs/workflow/pre-spec-intake.md": "replaced by docs/process-kit/prd-interview.md"
+    "docs/workflow/evaluation-validity.md": "replaced by docs/process-kit/scoring-rubric.md"
+
+removed:
+  description: "Files deleted from the FORGE template — remove from consumer projects during /forge stoke (Spec 166)"
+  paths:
+    - ".claude/commands/contribute.md"
+    - ".forge/commands/contribute.md"
+    - ".claude/commands/approve.md"
+    - ".forge/commands/approve.md"
+    - ".claude/commands/validate.md"
+    - ".forge/commands/validate.md"
+    - ".claude/commands/bootstrap.md"
+    - ".forge/commands/bootstrap.md"
+    - ".claude/commands/score.md"
+    - ".forge/commands/score.md"
+    - ".claude/commands/forge-light.md"
+    - ".forge/commands/forge-light.md"
+    - "docs/workflow/spec-driven-harness-loop.md"
+    - "docs/decisions/ADR-028-spec-status-source-of-truth.md"
+    - "docs/decisions/ADR-nanoclaw-forge-extraction.md"
+    - "docs/decisions/ADR-pal-extraction.md"

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Article — {{ PROJECT_NAME }}</title>
+<style>
+  /* ── Theme custom properties ── */
+  :root {
+    --color-bg: #ffffff;
+    --color-text: #1a1a2e;
+    --color-heading: #16213e;
+    --color-accent: #0f3460;
+    --color-accent-light: #e8eef6;
+    --color-border: #d1d5db;
+    --color-muted: #6b7280;
+    --color-attribution-bg: #f0f4f8;
+    --color-disclaimer-bg: #fef9e7;
+    --color-disclaimer-border: #f0c929;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-heading: var(--font-body);
+    --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+    --max-width: 48rem;
+    --spacing: 1.5rem;
+  }
+
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--color-text);
+    background: var(--color-bg);
+    line-height: 1.7;
+    padding: 2rem var(--spacing);
+  }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+
+  /* ── Typography ── */
+  h1 { font-size: 2.25rem; color: var(--color-heading); margin-bottom: 0.5rem; line-height: 1.2; }
+  h2 { font-size: 1.5rem; color: var(--color-heading); margin-top: 2.5rem; margin-bottom: 1rem; border-bottom: 2px solid var(--color-accent-light); padding-bottom: 0.25rem; }
+  h3 { font-size: 1.125rem; color: var(--color-accent); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+  p { margin-bottom: 1rem; }
+  ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+  li { margin-bottom: 0.25rem; }
+  code { font-family: var(--font-mono); background: var(--color-accent-light); padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--color-accent-light); padding: 1rem; border-radius: 6px; overflow-x: auto; margin-bottom: 1rem; }
+  pre code { background: none; padding: 0; }
+  blockquote { border-left: 4px solid var(--color-accent); padding: 0.75rem 1rem; margin-bottom: 1rem; background: var(--color-accent-light); }
+  a { color: var(--color-accent); }
+
+  /* ── Article metadata ── */
+  .meta {
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .meta span + span::before { content: " · "; }
+
+  /* ── Audience variants ── */
+  .audience-technical,
+  .audience-executive,
+  .audience-influencer { display: none; }
+
+  body.variant-technical .audience-technical { display: block; }
+  body.variant-executive .audience-executive { display: block; }
+  body.variant-influencer .audience-influencer { display: block; }
+  .audience-all { display: block; }
+
+  /* ── Attribution ── */
+  .attribution {
+    background: var(--color-attribution-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-top: 3rem;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+  .attribution h2 { font-size: 1rem; margin-top: 0; border: none; padding: 0; margin-bottom: 0.5rem; color: var(--color-heading); }
+
+  /* ── Disclaimer ── */
+  .disclaimer {
+    background: var(--color-disclaimer-bg);
+    border: 1px solid var(--color-disclaimer-border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+  .disclaimer h2 { font-size: 1rem; margin-top: 0; border: none; padding: 0; margin-bottom: 0.5rem; color: var(--color-heading); }
+</style>
+</head>
+
+<!--
+  AUDIENCE VARIANT: Add one of these classes to <body> to show audience-specific content:
+    variant-technical   — Deep technical detail
+    variant-executive   — Business outcomes and strategic value
+    variant-influencer  — Narrative-driven, shareable framing
+-->
+<body class="variant-technical">
+<div class="container">
+
+  <h1>{{ ARTICLE_TITLE }}</h1>
+  <div class="meta">
+    <span>{{ AUTHOR_NAME }}</span>
+    <span>{{ PUBLICATION_DATE }}</span>
+    <span>{{ PROJECT_NAME }}</span>
+  </div>
+
+  <!-- ── Introduction (all audiences) ── -->
+  <div class="audience-all">
+    <p>{{ INTRODUCTION }}</p>
+  </div>
+
+  <!-- ── Technical audience ── -->
+  <div class="audience-technical">
+    <h2>Technical Context</h2>
+    <p>{{ TECHNICAL_CONTEXT }}</p>
+
+    <h2>Implementation Details</h2>
+    <p>{{ IMPLEMENTATION_DETAILS }}</p>
+
+    <h3>Key Decisions</h3>
+    <ul>
+      <li>{{ DECISION_1 }}</li>
+      <li>{{ DECISION_2 }}</li>
+      <li>{{ DECISION_3 }}</li>
+    </ul>
+
+    <h2>Results and Evidence</h2>
+    <p>{{ RESULTS }}</p>
+  </div>
+
+  <!-- ── Executive audience ── -->
+  <div class="audience-executive">
+    <h2>Business Context</h2>
+    <p>{{ BUSINESS_CONTEXT }}</p>
+
+    <h2>Outcomes</h2>
+    <ul>
+      <li>{{ OUTCOME_1 }}</li>
+      <li>{{ OUTCOME_2 }}</li>
+      <li>{{ OUTCOME_3 }}</li>
+    </ul>
+
+    <h2>Strategic Implications</h2>
+    <p>{{ STRATEGIC_IMPLICATIONS }}</p>
+  </div>
+
+  <!-- ── Influencer audience ── -->
+  <div class="audience-influencer">
+    <h2>The Story</h2>
+    <p>{{ NARRATIVE }}</p>
+
+    <h2>Why It Matters</h2>
+    <p>{{ WHY_IT_MATTERS }}</p>
+
+    <h2>Key Takeaways</h2>
+    <ol>
+      <li>{{ TAKEAWAY_1 }}</li>
+      <li>{{ TAKEAWAY_2 }}</li>
+      <li>{{ TAKEAWAY_3 }}</li>
+    </ol>
+  </div>
+
+  <!-- ── Conclusion (all audiences) ── -->
+  <div class="audience-all">
+    <h2>Conclusion</h2>
+    <p>{{ CONCLUSION }}</p>
+  </div>
+
+  <!-- ── Attribution (mandatory) ── -->
+  <div class="attribution">
+    <h2>Attribution</h2>
+    <p>
+      This work builds on established methodologies:
+      <strong>Knowledge-Centered Service (KCS) v6</strong> for knowledge reuse and continuous improvement;
+      <strong>Stage-Gate</strong> for phased delivery with quality checkpoints;
+      and the <strong>AI-Assisted Integration Framework (AAIF)</strong> (Linux Foundation) for agent-driven development practices.
+      The FORGE framework synthesizes these foundations into a spec-driven, evidence-gated workflow.
+    </p>
+  </div>
+
+  <!-- ── Disclaimer (mandatory) ── -->
+  <div class="disclaimer">
+    <h2>Disclaimer</h2>
+    <p>
+      This content is experimental and provided for informational purposes only.
+      It has not been independently audited or verified.
+      Mention of any methodology, framework, or tool does not constitute an endorsement
+      by its authors or maintainers. Use your own judgment before applying any
+      practices described here.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

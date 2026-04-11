@@ -1,0 +1,47 @@
+command: evolve
+type: slash-command
+
+structure:
+  required_sections:
+    - "## "
+  required_strings:
+    - "evolve-config.yaml"
+    - "human-validation-runbook.md"
+    - "signals.md"
+    - "scratchpad.md"
+    - "pattern-analysis.md"
+    - "GATE"
+    - "--auto"
+    - "--full"
+    - "--spec"
+  forbidden_strings:
+    - "TODO"
+    - "FIXME"
+  max_lines: 400
+  min_lines: 40
+
+references:
+  files_must_exist:
+    - "docs/process-kit/human-validation-runbook.md"
+  commands_must_exist:
+    - "implement"
+    - "now"
+    - "spec"
+
+template_vars:
+  must_not_contain_raw:
+    - "cookiecutter."
+
+model_tier:
+  expected: "sonnet"
+
+frontmatter:
+  required_fields:
+    - "name"
+    - "description"
+    - "model_tier"
+    - "workflow_stage"
+  expected_values:
+    name: "evolve"
+    model_tier: "sonnet"
+    workflow_stage: "review"

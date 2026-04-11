@@ -1,0 +1,23 @@
+# FORGE Multi-Agent Scheduler Configuration
+# Spec 040 — Multi-Agent Scheduler
+# Docs: .claude/commands/scheduler.md
+
+# Maximum number of specs to execute concurrently
+max_concurrent: 3
+
+# Optional dependency override file (YAML map of spec_id → [prerequisite_spec_ids])
+# If absent, /scheduler infers dependencies from spec body text
+# dependency_file: docs/sessions/scheduler-deps.yaml
+
+# Conflict resolution strategy when two specs target overlapping files
+# Options:
+#   halt      — remove the lower-priority spec from the batch; re-queue for next round
+#   worktree  — both proceed in isolated git worktrees (merge conflicts handled at merge)
+#   queue     — remove lower-priority spec from batch; run it after the higher-priority one
+conflict_resolution: worktree   # Spec 041
+
+# Notification delivery (same options as outer-loop-config.yaml)
+notify_via: log-only
+
+# NanoClaw task ID for conflict/completion alerts (leave blank for log-only)
+nanoclaw_task_id: ""

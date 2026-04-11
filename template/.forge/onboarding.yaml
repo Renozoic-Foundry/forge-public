@@ -1,0 +1,44 @@
+# .forge/onboarding.yaml
+# Onboarding seed — planted by /forge init (Spec 072).
+# The onboarding flow (Spec 073) reads this file and guides the human
+# through first-time project configuration.
+#
+# Status lifecycle: pending → in-progress → complete
+# When status is "pending" or "in-progress", the agent executes the
+# onboarding flow before any other work (see AGENTS.md onboarding gate).
+
+status: pending              # pending → in-progress → complete
+created: "YYYY-MM-DD"       # filled by /forge init at creation time
+template_version: "1.0.0"
+mode: null                   # create-new | legacy-upgrade | greenfield (set by /forge init)
+
+# Phase completion tracking — set by /forge init and /onboarding (Spec 139)
+# If /forge init collects identity info, it sets phases.identity: complete
+# so /onboarding skips Phase 1 entirely.
+phases:
+  identity: null             # null = not started, complete = done
+  features: null
+  mcp_servers: null
+  credentials: null
+  summary: null
+
+# Feature toggles — all features copied, onboarding decides what stays
+features:
+  nanoclaw: null             # null = not yet asked
+  compliance: null
+  publications: null
+  devcontainer: true         # safe default
+
+# MCP servers — from template .mcp.json, human activates per project
+mcp_servers: {}              # populated from .mcp.json during onboarding
+
+# Credentials & environment — placeholders needing human input
+setup_tasks: []              # populated by scanning .env.example, config files
+
+# Project identity — filled during onboarding conversation
+project:
+  name: null
+  description: null
+  primary_stack: null
+  test_command: null
+  lint_command: null

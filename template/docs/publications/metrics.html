@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Metrics Report — {{ PROJECT_NAME }}</title>
+<style>
+  /* ── Theme custom properties ── */
+  :root {
+    --color-bg: #f9fafb;
+    --color-text: #1a1a2e;
+    --color-heading: #16213e;
+    --color-accent: #0f3460;
+    --color-accent-light: #e8eef6;
+    --color-border: #d1d5db;
+    --color-muted: #6b7280;
+    --color-attribution-bg: #f0f4f8;
+    --color-disclaimer-bg: #fef9e7;
+    --color-disclaimer-border: #f0c929;
+    --color-card-bg: #ffffff;
+    --color-positive: #059669;
+    --color-negative: #dc2626;
+    --color-neutral: #6b7280;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-heading: var(--font-body);
+    --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+    --max-width: 64rem;
+    --spacing: 1.5rem;
+  }
+
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--color-text);
+    background: var(--color-bg);
+    line-height: 1.6;
+    padding: 2rem var(--spacing);
+  }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  .report-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid var(--color-accent);
+  }
+  .report-header h1 { font-size: 2rem; color: var(--color-heading); margin-bottom: 0.25rem; }
+  .report-header .meta { color: var(--color-muted); font-size: 0.9rem; }
+  .report-header .meta span + span::before { content: " · "; }
+
+  /* ── Typography ── */
+  h2 { font-size: 1.375rem; color: var(--color-heading); margin-top: 2.5rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.125rem; color: var(--color-accent); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+  p { margin-bottom: 1rem; }
+
+  /* ── KPI cards ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .kpi-card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .kpi-card .label { font-size: 0.8rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+  .kpi-card .value { font-size: 2.25rem; font-weight: 700; color: var(--color-accent); }
+  .kpi-card .delta { font-size: 0.85rem; margin-top: 0.25rem; }
+  .kpi-card .delta.positive { color: var(--color-positive); }
+  .kpi-card .delta.negative { color: var(--color-negative); }
+  .kpi-card .delta.neutral { color: var(--color-neutral); }
+
+  /* ── Data table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    background: var(--color-card-bg);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+  }
+  th {
+    background: var(--color-accent-light);
+    color: var(--color-heading);
+    font-weight: 600;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  td { padding: 0.75rem 1rem; border-top: 1px solid var(--color-border); font-size: 0.95rem; }
+  tr:hover td { background: var(--color-accent-light); }
+
+  /* ── Chart placeholder ── */
+  .chart-placeholder {
+    background: var(--color-card-bg);
+    border: 2px dashed var(--color-border);
+    border-radius: 8px;
+    padding: 3rem;
+    text-align: center;
+    color: var(--color-muted);
+    margin: 1.5rem 0;
+    font-size: 0.9rem;
+  }
+
+  /* ── Audience variants ── */
+  .audience-technical,
+  .audience-executive,
+  .audience-influencer { display: none; }
+
+  body.variant-technical .audience-technical { display: block; }
+  body.variant-executive .audience-executive { display: block; }
+  body.variant-influencer .audience-influencer { display: block; }
+  .audience-all { display: block; }
+
+  /* ── Attribution ── */
+  .attribution {
+    background: var(--color-attribution-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-top: 3rem;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+  .attribution h2 { font-size: 1rem; margin-top: 0; margin-bottom: 0.5rem; color: var(--color-heading); }
+
+  /* ── Disclaimer ── */
+  .disclaimer {
+    background: var(--color-disclaimer-bg);
+    border: 1px solid var(--color-disclaimer-border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+  .disclaimer h2 { font-size: 1rem; margin-top: 0; margin-bottom: 0.5rem; color: var(--color-heading); }
+
+  @media print {
+    body { background: white; }
+    .chart-placeholder { border-style: solid; }
+  }
+</style>
+</head>
+
+<!--
+  AUDIENCE VARIANT: Add one of these classes to <body>:
+    variant-technical   — Detailed metrics with methodology notes
+    variant-executive   — High-level KPIs and trends
+    variant-influencer  — Narrative-wrapped metrics for sharing
+-->
+<body class="variant-executive">
+<div class="container">
+
+  <!-- ── Header ── -->
+  <div class="report-header">
+    <h1>{{ REPORT_TITLE }}</h1>
+    <div class="meta">
+      <span>{{ PROJECT_NAME }}</span>
+      <span>{{ REPORTING_PERIOD }}</span>
+      <span>Prepared by {{ AUTHOR_NAME }}</span>
+    </div>
+  </div>
+
+  <!-- ── Executive summary (all audiences) ── -->
+  <div class="audience-all">
+    <h2>Summary</h2>
+    <p>{{ EXECUTIVE_SUMMARY }}</p>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="label">{{ KPI_1_LABEL }}</div>
+        <div class="value">{{ KPI_1_VALUE }}</div>
+        <div class="delta positive">{{ KPI_1_DELTA }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">{{ KPI_2_LABEL }}</div>
+        <div class="value">{{ KPI_2_VALUE }}</div>
+        <div class="delta positive">{{ KPI_2_DELTA }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">{{ KPI_3_LABEL }}</div>
+        <div class="value">{{ KPI_3_VALUE }}</div>
+        <div class="delta neutral">{{ KPI_3_DELTA }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">{{ KPI_4_LABEL }}</div>
+        <div class="value">{{ KPI_4_VALUE }}</div>
+        <div class="delta positive">{{ KPI_4_DELTA }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Technical audience ── -->
+  <div class="audience-technical">
+    <h2>Spec Throughput</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Spec</th>
+          <th>Status</th>
+          <th>Change Lane</th>
+          <th>Sessions</th>
+          <th>Evidence Items</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ SPEC_1_ID }}</td>
+          <td>{{ SPEC_1_STATUS }}</td>
+          <td>{{ SPEC_1_LANE }}</td>
+          <td>{{ SPEC_1_SESSIONS }}</td>
+          <td>{{ SPEC_1_EVIDENCE }}</td>
+        </tr>
+        <tr>
+          <td>{{ SPEC_2_ID }}</td>
+          <td>{{ SPEC_2_STATUS }}</td>
+          <td>{{ SPEC_2_LANE }}</td>
+          <td>{{ SPEC_2_SESSIONS }}</td>
+          <td>{{ SPEC_2_EVIDENCE }}</td>
+        </tr>
+        <tr>
+          <td>{{ SPEC_3_ID }}</td>
+          <td>{{ SPEC_3_STATUS }}</td>
+          <td>{{ SPEC_3_LANE }}</td>
+          <td>{{ SPEC_3_SESSIONS }}</td>
+          <td>{{ SPEC_3_EVIDENCE }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Quality Gates</h2>
+    <div class="chart-placeholder">
+      [ Quality gate pass/fail chart — replace with actual data visualization ]
+    </div>
+
+    <h2>Process Signals</h2>
+    <p>{{ PROCESS_SIGNALS_DETAIL }}</p>
+  </div>
+
+  <!-- ── Executive audience ── -->
+  <div class="audience-executive">
+    <h2>Delivery Progress</h2>
+    <div class="chart-placeholder">
+      [ Delivery progress chart — replace with actual data visualization ]
+    </div>
+
+    <h2>Risk Summary</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Risk</th>
+          <th>Severity</th>
+          <th>Mitigation</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ RISK_1 }}</td>
+          <td>{{ RISK_1_SEVERITY }}</td>
+          <td>{{ RISK_1_MITIGATION }}</td>
+          <td>{{ RISK_1_STATUS }}</td>
+        </tr>
+        <tr>
+          <td>{{ RISK_2 }}</td>
+          <td>{{ RISK_2_SEVERITY }}</td>
+          <td>{{ RISK_2_MITIGATION }}</td>
+          <td>{{ RISK_2_STATUS }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Recommendations</h2>
+    <ul>
+      <li>{{ RECOMMENDATION_1 }}</li>
+      <li>{{ RECOMMENDATION_2 }}</li>
+      <li>{{ RECOMMENDATION_3 }}</li>
+    </ul>
+  </div>
+
+  <!-- ── Influencer audience ── -->
+  <div class="audience-influencer">
+    <h2>The Numbers Tell a Story</h2>
+    <p>{{ METRICS_NARRATIVE }}</p>
+
+    <h2>What We Learned</h2>
+    <p>{{ LESSONS_LEARNED }}</p>
+
+    <h2>What Comes Next</h2>
+    <p>{{ WHATS_NEXT }}</p>
+  </div>
+
+  <!-- ── Attribution (mandatory) ── -->
+  <div class="attribution">
+    <h2>Attribution</h2>
+    <p>
+      This work builds on established methodologies:
+      <strong>Knowledge-Centered Service (KCS) v6</strong> for knowledge reuse and continuous improvement;
+      <strong>Stage-Gate</strong> for phased delivery with quality checkpoints;
+      and the <strong>AI-Assisted Integration Framework (AAIF)</strong> (Linux Foundation) for agent-driven development practices.
+      The FORGE framework synthesizes these foundations into a spec-driven, evidence-gated workflow.
+    </p>
+  </div>
+
+  <!-- ── Disclaimer (mandatory) ── -->
+  <div class="disclaimer">
+    <h2>Disclaimer</h2>
+    <p>
+      This content is experimental and provided for informational purposes only.
+      It has not been independently audited or verified.
+      Mention of any methodology, framework, or tool does not constitute an endorsement
+      by its authors or maintainers. Use your own judgment before applying any
+      practices described here.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

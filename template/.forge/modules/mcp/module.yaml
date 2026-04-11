@@ -1,0 +1,35 @@
+name: mcp
+display_name: "MCP Server Integration"
+description: "Model Context Protocol server configuration for enhanced tool access"
+version: 1
+category: integration
+requires: []
+conflicts: []
+
+recommendation:
+  when: "Projects that benefit from MCP servers (documentation lookup, code graph, external APIs)"
+  not_when: "Projects in air-gapped environments where MCP servers cannot be approved"
+
+files:
+  - .mcp.json.jinja
+  - docs/process-kit/mcp-setup.md
+
+injects: []
+
+onboarding:
+  phase: mcp_servers
+  prompt: "Configure MCP server integrations?"
+  explain: |
+    MCP (Model Context Protocol) servers extend the agent's capabilities
+    with additional tools — documentation lookup, code graph analysis,
+    external API access, etc.
+
+    The template includes a .mcp.json with common server configurations.
+    During onboarding, you choose which servers to enable for this project.
+
+    Skip this if: MCP servers are not approved in your environment,
+    or you prefer to configure them manually later.
+
+    Files: .mcp.json (server configuration)
+    Additional setup: per-server credentials may be needed
+  default: true

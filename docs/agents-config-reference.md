@@ -210,4 +210,4 @@ Three enforcement modes determine how gate approval happens:
 
 ---
 
-Last verified against Spec 217.
+*Last verified against Spec 221 on 2026-04-11.*

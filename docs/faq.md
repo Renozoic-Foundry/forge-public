@@ -57,4 +57,4 @@ FORGE is process, not infrastructure. Your code has no FORGE runtime dependency 
 
 ---
 
-Last verified against Spec 216.
+*Last verified against Spec 221 on 2026-04-11.*

@@ -143,4 +143,4 @@ configlint 0.4.1
 
 ---
 
-Last verified against Spec 215.
+*Last verified against Spec 221 on 2026-04-11.*

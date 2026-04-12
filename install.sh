@@ -500,7 +500,7 @@ init_project() {
 # Main
 # =========================================================================
 
-printf "\n%sFORGE Installer%s\n" "$BOLD" "$NC"
+printf "\n${BOLD}FORGE Installer${NC}\n"
 printf "Framework for Organized Reliable Gated Engineering\n\n"
 
 # Step 1: Detect platform
@@ -630,23 +630,23 @@ else
 fi
 
 if [ "$MODE" = "claude-code" ] && [ -n "$INIT_PATH" ]; then
-    printf "  %sFORGE project bootstrapped at %s.%s\n" "$GREEN" "$INIT_PATH" "$NC"
-    printf "  Next: Open %s in Claude Code and run %s/onboarding%s\n" "$INIT_PATH" "$BOLD" "$NC"
+    printf "  ${GREEN}FORGE project bootstrapped at %s.${NC}\n" "$INIT_PATH"
+    printf "  Next: Open %s in Claude Code and run ${BOLD}/onboarding${NC}\n" "$INIT_PATH"
     echo ""
-    printf "  %sNote:%s If your IDE is already open, reload the window first\n" "$YELLOW" "$NC"
+    printf "  ${YELLOW}Note:${NC} If your IDE is already open, reload the window first\n"
     printf "        (VS Code: Ctrl+Shift+P → \"Developer: Reload Window\")\n"
 elif [ "$MODE" = "claude-code" ]; then
-    printf "  %sFORGE installed successfully.%s\n" "$GREEN" "$NC"
-    printf "  Next: Open any project directory in Claude Code and run %s/forge-bootstrap%s\n" "$BOLD" "$NC"
+    printf "  ${GREEN}FORGE installed successfully.${NC}\n"
+    printf "  Next: Open any project directory in Claude Code and run ${BOLD}/forge-bootstrap${NC}\n"
     echo ""
-    printf "  %sNote:%s If your IDE is already open, reload the window so it picks\n" "$YELLOW" "$NC"
+    printf "  ${YELLOW}Note:${NC} If your IDE is already open, reload the window so it picks\n"
     printf "        up the new command (VS Code: Ctrl+Shift+P → \"Developer: Reload Window\")\n"
 elif [ "$MODE" = "generic" ] && [ -n "$INIT_PATH" ]; then
-    printf "  %sFORGE project bootstrapped at %s.%s\n" "$GREEN" "$INIT_PATH" "$NC"
+    printf "  ${GREEN}FORGE project bootstrapped at %s.${NC}\n" "$INIT_PATH"
     printf "  Next: Open %s in your AI-assisted IDE.\n" "$INIT_PATH"
     printf "        Your assistant will read AGENTS.md and guide you through setup.\n"
 else
-    printf "  %sFORGE prerequisites installed.%s\n" "$GREEN" "$NC"
+    printf "  ${GREEN}FORGE prerequisites installed.${NC}\n"
     printf "  Next steps:\n"
     printf "    1. Create a project:  copier copy %s my-project\n" "$COPIER_URL"
     printf "    2. Open my-project/ in your AI-assisted IDE (Cursor, Windsurf, Copilot, etc.)\n"

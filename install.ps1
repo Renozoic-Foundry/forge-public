@@ -24,7 +24,7 @@ $DEFAULT_REPO = "https://github.com/bwcarty/forge-public.git"
 $RAW_BASE = "https://raw.githubusercontent.com/bwcarty/forge-public/main"
 $FORGE_CONFIG_DIR = Join-Path $HOME ".forge"
 $FORGE_CONFIG_FILE = Join-Path $FORGE_CONFIG_DIR "config"
-$CLAUDE_CMD_DIR = Join-Path $HOME ".claude" "commands"
+$CLAUDE_CMD_DIR = Join-Path (Join-Path $HOME ".claude") "commands"
 $BOOTSTRAP_FILE = "forge-bootstrap.md"
 $DOCS_URL = "https://github.com/bwcarty/forge-public#readme"
 
@@ -282,7 +282,7 @@ function Install-Bootstrap {
             & git clone --depth 1 $RepoUrl $tmpDir 2>&1 | Out-Null
             $bootstrapPath = Join-Path $tmpDir $BOOTSTRAP_FILE
             if (-not (Test-Path $bootstrapPath)) {
-                $bootstrapPath = Join-Path $tmpDir ".claude" "commands" $BOOTSTRAP_FILE
+                $bootstrapPath = Join-Path (Join-Path (Join-Path $tmpDir ".claude") "commands") $BOOTSTRAP_FILE
             }
             if (Test-Path $bootstrapPath) {
                 $content = Get-Content $bootstrapPath -Raw

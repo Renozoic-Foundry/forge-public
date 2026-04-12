@@ -12,13 +12,14 @@ FORGE is an opinionated development framework that synthesizes five foundational
 
 These capabilities are built into every FORGE project out of the box:
 
+- **AI-driven discovery** — `/interview` runs Socratic elicitation to turn vague ideas into structured requirements. `/brainstorm` scans signals, backlog, and project context to recommend spec candidates. `/note` captures thoughts ambient to the workflow for later synthesis.
 - **AI-generated specs** — Describe what you need; AI produces the full spec in seconds. Human approves; AI implements with evidence at every gate.
 - **Evidence gates** — Every lifecycle transition requires proof. Structured PASS/FAIL outcomes. Gate failures produce actionable feedback.
-- **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
+- **Evolve Loop** — The Solve Loop delivers specs; the Evolve Loop improves the process itself. Signals captured during closure feed periodic reviews that re-score priorities, calibrate the scoring formula, and graduate watchlist items. Fast-path runs after every `/close`; full review triggers every 5 closed specs or 30 days.
 - **Role-separated agents** — 16 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
 - **29 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
-- **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
+- **Session logging** — Auto-captured throughout the session (`/implement` and `/close` append structured entries automatically), human-finalized with `/session` before stopping. Every session ends with a coherent log that serves as a context anchor.
 
 ### Enhancing features (opt-in)
 

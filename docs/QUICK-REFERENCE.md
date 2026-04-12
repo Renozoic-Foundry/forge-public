@@ -81,11 +81,19 @@
 
 ### Typical Workflow
 
+**Continuing work (most sessions):**
 ```
 /now → /implement next → /close NNN → /session
 ```
 
-For new projects: `/forge init` → `/onboarding` → `/interview` → `/spec` → `/implement`
+**Starting new work (discovery path):**
+```
+/interview → /brainstorm → refine in conversation → AI writes spec → /implement → /close → /session
+```
+
+`/spec` is the underlying tool for spec creation, but you rarely invoke it directly — `/brainstorm` recommends spec candidates, and the AI writes them as part of the conversation.
+
+**New projects:** `/forge init` → `/onboarding` → `/interview` → `/brainstorm` → AI writes spec → `/implement`
 
 ---
 

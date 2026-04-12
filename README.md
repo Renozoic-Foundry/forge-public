@@ -18,7 +18,7 @@ These capabilities are built into every FORGE project out of the box:
 - **Evolve Loop** — The Solve Loop delivers specs; the Evolve Loop improves the process itself. Signals captured during closure feed periodic reviews that re-score priorities, calibrate the scoring formula, and graduate watchlist items. Fast-path runs after every `/close`; full review triggers every 5 closed specs or 30 days.
 - **Role-separated agents** — 16 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **29 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
+- **27 active slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
 - **Session logging** — Auto-captured throughout the session (`/implement` and `/close` append structured entries automatically), human-finalized with `/session` before stopping. Every session ends with a coherent log that serves as a context anchor.
 
 ### Enhancing features (opt-in)
@@ -38,7 +38,7 @@ These features are under active development and will be available in future rele
 
 ### Foundations
 
-1. **KCS v6 (Knowledge-Centered Service)** — Double-loop learning: a Solve Loop for every spec, an Evolve Loop to improve the process itself. Signals (errors, insights, retro findings) are captured at lifecycle transitions and feed back into priority scoring.
+1. **KCS v6 (Knowledge-Centered Service)** — Double-loop learning: a Solve Loop for every spec, an Evolve Loop to improve the process itself. Signals (errors, insights, observations) are captured at lifecycle transitions via `/note` and `/close`, feeding back into priority scoring.
 
 2. **Stage-Gate (Cooper)** — Evidence gates at each lifecycle transition (`draft → in-progress → implemented → closed`). Gate failures produce structured feedback identifying what is missing. No status transition without demonstrable evidence.
 
@@ -189,7 +189,7 @@ your-project/
 - **Evidence gates**: Each transition requires demonstrable proof (structured `GATE [name]: PASS/FAIL` outcomes)
 - **Spec approval gate**: By default, every AI-written spec requires human approval before implementation — configurable per autonomy level
 - **Change lanes**: `hotfix`, `small-change`, `standard-feature`, `process-only`
-- **Signal capture**: Errors, insights, and retro findings are logged and inform priority scoring
+- **Signal capture**: Errors, insights, and observations are logged via `/note` and `/close`, informing priority scoring
 - **Command chaining**: `/implement` → `/close` → `/implement next` auto-chains on gate success (L2+)
 - **Core vs enhancing**: Core framework (specs, gates, learning, commands) works standalone; enhancing features (compliance, NanoClaw, hardware auth) are opt-in
 
@@ -232,7 +232,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 218 specs across 50 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 221 specs across 53 sessions as of April 2026, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

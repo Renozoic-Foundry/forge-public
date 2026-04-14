@@ -75,7 +75,7 @@ find . -maxdepth 1 -not -name '.*' -not -name '.' | head -5
 
 Run:
 ```bash
-python -m copier copy gh:bwcarty/forge-public . --defaults
+python -m copier copy gh:Renozoic-Foundry/forge-public . --defaults
 ```
 
 If the command fails:

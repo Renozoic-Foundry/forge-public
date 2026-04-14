@@ -146,7 +146,7 @@ set_module_toggle() {
 
     # Update the toggle in onboarding.yaml
     if grep -q "^  ${name}:" "$ONBOARDING_FILE"; then
-        sed -i "s/^  ${name}:.*$/  ${name}: ${value}/" "$ONBOARDING_FILE"
+        sed -i "s|^  ${name}:.*$|  ${name}: ${value}|" "$ONBOARDING_FILE"
         echo "Set $name: $value in $ONBOARDING_FILE"
     else
         # Add under features: section
@@ -164,7 +164,7 @@ clear_module_markers() {
 
     if grep -q "$start_marker" "$file" 2>/dev/null; then
         # Remove content between markers, keep markers themselves
-        sed -i "/${start_marker}/,/${end_marker}/{/${start_marker}/b;/${end_marker}/b;d}" "$file"
+        sed -i "\|${start_marker}|,\|${end_marker}|{\|${start_marker}|b;\|${end_marker}|b;d}" "$file"
         echo "  Cleared $module_name markers in $(basename "$file")"
     fi
 }

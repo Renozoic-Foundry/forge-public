@@ -42,41 +42,6 @@ Each step produces or consumes a context anchor. The spec captures intent. The i
 
 Change lanes (`hotfix`, `small-change`, `standard-feature`, `process-only`) control the level of ceremony. A one-line fix does not require the same gates as a cross-cutting feature.
 
-## The Evolve Loop
-
-The Solve Loop (spec to implementation to closure) handles individual changes. The **Evolve Loop** handles the process itself — it is where FORGE learns and improves over time.
-
-### What it does
-
-The Evolve Loop reviews accumulated signals (errors, insights, retro findings, friction observations) and proposes concrete process improvements: priority re-scoring, workflow adjustments, watchlist graduation, scoring formula calibration. Without it, process debt accumulates silently — small inefficiencies compound until the workflow no longer fits the project.
-
-### When it triggers
-
-The Evolve Loop runs at two cadences:
-
-- **Fast-path (F1 + F4):** After every `/close`, a lightweight check reviews fresh signals and updates priorities. This runs inline — no separate command needed.
-- **Full review (F1-F4):** A comprehensive process review triggers every **5 closed specs** or **30 days** (whichever comes first). The full review covers signal analysis, scoring calibration, backlog re-ranking, and watchlist graduation.
-
-The `/now` command also checks five signal-based thresholds that can trigger an evolve recommendation: unreviewed signals (15), open evolve notes (4), error autopsies (3), deferred scope items (5), and spec velocity changes (5).
-
-### Why it matters
-
-Most development processes are static — they are designed once and then followed until they break visibly. FORGE's double-loop structure (Solve + Evolve) means the process adapts continuously. Signals captured during everyday work feed directly into process improvement, so FORGE gets better at supporting your project the more you use it.
-
-## Session logging
-
-FORGE's second hard rule is "every session ends with a session log." The logging mechanism has two parts:
-
-### Auto-capture (automatic)
-
-Throughout a session, `/implement` and `/close` append structured entries to the session log automatically — timestamps, spec IDs, gate outcomes, signals captured. This data is never lost, even if you forget to finalize.
-
-### Finalization (manual)
-
-Run `/session` before you stop working. It reads the accumulated entries, mines the conversation for additional context (decisions made, problems encountered, ideas surfaced), and drafts a complete session log for your review.
-
-The distinction matters: auto-capture ensures data safety, while manual finalization ensures the log is coherent, complete, and useful as a context anchor for future sessions.
-
 ## What FORGE does not do
 
 - **Not a project management tool.** FORGE has no Gantt charts, no sprint planning, no velocity tracking. It structures individual changes, not project schedules.
@@ -92,4 +57,4 @@ The distinction matters: auto-capture ensures data safety, while manual finaliza
 
 ---
 
-*Last verified against Spec 221 on 2026-04-11.*
+*Last verified against Spec 212 on 2026-04-11.*

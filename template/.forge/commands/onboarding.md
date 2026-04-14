@@ -276,11 +276,11 @@ Which AI coding agents does your team use? (select all that apply)
     - Set `lint_command` to the lint command (or empty string if none)
     - Preserve all other existing keys (especially `_commit`, `_src_path`)
 
-    **Note — `/forge stoke` upstream source**: The `_src_path` key in `.copier-answers.yml` determines where `/forge stoke` pulls template updates from. If this project was bootstrapped via `copier copy gh:bwcarty/forge-public`, the value is `gh:bwcarty/forge-public` and stoke works from any machine. If it contains a local path (e.g., `d:/forge`), stoke only works on the machine where that path exists. To switch to the public GitHub source: update `_src_path: gh:bwcarty/forge-public` in `.copier-answers.yml`.
+    **Note — `/forge stoke` upstream source**: The `_src_path` key in `.copier-answers.yml` determines where `/forge stoke` pulls template updates from. If this project was bootstrapped via `copier copy gh:Renozoic-Foundry/forge-public`, the value is `gh:Renozoic-Foundry/forge-public` and stoke works from any machine. If it contains a local path (e.g., `d:/forge`), stoke only works on the machine where that path exists. To switch to the public GitHub source: update `_src_path: gh:Renozoic-Foundry/forge-public` in `.copier-answers.yml`.
 
 ### [conditional] Step 10a — Private repo authentication setup (Spec 200)
 
-If `_src_path` does NOT start with `gh:bwcarty/forge-public` and does NOT look like a local path (i.e., it is a remote URL pointing to a private repo):
+If `_src_path` does NOT start with `gh:Renozoic-Foundry/forge-public` and does NOT look like a local path (i.e., it is a remote URL pointing to a private repo):
 
 Present:
 ```
@@ -312,7 +312,7 @@ Recommended setup — choose the option that fits your environment:
 Embedded credentials are stored in `.copier-answers.yml` and committed to version control.
 ```
 
-If `_src_path` starts with `gh:bwcarty/forge-public` or is a local path: skip this section silently.
+If `_src_path` starts with `gh:Renozoic-Foundry/forge-public` or is a local path: skip this section silently.
 
 ### [decision] 10b — Autonomy level
 

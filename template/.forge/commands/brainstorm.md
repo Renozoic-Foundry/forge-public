@@ -68,6 +68,18 @@ For each recommendation, classify its readiness:
 For each recommendation, estimate a priority score using the formula in `docs/process-kit/scoring-rubric.md`.
 These are estimates — actual scores are set when specs are created.
 
+## [mechanical] Step 3b — Score verification (Spec 236)
+After estimating scores in Step 3, verify each recommendation's arithmetic before presenting.
+For each recommendation with BV, E, R, SR values:
+1. Show the intermediate computation explicitly:
+   ```
+   Score check: (BV×3)=X + ((6−E)×2)=Y + ((6−R)×2)=Z + (SR×1)=W = X+Y+Z+W = total
+   ```
+2. Compare the computed total to the stated "Est. score" value.
+3. If they match: no action needed.
+4. If mismatch: auto-correct the score and log: `Score corrected: listed=<old>, computed=<new>`
+5. All scores presented in Step 4 must use the verified values.
+
 ## [decision] Step 4 — Present recommendations
 Present recommendations as a numbered list:
 

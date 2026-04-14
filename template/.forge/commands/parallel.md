@@ -55,8 +55,18 @@ If any spec fails validation, stop and report all failures at once — do not pr
 
 Load conflict resolution config from `docs/sessions/scheduler-config.yaml` (skip if absent — use default: `conflict_resolution: worktree`).
 
+**Orchestrator-only boundary check (Spec 237):** Before scanning for inter-spec conflicts, check each spec's Implementation Summary for orchestrator-only files (see `docs/process-kit/parallelism-guide.md` § Write-Permission Boundaries):
+- Orchestrator-only files: `docs/backlog.md`, `docs/specs/README.md`, `docs/specs/CHANGELOG.md`, `docs/sessions/*.md`, `docs/sessions/signals.md`, `docs/sessions/scratchpad.md`, `CLAUDE.md`
+- If any spec's Implementation Summary lists orchestrator-only files:
+  ```
+  ⚠ ORCHESTRATOR-ONLY FILES IN SCOPE — Spec NNN lists files that are orchestrator-managed during /parallel:
+  - <file list>
+  These files will NOT be modified by the agent. The orchestrator handles post-merge updates.
+  ```
+  Remove these files from the agent's `files_in_scope` before dispatching. The agent's `/implement` will skip these; the orchestrator updates them in the post-merge pass (Step 9+).
+
 Compare the file scopes across all specs:
-1. For each pair of specs, compute the intersection of their scoped files.
+1. For each pair of specs, compute the intersection of their scoped files (excluding orchestrator-only files already removed above).
 2. Record file ownership in `docs/sessions/agent-file-registry.md` (create if absent):
    ```
    # Agent File Registry — YYYY-MM-DD HH:MM

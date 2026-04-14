@@ -1,64 +1,6 @@
 # FORGE — Framework for Organized Reliable Gated Engineering
 
-A project framework that gives AI-assisted development a structured delivery process — spec-driven, evidence-gated, and designed to remain reliable as agent autonomy increases.
-
-## What is FORGE?
-
-FORGE is an opinionated development framework that synthesizes five foundational standards into a coherent workflow for human-AI collaborative software delivery. The underlying methodology — Evidence-Gated Iterative Delivery (EGID) — ensures every lifecycle transition requires demonstrable proof.
-
-**The speed multiplier:** Traditional spec-driven development is thorough but slow. FORGE inverts that tradeoff — AI generates detailed specs from a brief description (objective, scope, acceptance criteria, test plan), then implements them with evidence at every gate. The human role shifts from writing documentation to reviewing and approving, where judgment adds the most value. At higher autonomy levels, AI can chain from spec creation straight through to validated closure — but by default, every AI-written spec is gated from implementation until a human approves it.
-
-### Core framework (every project)
-
-These capabilities are built into every FORGE project out of the box:
-
-- **AI-driven discovery** — `/interview` runs Socratic elicitation to turn vague ideas into structured requirements. `/brainstorm` scans signals, backlog, and project context to recommend spec candidates. `/note` captures thoughts ambient to the workflow for later synthesis.
-- **AI-generated specs** — Describe what you need; AI produces the full spec in seconds. Human approves; AI implements with evidence at every gate.
-- **Evidence gates** — Every lifecycle transition requires proof. Structured PASS/FAIL outcomes. Gate failures produce actionable feedback.
-- **Evolve Loop** — The Solve Loop delivers specs; the Evolve Loop improves the process itself. Signals captured during closure feed periodic reviews that re-score priorities, calibrate the scoring formula, and graduate watchlist items. Fast-path runs after every `/close`; full review triggers every 5 closed specs or 30 days.
-- **Role-separated agents** — 16 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
-- **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **27 active slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
-- **Session logging** — Auto-captured throughout the session (`/implement` and `/close` append structured entries automatically), human-finalized with `/session` before stopping. Every session ends with a coherent log that serves as a context anchor.
-
-### Enhancing features (opt-in)
-
-Optional capabilities activated per-project based on needs. The core framework operates fully without any of these.
-
-- **NanoClaw Messaging Bridge** — Async gate approvals via Telegram, WhatsApp, Slack. Agents work while you're away; you review on your phone. *For L3+ autonomy.*
-- **Multi-agent swarms** — Parallel spec delivery with conflict detection and swarm budgets. *For high-throughput projects.*
-- **OCI container isolation** — Role-scoped volume mounts for filesystem permission enforcement. *Alternative to default git worktree isolation.*
-
-### Roadmap
-
-These features are under active development and will be available in future releases:
-
-- **Lane B Compliance Engine** — Pluggable compliance profiles for regulated industries (IEC 61508, EU 2023/1230, ISO 13485, IEC 62443). Bidirectional traceability, V&V reports, spec sealing. Designed for safety-critical firmware and medical device teams.
-- **Hardware Authentication (PAL)** — YubiKey HMAC-SHA1 challenge-response for gate decisions. Cryptographic proof of human approval. Will be required for Lane B; optional for Lane A.
-
-### Foundations
-
-1. **KCS v6 (Knowledge-Centered Service)** — Double-loop learning: a Solve Loop for every spec, an Evolve Loop to improve the process itself. Signals (errors, insights, observations) are captured at lifecycle transitions via `/note` and `/close`, feeding back into priority scoring.
-
-2. **Stage-Gate (Cooper)** — Evidence gates at each lifecycle transition (`draft → in-progress → implemented → closed`). Gate failures produce structured feedback identifying what is missing. No status transition without demonstrable evidence.
-
-3. **AAIF (Agentic AI Foundation, Linux Foundation 2025)** — `AGENTS.md` defines bounded autonomy, delegation contracts, prohibited actions, and signal capture responsibilities. The AI agent operates within explicit guardrails.
-
-4. **Spec Kit** — Every change has a versioned spec with objective, scope, requirements, acceptance criteria, test plan, and revision log. Specs are rebuild guides — the codebase can be reconstructed from specs alone. Specs also serve as **context anchors**: living documents that persist decision context across AI sessions, team changes, and time. Rahul Garg's writing on [context anchoring](https://martinfowler.com/articles/reduce-friction-ai/context-anchoring.html) (2026, published on martinfowler.com) independently validated this pattern — FORGE has practiced it from the start.
-
-5. **Copier** — Template-based project bootstrapping with upstream sync. Framework improvements propagate to all downstream projects via `copier update`.
-
-### Autonomy levels
-
-FORGE defines five autonomy levels (L0–L4), all supported. The default is L1 (human-gated). At L2+, the agent chains `/implement` → `/close` → `/implement next` cycles with the human watching at the terminal, intervening only on gate failures or decision points. L3–L4 enable fully async operation via NanoClaw messaging (enhancing feature, opt-in).
-
-| Level | Name | Human role | Status |
-|-------|------|-----------|--------|
-| L0 | Manual | Human drives everything | Supported |
-| L1 | AI-Assisted | AI implements, human gates every transition | Supported (default) |
-| L2 | Supervised Auto-Chain | Commands auto-chain on success, human watches | **Supported (Phase 1 complete)** |
-| L3 | Async Review | Agents run autonomously, human approves via messaging | Supported (NanoClaw operational) |
-| L4 | Self-Improving | Agents propose process improvements, human approves weekly | Supported (infrastructure complete) |
+AI coding assistants lose context between sessions, drift from the original goal, and declare work done before it meets acceptance criteria. FORGE fixes that with specs, evidence gates, and a structured delivery process that remains reliable as agent autonomy increases.
 
 ## Quickstart
 
@@ -66,10 +8,10 @@ One command to install FORGE — the script detects your environment and adapts:
 
 ```bash
 # macOS / Linux / Git Bash on Windows
-curl -fsSL https://raw.githubusercontent.com/bwcarty/forge-public/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash
 
 # Windows PowerShell
-irm https://raw.githubusercontent.com/bwcarty/forge-public/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
 ```
 
 The install script handles prerequisites (Python, Git, Copier), detects Claude Code, and provides environment-appropriate next steps. Safe to run multiple times.
@@ -78,7 +20,7 @@ The install script handles prerequisites (Python, Git, Copier), detects Claude C
 
 **Install + bootstrap a project in one shot:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bwcarty/forge-public/main/install.sh | bash -s -- --init my-project
+curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash -s -- --init my-project
 ```
 
 ### What happens after install
@@ -87,20 +29,22 @@ curl -fsSL https://raw.githubusercontent.com/bwcarty/forge-public/main/install.s
 |---|---|---|
 | **Claude Code** | Installs prereqs + plants `/forge-bootstrap` command | Run `/forge-bootstrap` in any project |
 | **Claude Code** + `--init` | Installs prereqs + bootstraps project | Run `/onboarding` in the project |
-| **Other AI IDE** (Cursor, Windsurf, Copilot, etc.) | Installs prereqs | `copier copy https://github.com/bwcarty/forge-public.git my-project`, then open in your IDE — it reads `AGENTS.md` |
+| **Other AI IDE** (Cursor, Windsurf, Copilot, etc.) | Installs prereqs | `copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project`, then open in your IDE — it reads `AGENTS.md` |
 | **Private fork** | `bash install.sh --repo <url>` — same flow with git auth preflight | Same as above, using your fork URL |
 
 ### Manual path (power users)
 
 ```bash
 pip install copier
-copier copy https://github.com/bwcarty/forge-public.git my-project
+copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project
 cd my-project
 ```
 
 Then open the project in your AI-assisted IDE and run `/now` (Claude Code) or let your assistant read `AGENTS.md`.
 
 **Want the full walkthrough?** See the [Getting Started tutorial](docs/getting-started.md) — zero to first closed spec in a single session. Or read the [Concept Overview](docs/concept-overview.md) to understand what FORGE is and why it exists.
+
+**Want to see the result?** See [docs/examples/hello-forge/](docs/examples/hello-forge/) for what a bootstrapped project looks like after `/forge init` and a first spec cycle.
 
 ### What onboarding configures
 
@@ -143,6 +87,63 @@ Git for Windows includes Git Bash. The PowerShell wrappers (`.ps1`) auto-detect 
 # Pull framework updates
 copier update
 ```
+
+## What is FORGE?
+
+FORGE is an opinionated development framework that synthesizes five foundational standards into a coherent workflow for human-AI collaborative software delivery. The underlying methodology — Evidence-Gated Iterative Delivery (EGID) — ensures every lifecycle transition requires demonstrable proof.
+
+**The speed multiplier:** Traditional spec-driven development is thorough but slow. FORGE inverts that tradeoff — AI generates detailed specs from a brief description (objective, scope, acceptance criteria, test plan), then implements them with evidence at every gate. The human role shifts from writing documentation to reviewing and approving, where judgment adds the most value. At higher autonomy levels, AI can chain from spec creation straight through to validated closure — but by default, every AI-written spec is gated from implementation until a human approves it.
+
+### Core framework (every project)
+
+These capabilities are built into every FORGE project out of the box:
+
+- **AI-generated specs** — Describe what you need; AI produces the full spec in seconds. Human approves; AI implements with evidence at every gate.
+- **Evidence gates** — Every lifecycle transition requires proof. Structured PASS/FAIL outcomes. Gate failures produce actionable feedback.
+- **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
+- **Role-separated agents** — 16 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
+- **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
+- **29 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
+- **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
+
+### Enhancing features (opt-in)
+
+Optional capabilities activated per-project based on needs. The core framework operates fully without any of these.
+
+- **NanoClaw Messaging Bridge** — Async gate approvals via Telegram, WhatsApp, Slack. Agents work while you're away; you review on your phone. *For L3+ autonomy.*
+- **Multi-agent swarms** — Parallel spec delivery with conflict detection and swarm budgets. *For high-throughput projects.*
+- **OCI container isolation** — Role-scoped volume mounts for filesystem permission enforcement. *Alternative to default git worktree isolation.*
+
+### Roadmap
+
+These features are under active development and will be available in future releases:
+
+- **Lane B Compliance Engine** — Pluggable compliance profiles for regulated industries (IEC 61508, EU 2023/1230, ISO 13485, IEC 62443). Bidirectional traceability, V&V reports, spec sealing. Designed for safety-critical firmware and medical device teams.
+- **Hardware Authentication (PAL)** — YubiKey HMAC-SHA1 challenge-response for gate decisions. Cryptographic proof of human approval. Will be required for Lane B; optional for Lane A.
+
+### Foundations
+
+1. **KCS v6 (Knowledge-Centered Service)** — Double-loop learning: a Solve Loop for every spec, an Evolve Loop to improve the process itself. Signals (errors, insights, retro findings) are captured at lifecycle transitions and feed back into priority scoring.
+
+2. **Stage-Gate (Cooper)** — Evidence gates at each lifecycle transition (`draft → in-progress → implemented → closed`). Gate failures produce structured feedback identifying what is missing. No status transition without demonstrable evidence.
+
+3. **AAIF (Agentic AI Foundation, Linux Foundation 2025)** — `AGENTS.md` defines bounded autonomy, delegation contracts, prohibited actions, and signal capture responsibilities. The AI agent operates within explicit guardrails.
+
+4. **Spec Kit** — Every change has a versioned spec with objective, scope, requirements, acceptance criteria, test plan, and revision log. Specs are rebuild guides — the codebase can be reconstructed from specs alone. Specs also serve as **context anchors**: living documents that persist decision context across AI sessions, team changes, and time. Rahul Garg's writing on [context anchoring](https://martinfowler.com/articles/reduce-friction-ai/context-anchoring.html) (2026, published on martinfowler.com) independently validated this pattern — FORGE has practiced it from the start.
+
+5. **Copier** — Template-based project bootstrapping with upstream sync. Framework improvements propagate to all downstream projects via `copier update`.
+
+### Autonomy levels
+
+FORGE defines five autonomy levels (L0–L4), all supported. The default is L1 (human-gated). At L2+, the agent chains `/implement` → `/close` → `/implement next` cycles with the human watching at the terminal, intervening only on gate failures or decision points. L3–L4 enable fully async operation via NanoClaw messaging (enhancing feature, opt-in).
+
+| Level | Name | Human role | Status |
+|-------|------|-----------|--------|
+| L0 | Manual | Human drives everything | Supported |
+| L1 | AI-Assisted | AI implements, human gates every transition | Supported (default) |
+| L2 | Supervised Auto-Chain | Commands auto-chain on success, human watches | **Supported (Phase 1 complete)** |
+| L3 | Async Review | Agents run autonomously, human approves via messaging | Available via NanoClaw (opt-in) |
+| L4 | Self-Improving | Agents propose process improvements, human approves weekly | Preview — requires NanoClaw |
 
 ## MCP Documentation Servers
 
@@ -189,7 +190,7 @@ your-project/
 - **Evidence gates**: Each transition requires demonstrable proof (structured `GATE [name]: PASS/FAIL` outcomes)
 - **Spec approval gate**: By default, every AI-written spec requires human approval before implementation — configurable per autonomy level
 - **Change lanes**: `hotfix`, `small-change`, `standard-feature`, `process-only`
-- **Signal capture**: Errors, insights, and observations are logged via `/note` and `/close`, informing priority scoring
+- **Signal capture**: Errors, insights, and retro findings are logged and inform priority scoring
 - **Command chaining**: `/implement` → `/close` → `/implement next` auto-chains on gate success (L2+)
 - **Core vs enhancing**: Core framework (specs, gates, learning, commands) works standalone; enhancing features (compliance, NanoClaw, hardware auth) are opt-in
 
@@ -232,11 +233,15 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 221 specs across 53 sessions as of April 2026, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 247 specs across 57 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for prerequisites, development setup, spec lifecycle, and how to open a PR.
+
+## Compliance Disclaimer
+
+FORGE is a process framework, not a certification authority. Compliance features (Lane B profiles, traceability matrices, V&V reports) are aids for qualified professionals — they do not constitute regulatory assessments, certifications, or legal determinations of compliance. All generated artifacts must be reviewed and approved by qualified engineers before submission to certification authorities. See [concept-overview.md](docs/concept-overview.md) for details.
 
 ## License
 

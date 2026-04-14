@@ -22,6 +22,15 @@ If you are maintaining a private fork of FORGE, these scripts are your QA toolki
 | `gen-command-reference.sh` | Regenerate `docs/command-reference.md` from command source files in `template/.claude/commands/` | After adding or modifying slash commands |
 | `compose-modules.sh` | Assemble command files from core + enabled modules based on `onboarding.yaml` | Used by `/onboarding`; run manually with `--check` to inspect module status |
 
+### Internal (not distributed to forge-public)
+
+| Script | Purpose |
+|--------|---------|
+| `sync-to-public.sh` | Sync the public subset of this repo to forge-public |
+| `validate-spec-index.sh` | Validate `docs/specs/README.md` consistency |
+| `validate-readme-stats.sh` | Validate README stats against spec count |
+| `validate-public-docs.sh` | Validate public-facing docs (links, deprecated refs) |
+
 ## Usage
 
 All scripts are executable and run from the repo root:
@@ -72,10 +81,11 @@ If you are maintaining a private fork of this repository:
    - run: bash scripts/smoke-test-template.sh
    ```
 
-## Scripts NOT included
+## Scripts NOT included in forge-public
 
 The upstream FORGE development repository uses additional internal scripts that are not distributed:
 
-- `sync-to-public.sh` — Syncs the private development repo to this public repo. Fork maintainers who need a similar workflow should write their own.
+- `sync-to-public.sh` — Syncs the private development repo to the public repo. Fork maintainers who need a similar workflow should write their own.
 - `validate-spec-index.sh` — Validates spec index files (development-only artifact).
 - `validate-readme-stats.sh` — Validates README statistics against spec counts (development-only artifact).
+- `validate-public-docs.sh` — Validates public-facing docs for broken links and deprecated references.

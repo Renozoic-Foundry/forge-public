@@ -139,7 +139,7 @@ check_ncforge_bridge() {
   if [[ "$nc_enabled" == "true" ]]; then
     warn "ncforge: not installed (recommended — NanoClaw is enabled)"
     warn "  Install: pip install nanoclaw-forge"
-    warn "  Or:      see https://github.com/bwcarty/nanoclaw-forge"
+    warn "  Or:      see https://github.com/Renozoic-Foundry/nanoclaw-forge"
     return 0  # Warning only, not blocking
   else
     info "ncforge: not installed (optional — NanoClaw is not enabled)"
@@ -173,11 +173,11 @@ check_pal() {
 
   if [[ "$lane" == "B" ]]; then
     fail "pal: not found (REQUIRED — Lane B requires hardware-authenticated gates)"
-    fail "  Install PAL: pip install pal-gate  OR  see https://github.com/bwcarty/pal"
+    fail "  Install PAL: pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal"
     return 1
   elif [[ "$gate_provider" == "pal" ]]; then
     fail "pal: not found (REQUIRED — gate.provider is 'pal')"
-    fail "  Install PAL: pip install pal-gate  OR  see https://github.com/bwcarty/pal"
+    fail "  Install PAL: pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal"
     return 1
   elif [[ "$gate_provider" == "auto" ]]; then
     info "pal: not installed (optional — gate.provider is 'auto', will fall back to prompt)"
@@ -440,16 +440,16 @@ install_missing() {
       if command -v pip3 &>/dev/null; then
         pip3 install pal-gate || {
           fail "Failed to install PAL via pip. Install manually:"
-          fail "  pip install pal-gate  OR  see https://github.com/bwcarty/pal"
+          fail "  pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal"
         }
       elif command -v pip &>/dev/null; then
         pip install pal-gate || {
           fail "Failed to install PAL via pip. Install manually:"
-          fail "  pip install pal-gate  OR  see https://github.com/bwcarty/pal"
+          fail "  pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal"
         }
       else
         fail "pip not found. Install PAL manually:"
-        fail "  pip install pal-gate  OR  see https://github.com/bwcarty/pal"
+        fail "  pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal"
       fi
     elif [[ "$gate_provider" == "auto" ]]; then
       echo ""

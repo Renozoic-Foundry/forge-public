@@ -42,6 +42,20 @@ No. Lane B compliance tooling is under active development and is not included in
 
 FORGE is process, not infrastructure. Your code has no FORGE runtime dependency — there are no FORGE imports, no build plugins, no CI lock-in. Remove the `.forge/` and `docs/` process directories and you have a standard project. Specs and session logs remain as useful documentation even after you stop using the framework.
 
+## When do I run /session?
+
+Run it before you stop working — that is the short answer. Throughout your session, `/implement` and `/close` automatically append structured entries (timestamps, spec IDs, gate outcomes) to the session log. Your data is safe even if you forget. But `/session` does the final synthesis: it reads those accumulated entries, mines the conversation for decisions and observations, and drafts a complete session log. FORGE's second hard rule — "every session ends with a session log" — refers to this finalization step. The auto-captured data ensures nothing is lost; `/session` ensures the log is coherent and useful as a context anchor for future sessions.
+
+## What is /evolve and when does it run?
+
+`/evolve` is the Evolve Loop — the second half of FORGE's KCS v6 double-loop structure. While the Solve Loop (spec, implement, close) delivers individual changes, the Evolve Loop reviews accumulated signals and proposes improvements to the process itself: priority re-scoring, scoring formula calibration, watchlist graduation, workflow adjustments.
+
+It runs at two cadences. A **fast-path** check (F1 + F4) runs inline after every `/close`, reviewing fresh signals and updating priorities. A **full review** (F1-F4) triggers every 5 closed specs or 30 days, whichever comes first. The `/now` command also monitors five signal-based thresholds that can recommend an early evolve review. You do not need to remember to run it — FORGE tells you when it is time.
+
+## Do I need to run /spec manually?
+
+Usually no. The typical workflow is: `/interview` (to explore and define the problem) or `/brainstorm` (to discover spec candidates from signals and context), then discuss recommendations in conversation, and tell the AI to write the spec. The AI handles spec creation as part of the natural conversation flow. `/spec` is the underlying tool that creates spec files, but operators rarely invoke it directly. Think of `/spec` as the engine and `/brainstorm` as the steering wheel — you interact with the steering wheel.
+
 ## What FORGE does not do
 
 - **Not a project management tool.** FORGE does not provide Gantt charts, sprint planning, velocity tracking, or time tracking. It structures the delivery process, not the project schedule.
@@ -57,4 +71,4 @@ FORGE is process, not infrastructure. Your code has no FORGE runtime dependency 
 
 ---
 
-*Last verified against Spec 221 on 2026-04-11.*
+Last verified against Spec 221.

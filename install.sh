@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # FORGE Installer — Universal entry point
-# Usage: curl -fsSL https://raw.githubusercontent.com/bwcarty/forge-public/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash
 #        bash install.sh [--repo <url>] [--init <path>] [--update] [--yes]
 #
 # Detects environment (Claude Code or generic) and adapts behavior.
-# See: https://github.com/bwcarty/forge-public
+# See: https://github.com/Renozoic-Foundry/forge-public
 
 set -euo pipefail
 
 # --- Constants ---
-DEFAULT_REPO="https://github.com/bwcarty/forge-public.git"
-RAW_BASE="https://raw.githubusercontent.com/bwcarty/forge-public/main"
+DEFAULT_REPO="https://github.com/Renozoic-Foundry/forge-public.git"
+RAW_BASE="https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main"
 FORGE_CONFIG_DIR="$HOME/.forge"
 FORGE_CONFIG_FILE="$FORGE_CONFIG_DIR/config"
 CLAUDE_CMD_DIR="$HOME/.claude/commands"
 BOOTSTRAP_FILE="forge-bootstrap.md"
-DOCS_URL="https://github.com/bwcarty/forge-public#readme"
+DOCS_URL="https://github.com/Renozoic-Foundry/forge-public#readme"
 
 # --- Color output (disabled if not a terminal) ---
 if [ -t 1 ]; then

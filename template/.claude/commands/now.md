@@ -98,7 +98,37 @@ Constraints:
      > | **2** | `close NNN` | Run /close NNN to validate and close the spec |
      > | **3** | `skip` | Defer validation — continue to backlog recommendations |
      ```
-     If user selects "review": read `docs/process-kit/human-validation-runbook.md`, identify applicable sections (A–G) based on the spec's changes, and display the full Quick Check list for each applicable section. After displaying, remind: "Run `/close NNN` when validation is complete."
+     If user selects "review NNN":
+
+     **Part 1 — Spec-specific checklist** (Spec 232): Read the spec file (`docs/specs/NNN-*.md`) and generate a targeted validation checklist:
+
+     a. **From Acceptance Criteria**: For each AC in the spec, create a numbered validation item:
+        ```
+        ## Spec-Specific Validation — Spec NNN
+
+        ### Acceptance Criteria
+        1. [ ] AC1: "<AC text>" — Verify: <concrete check instruction based on the AC>
+        2. [ ] AC2: "<AC text>" — Verify: <concrete check instruction>
+        ...
+        ```
+
+     b. **From Test Plan**: For each test plan item, create a verification step:
+        ```
+        ### Test Plan Verification
+        1. [ ] <test plan item> — Run/check: <how to verify>
+        ...
+        ```
+
+     c. **From Implementation Summary**: List changed files for visual inspection:
+        ```
+        ### Changed Files (visual inspection)
+        - [ ] `<file path>` — spot-check changes
+        ...
+        ```
+
+     **Part 2 — Generic runbook sections**: Then read `docs/process-kit/human-validation-runbook.md`, identify applicable sections (A–G) based on the spec's changes, and display the Quick Check list for each applicable section under a `### General Checks` heading.
+
+     **Footer**: End with: "Run `/close NNN` when validation is complete."
    - This takes priority over recommending new implementation work.
 
 <!-- parallel: steps 2-5 are independent reads — run them simultaneously -->

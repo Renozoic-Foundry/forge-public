@@ -276,7 +276,7 @@ Which AI coding agents does your team use? (select all that apply)
     - Set `lint_command` to the lint command (or empty string if none)
     - Preserve all other existing keys (especially `_commit`, `_src_path`)
 
-    **Note — `/forge stoke` upstream source**: The `_src_path` key in `.copier-answers.yml` determines where `/forge stoke` pulls template updates from. If this project was bootstrapped via `copier copy gh:bwcarty/forge-public`, the value is `gh:bwcarty/forge-public` and stoke works from any machine. If it contains a local path (e.g., `d:/forge`), stoke only works on the machine where that path exists. To switch to the public GitHub source: update `_src_path: gh:bwcarty/forge-public` in `.copier-answers.yml`.
+    **Note — `/forge stoke` upstream source**: The `_src_path` key in `.copier-answers.yml` determines where `/forge stoke` pulls template updates from. If this project was bootstrapped via `copier copy gh:Renozoic-Foundry/forge-public`, the value is `gh:Renozoic-Foundry/forge-public` and stoke works from any machine. If it contains a local path (e.g., `d:/forge`), stoke only works on the machine where that path exists. To switch to the public GitHub source: update `_src_path: gh:Renozoic-Foundry/forge-public` in `.copier-answers.yml`.
 
 ### [decision] 10b — Autonomy level
 

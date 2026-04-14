@@ -16,7 +16,7 @@ Windows users: use Git Bash for all shell operations. PowerShell wrappers are in
 
 ## Development Setup
 
-1. Clone the repo: `git clone https://github.com/bwcarty/forge-public`
+1. Clone the repo: `git clone https://github.com/Renozoic-Foundry/forge-public`
 2. No build step — FORGE is a Copier template (text files + bash scripts).
 3. Test your changes by bootstrapping a fresh project:
    ```bash
@@ -96,6 +96,33 @@ When a CI-NNN insight improves a command or template in your project, propagate 
 3. Reference the original insight in the PR description
 4. Ensure the change is domain-neutral
 
+## Contributing from a Consumer Project
+
+If you're using FORGE in your project (not developing FORGE itself), your upstream contribution path depends on where your project's template comes from. Check `_src_path` in your `.copier-answers.yml`:
+
+### Path A — Canonical FORGE (`Renozoic-Foundry/forge-public`)
+
+Your `_src_path` contains `Renozoic-Foundry/forge-public`. Contribute directly:
+
+1. Open an issue or PR on [Renozoic-Foundry/forge-public](https://github.com/Renozoic-Foundry/forge-public)
+2. Include the signal entry (SIG-NNN) or insight (CI-NNN) that prompted the improvement
+3. Ensure the change is domain-neutral — no project-specific names, paths, or config
+4. Apply the change to the Copier template files (under `template/`), not your project's copies
+
+### Path B — Private Fork (org-specific URL)
+
+Your `_src_path` points to an internal repo (e.g., `dev.azure.com/yourorg/...`). Contribute to your fork maintainer first:
+
+1. Open an issue or PR on your **fork's repo** (not Renozoic-Foundry)
+2. Your fork maintainer decides whether to upstream the improvement
+3. If the improvement is domain-neutral and benefits all FORGE users, the fork maintainer can open a PR on [Renozoic-Foundry/forge-public](https://github.com/Renozoic-Foundry/forge-public)
+
+This two-hop path (consumer → fork → upstream) ensures org-specific changes don't leak upstream, while genuinely universal improvements still reach the canonical repo.
+
+### Path C — Local Path (FORGE developer)
+
+Your `_src_path` is a local filesystem path. You're working directly on FORGE — use the standard development workflow above.
+
 ## Contribution Checklist
 
 Before submitting any upstream contribution:
@@ -108,9 +135,35 @@ Before submitting any upstream contribution:
 - [ ] PR description includes provenance (which signal/error/insight prompted this)
 - [ ] Shellcheck passes on any modified `.sh` files
 
+## Response Times
+
+FORGE is maintained by a small team. Here's what to expect:
+
+| Type | Target Response | Notes |
+|------|----------------|-------|
+| **Security vulnerability** | 48 hours | See [SECURITY.md](SECURITY.md) for private reporting |
+| **Bug report** | 3-5 business days | Faster if reproduction steps are included |
+| **Feature request** | 1-2 weeks | Evaluated against the backlog during evolve loop reviews |
+| **Pull request** | 1-2 weeks | Faster for small changes with clear spec references |
+| **Question / discussion** | 3-5 business days | |
+
+These are targets, not guarantees. If something is urgent, note it in the issue title.
+
+## Pull Request Review
+
+When reviewing PRs, maintainers check:
+
+- **Spec alignment**: Does the PR reference a spec? Changes without specs need one created first.
+- **Template integrity**: Do template files render correctly? (`copier copy . /tmp/test --defaults`)
+- **Own-copy sync**: If template commands changed, are the own-copies updated too?
+- **Shellcheck**: All `.sh` files pass `scripts/validate-bash.sh`
+- **Domain neutrality**: No project-specific names, paths, or internal references
+
+PRs that include a spec reference and pass the contribution checklist above are reviewed fastest.
+
 ## Code of Conduct
 
-Be constructive. Every contribution should make the framework better for all users. If in doubt about whether something belongs in FORGE vs. your project, open a discussion issue first.
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Be constructive — every contribution should make the framework better for all users.
 
 ## License
 

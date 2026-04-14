@@ -500,7 +500,7 @@ usage() {
     echo ""
   else
     echo "PAL not detected — using local device management."
-    echo "  Install PAL for hardware-authenticated gates: https://github.com/bwcarty/pal"
+    echo "  Install PAL for hardware-authenticated gates: https://github.com/Renozoic-Foundry/pal"
     echo ""
   fi
   echo "Non-interactive commands (--json output, for AI agent orchestration):"
@@ -620,7 +620,7 @@ case "$COMMAND" in
       else
         # Legacy interactive enrollment — requires security.sh with full enrollment
         echo "PAL not installed. Use --station SERIAL --mobile SERIAL --json for non-interactive enrollment."
-        echo "Or install PAL for guided enrollment: https://github.com/bwcarty/pal"
+        echo "Or install PAL for guided enrollment: https://github.com/Renozoic-Foundry/pal"
         exit 1
       fi
     fi
@@ -630,7 +630,7 @@ case "$COMMAND" in
     if pal_available; then
       cmd_approve_pal "$GATE_ID"
     else
-      echo "ERROR: --approve requires PAL. Install: https://github.com/bwcarty/pal" >&2
+      echo "ERROR: --approve requires PAL. Install: https://github.com/Renozoic-Foundry/pal" >&2
       exit 1
     fi
     ;;
@@ -639,7 +639,7 @@ case "$COMMAND" in
     if pal_available; then
       cmd_reject_pal "$GATE_ID" "$REASON"
     else
-      echo "ERROR: --reject requires PAL. Install: https://github.com/bwcarty/pal" >&2
+      echo "ERROR: --reject requires PAL. Install: https://github.com/Renozoic-Foundry/pal" >&2
       exit 1
     fi
     ;;

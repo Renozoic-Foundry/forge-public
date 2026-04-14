@@ -6,7 +6,7 @@ If you discover a security vulnerability in FORGE, please report it responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email security concerns to the maintainers via the contact information in the repository's GitHub profile, or use GitHub's private vulnerability reporting feature:
+Instead, please email **support@renozoic.com** or use GitHub's private vulnerability reporting feature:
 
 1. Go to the repository's **Security** tab
 2. Click **Report a vulnerability**

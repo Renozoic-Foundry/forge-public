@@ -679,19 +679,16 @@ Scan the changed files list (from `git diff --name-only` against the spec baseli
    - `GATE [test-execution]: PASS/FAIL — <test results summary>`. On FAIL: `Remediation: fix failing tests before marking implemented.`
    - `GATE [post-implementation]: PASS/FAIL — <checklist summary>`. On FAIL: `Remediation: complete missing checklist items: <items>.`
 8. **Implementation retrospective**: Draft SIG-NNN entries for any errors, user corrections, or insights from this cycle. Show drafts, get confirmation, then append to `docs/sessions/signals.md` and update today's session log.
-9. **Inline review brief (Spec 160)**: Present the implementation results using the Review Brief format from `docs/process-kit/gate-categories.md`:
-   a. Categorize each post-implementation check as machine-verifiable, human-judgment-required, or confidence-gated.
-   b. Output the Review Brief:
-      - **Machine-Verified**: All mechanical gates that passed (file presence, test execution, cross-reference sync, completeness, lint)
-      - **Needs Your Review**: Items requiring human judgment before /close:
-        - If spec modified user-facing commands or onboarding → UX judgment item
-        - If spec modified README or external-facing content → external content item
-        - If spec involves physical-world recommendations → Physical Logic Check (always human-judgment, cannot be delegated)
-        - If spec touches auth/security → security review item
-        - If spec is a novel pattern → novel situation assessment
-      - **Machine-Handled**: Lower-priority machine-verified items not shown in detail
-   c. If no human-judgment items are identified: note "This spec appears delegation-eligible at L3+ — all ACs are machine-verifiable."
-   d. This is informational — the actual enforcement mode is determined at /close time.
+9. **Implementation summary (Spec 239)**: Present a concise summary of what was implemented. Do NOT present a Review Brief here — the formal Review Brief is generated exclusively at `/close` (Step 2e).
+   a. Output the summary:
+      ```
+      ## Implementation Summary — Spec NNN
+      **Changed files**: <bulleted list of files modified>
+      **AC status**: <N/N acceptance criteria satisfied — list each AC with pass/fail>
+      **Test results**: <test command output summary — pass/fail count>
+      ```
+   b. If no human-judgment items are likely needed at `/close` (all ACs are machine-verifiable): note "This spec appears delegation-eligible at L3+ — all ACs are machine-verifiable."
+   c. This summary is informational — the formal gate review happens at `/close`.
 10. Remind me to run `/close NNN` to confirm and transition to `closed`.
 
 ---

@@ -1,9 +1,9 @@
 # FORGE Installer — Universal entry point (PowerShell)
-# Usage: irm https://raw.githubusercontent.com/bwcarty/forge-public/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
 #        .\install.ps1 [-Repo <url>] [-Init <path>] [-Update] [-Yes]
 #
 # Detects environment (Claude Code or generic) and adapts behavior.
-# See: https://github.com/bwcarty/forge-public
+# See: https://github.com/Renozoic-Foundry/forge-public
 
 [CmdletBinding()]
 param(
@@ -20,13 +20,13 @@ $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # --- Constants ---
-$DEFAULT_REPO = "https://github.com/bwcarty/forge-public.git"
-$RAW_BASE = "https://raw.githubusercontent.com/bwcarty/forge-public/main"
+$DEFAULT_REPO = "https://github.com/Renozoic-Foundry/forge-public.git"
+$RAW_BASE = "https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main"
 $FORGE_CONFIG_DIR = Join-Path $HOME ".forge"
 $FORGE_CONFIG_FILE = Join-Path $FORGE_CONFIG_DIR "config"
 $CLAUDE_CMD_DIR = Join-Path (Join-Path $HOME ".claude") "commands"
 $BOOTSTRAP_FILE = "forge-bootstrap.md"
-$DOCS_URL = "https://github.com/bwcarty/forge-public#readme"
+$DOCS_URL = "https://github.com/Renozoic-Foundry/forge-public#readme"
 
 # --- Output helpers ---
 function Write-Info  { param([string]$Msg) Write-Host "  $([char]0x2713) $Msg" -ForegroundColor Green }

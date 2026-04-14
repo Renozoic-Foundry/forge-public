@@ -50,4 +50,4 @@ Reference documents for FORGE's spec-driven development workflow. Organized by p
 
 ## Upstream
 
-This process kit ships with the [FORGE framework](https://github.com/bwcarty/forge-public). Adapt freely for your project.
+This process kit ships with the [FORGE framework](https://github.com/Renozoic-Foundry/forge-public). Adapt freely for your project.

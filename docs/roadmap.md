@@ -8,10 +8,10 @@ Each phase builds on the previous. No phase can be skipped — the evidence gate
 
 ## Current State
 
-**All four autonomy phases are delivered as template infrastructure.** FORGE operates at **L2 autonomy** in daily use (supervised, command chaining) with all infrastructure for L3–L4 in place. As of April 2026: 221 total spec entries across 53 sessions.
+**All four autonomy phases are delivered as template infrastructure.** FORGE operates at **L2 autonomy** in daily use (supervised, command chaining) with all infrastructure for L3–L4 in place. 120 specs closed, 7 draft, 11 deprecated across 23 sessions (2026-03-13 through 2026-03-28). 139 total spec entries.
 
 **What works today:**
-- Spec-driven development with evidence gates (29 active slash commands)
+- Spec-driven development with evidence gates (27 active slash commands + 6 deprecated)
 - Agent role separation with context-scoped isolation (Spec 099) — DA and validator as isolated subagents
 - OCI container isolation for permission enforcement
 - Budget tracking (time-based) with dynamic model routing (Spec 085)

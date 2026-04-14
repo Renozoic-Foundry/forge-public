@@ -121,6 +121,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       - Patterns with 2+ occurrences at medium+ severity: flag as "systemic gap → spec recommended"
    e. Save the pattern table to `docs/sessions/pattern-analysis.md` (append with date header; create if absent).
    f. **Knowledge consolidation**: If pattern analysis reveals 10+ signals or 3+ recurring themes, recommend running `/synthesize` to consolidate accumulated knowledge into a refined reference document.
+   g. **Architecture document update** (Spec 228): Check `docs/architecture.md`. If it exists and any of the following changed since its `Last updated` date: new modules added, commands added/removed, agent roles changed, or runtime adapters modified — flag for update: "Architecture document may be stale. Review `docs/architecture.md` and update feature inventory, module list, or integration points as needed."
 8b. **Trust calibration review (Spec 160):** Read `docs/sessions/signals.md` for trust signals (type tag `[trust]`):
    a. **Aggregate corrections by check type**: For each check type that appears in trust signals, count:
       - Total spec closures where this check type was machine-verified (estimate from CHANGELOG close count)
@@ -136,7 +137,14 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       |------------|----------|-------------|-----------------|----------------|
       | <check>    | <N>      | <N>         | machine-verifiable | escalate to confidence-gated |
       ```
-      These are **recommendations only** — present as a choice block: **apply** (update gate-categories.md) | **defer** (revisit next cycle) | **dismiss**.
+      These are **recommendations only**:
+      > **Choose** — type a number or keyword:
+      > | # | Action | What happens |
+      > |---|--------|--------------|
+      > | **1** | `apply all` | Apply all recommended category changes to gate-categories.md |
+      > | **2** | `apply <N>` | Apply a specific recommendation (type the row number) |
+      > | **3** | `defer` | Revisit all recommendations next cycle |
+      > | **4** | `dismiss` | Dismiss all — no adjustments warranted |
    d. If no trust signals exist or no adjustments are warranted: report "Trust calibration: no adjustments needed (N closures reviewed, 0 corrections)."
 
 8c. **CQO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
@@ -174,13 +182,20 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
        1. <Title> — <Objective (first sentence)>
        2. <Title> — <Objective (first sentence)>
        ...
-       > **Choose action for each** — type: approve <N> | modify <N> | dismiss <N>
        ```
-    d. On `approve <N>`: run `/spec` with the proposal title and content to create the draft spec.
-    e. On `modify <N>`: accept operator edits to the proposal, then run `/spec` with revised content.
-    f. On `dismiss <N>`: record dismissal in `docs/sessions/pattern-analysis.md` as `dismissed: YYYY-MM-DD — <reason>`. Suppresses re-proposal for this pattern in subsequent cycles.
+       > **Choose** — type a number or keyword:
+       > | # | Action | What happens |
+       > |---|--------|--------------|
+       > | **1** | `approve all` | Approve all N proposals for spec creation |
+       > | **2** | `approve <N>` | Approve a specific proposal (type the number) |
+       > | **3** | `modify <N>` | Edit a proposal before approving |
+       > | **4** | `dismiss <N>` | Dismiss a specific proposal with reason |
+       > | **5** | `dismiss all` | Dismiss all proposals |
+    e. On `approve <N>` (or `approve all`): run `/spec` with the proposal title and content to create the draft spec.
+    f. On `modify <N>`: accept operator edits to the proposal, then run `/spec` with revised content.
+    g. On `dismiss <N>` (or `dismiss all`): record dismissal in `docs/sessions/pattern-analysis.md` as `dismissed: YYYY-MM-DD — <reason>`. Suppresses re-proposal for this pattern in subsequent cycles.
 
-    g. **Multi-role vetting**: For high-impact proposals (severity `high` or BV >= 4), recommend running `/consensus <proposal>` to gather structured feedback from all registry roles before approving.
+    h. **Multi-role vetting**: For high-impact proposals (severity `high` or BV >= 4), recommend running `/consensus <proposal>` to gather structured feedback from all registry roles before approving.
 After either path:
 - **Metrics rotation** (Spec 102 — skip if `.forge/metrics/` directory does not exist):
   Read `forge.model_router.metrics_retention_days` from AGENTS.md (default: 30).
@@ -204,7 +219,13 @@ After either path:
   Action required: promote to spec, drop, or carry forward with justification.
   ```
   If no aged items found: report "Deferred scope: all items current (none >14 days)."
-- Check docs/sessions/scratchpad.md for open `[evolve]` (or legacy `[outer-loop]`) notes — report and ask to resolve or convert to a spec.
+- Check docs/sessions/scratchpad.md for open `[evolve]` (or legacy `[outer-loop]`) notes. If open notes exist, present them as a numbered list and offer disposition:
+  > **Choose** — type a number or keyword:
+  > | # | Action | What happens |
+  > |---|--------|--------------|
+  > | **1** | `review all` | Walk through each item one at a time for disposition |
+  > | **2** | `batch dispose` | Recommend dispositions for all, approve/modify in bulk |
+  > | **3** | `carry forward` | Carry all items forward to next cycle |
 - Remind me to update the `Last evolve loop review:` field in today's session log.
 
 ## [decision] Evolve Loop Exit Gate (Spec 191)
@@ -230,7 +251,8 @@ Before returning control to the solve loop, verify all evolve-loop work is compl
    > |---|--------|--------------|
    > | **1** | `implement next` | Exit evolve loop → `/implement next` |
    > | **2** | `spec <title>` | Exit evolve loop → create spec from approved proposal |
-   > | **3** | `stop` | Exit evolve loop → end session |
+   > | **3** | `spec all` | Exit evolve loop → create all approved proposals as specs |
+   > | **4** | `stop` | Exit evolve loop → end session |
    >
    > _(No solve-loop commands execute until you choose.)_
 

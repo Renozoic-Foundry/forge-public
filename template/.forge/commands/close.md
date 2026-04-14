@@ -98,16 +98,9 @@ After identifying the spec, determine the enforcement mode for this closure:
 8. **If PAL mode**: Proceed normally but deliver Review Brief via NanoClaw for hardware-authenticated approval.
 
 ### [mechanical] Current Goal tracking (Spec 091)
-After completing each major step (2, 3, 4, 5, 6, 7, 8, 9), emit a validation progress block at the END of your output:
+After completing each major step (2, 3, 4, 5, 6, 7, 8, 9), emit a compact validation progress line at the END of your output:
 ```
----
-## Validation Progress
-**Spec**: NNN — <title>
-**Step**: <current> of 9 — <step description>
-**Gates checked**: <N>/<total expected>
-**Results**: PASS: <N>, CONDITIONAL_PASS: <N>, FAIL: <N>
-**Remaining**: <comma-separated list of remaining steps>
----
+_Progress: Step <current>/9 (<step description>) | Gates: <N>/<total> | PASS: <N>, COND: <N>, FAIL: <N> | Next: <next step>_
 ```
 Update `docs/sessions/context-snapshot.md` `## Active implementation` at steps 2 (start close), 3 (status transition), and 9 (complete).
 
@@ -439,7 +432,18 @@ After all Step 2 gates complete, generate the Review Brief. This is the primary 
    - When a human approves without corrections: no action needed (success is the default).
 
 7. **Enforcement mode behavior**:
-   - **Chat mode**: Present the Review Brief. Wait for human to review "Needs Your Review" items and confirm. Then proceed to Step 3.
+   - **Chat mode**: Present the Review Brief, then present a choice block:
+
+     > **Review Brief complete** — choose an action:
+     > | # | Action | What happens |
+     > |---|--------|--------------|
+     > | **1** | `approve` | Confirm all items reviewed — proceed to close |
+     > | **2** | `show <item>` | Expand a Machine-Handled item for inspection |
+     > | **3** | `reject` | Halt close — return spec to implemented for rework |
+     >
+     > _(Type the number or keyword directly)_
+
+     Wait for response. On `approve`: proceed to Step 3. On `reject`: stop and report "Close halted by reviewer." On `show`: expand the requested item, then re-present the choice block.
    - **Delegated mode**: The Review Brief has no "Needs Your Review" items (all machine-verifiable). Skip human prompt. Proceed directly to Step 3 with the delegated close addendum.
    - **PAL mode**: Present the Review Brief. Deliver via NanoClaw for hardware-authenticated approval. Wait for tap/reject response. Then proceed to Step 3.
 
@@ -534,6 +538,17 @@ Remove the edit-gate sentinel to signal that no `/implement` session is active:
 rm -f .forge/state/implementing.json
 ```
 If the file does not exist, skip silently.
+
+### [mechanical] Step 3a+ — README stats auto-update (Spec 235)
+Run `validate-readme-stats.sh --fix` to auto-correct spec and session counts in README.md before committing:
+```bash
+if [[ -f "scripts/validate-readme-stats.sh" ]]; then
+  bash scripts/validate-readme-stats.sh --fix || true
+fi
+```
+- If the script is absent: skip silently (consumer projects may not have it).
+- If `--fix` corrects counts: the updated README.md is included in the /close commit.
+- If the script fails for any reason: proceed (non-blocking, `|| true`).
 
 ## [mechanical] Step 3c — Session log incremental entry (Spec 131)
 
@@ -638,6 +653,33 @@ Run the `/retro` retrospective inline for this spec. Three signal categories:
 Present draft signal entries. **Re-read `docs/sessions/signals.md` now** (Spec 123 — context overflow guard), then append confirmed entries.
 
 After presenting signals, write confirmed entries to `docs/sessions/signals.md` using the established format (`###` header with date and spec, then categorized signal entries). If the file doesn't exist, create it from the signals log header. This is a [mechanical] step — do not skip.
+
+### Step 6a — Upstream contribution check (Spec 226)
+After capturing process signals, check if any should be contributed upstream:
+
+a. Read `.copier-answers.yml` for `_src_path`. Determine contribution path:
+   - Contains `Renozoic-Foundry/forge-public` → **canonical** (direct upstream PR)
+   - Contains another remote URL (not local path) → **fork** (contribute to fork maintainer)
+   - Is a local filesystem path → **skip** (FORGE developer, already at source)
+
+b. For each **process signal** just captured (content and architecture signals are project-specific — skip them):
+   - Evaluate: "Does this signal describe a FORGE workflow improvement that would benefit all FORGE users, not just this project?"
+   - If yes, present:
+     ```
+     UPSTREAM CANDIDATE — process signal SIG-NNN-XX may be a framework-level improvement:
+       Signal: <signal text>
+       Contribution path: <canonical | fork>
+       Target: <repo URL>
+     ```
+     > | # | Action | What happens |
+     > |---|--------|--------------|
+     > | **1** | `note` | Add to scratchpad as upstream candidate for later |
+     > | **2** | `skip` | Project-specific — not an upstream improvement |
+
+     - If `note`: append to scratchpad: `- [ ] <date>: [upstream] SIG-NNN-XX — <signal summary>. Target: <repo>.`
+     - If `skip`: proceed silently.
+
+c. If `_src_path` is a local path or `.copier-answers.yml` is absent: skip this step silently.
 
 ### Step 6b — Runbook amendment check (Spec 107)
 After capturing process signals, check if any process signal maps to an existing runbook:

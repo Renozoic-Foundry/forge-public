@@ -121,6 +121,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       - Patterns with 2+ occurrences at medium+ severity: flag as "systemic gap → spec recommended"
    e. Save the pattern table to `docs/sessions/pattern-analysis.md` (append with date header; create if absent).
    f. **Knowledge consolidation**: If pattern analysis reveals 10+ signals or 3+ recurring themes, recommend running `/synthesize` to consolidate accumulated knowledge into a refined reference document.
+   g. **Architecture document update** (Spec 228): Check `docs/architecture.md`. If it exists and any of the following changed since its `Last updated` date: new modules added, commands added/removed, agent roles changed, or runtime adapters modified — flag for update: "Architecture document may be stale. Review `docs/architecture.md` and update feature inventory, module list, or integration points as needed."
 8b. **Trust calibration review (Spec 160):** Read `docs/sessions/signals.md` for trust signals (type tag `[trust]`):
    a. **Aggregate corrections by check type**: For each check type that appears in trust signals, count:
       - Total spec closures where this check type was machine-verified (estimate from CHANGELOG close count)

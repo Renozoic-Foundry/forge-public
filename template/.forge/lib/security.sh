@@ -14,7 +14,7 @@
 # When PAL is not available and provider is "prompt" or "auto", falls back
 # to chat-based approval (no hardware auth).
 #
-# Dependencies: jq. Optional: pal CLI (https://github.com/bwcarty/pal)
+# Dependencies: jq. Optional: pal CLI (https://github.com/Renozoic-Foundry/pal)
 
 FORGE_SECURITY_DIR=""
 FORGE_CHALLENGES_DIR=""
@@ -44,7 +44,7 @@ _forge_resolve_provider() {
     pal)
       if ! _forge_pal_available; then
         echo "ERROR: gate.provider is 'pal' but PAL is not installed." >&2
-        echo "  Install PAL: pip install pal-gate  OR  see https://github.com/bwcarty/pal" >&2
+        echo "  Install PAL: pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal" >&2
         echo "  Or set gate.provider to 'prompt' or 'auto' in AGENTS.md." >&2
         return 1
       fi
@@ -184,7 +184,7 @@ forge_gate_status() {
 forge_gate_enroll() {
   if ! _forge_pal_available; then
     echo "ERROR: PAL is required for key enrollment." >&2
-    echo "  Install PAL: pip install pal-gate  OR  see https://github.com/bwcarty/pal" >&2
+    echo "  Install PAL: pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal" >&2
     return 1
   fi
   pal enroll "$@"

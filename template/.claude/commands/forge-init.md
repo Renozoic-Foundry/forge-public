@@ -19,7 +19,7 @@
    - If the current repo root contains `copier.yml`: local FORGE clone detected. Prompt for the bootstrap source:
      ```
      Bootstrap source — determines where /forge stoke pulls future updates:
-     1. gh:bwcarty/forge-public  ← recommended (public GitHub — works on any machine)
+     1. gh:Renozoic-Foundry/forge-public  ← recommended (public GitHub — works on any machine)
      2. <current directory path>  ← local path (only works on this machine)
      3. Private repo URL          ← enter a Git URL (GitHub private, Azure DevOps, GitLab, etc.)
 

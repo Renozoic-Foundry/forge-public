@@ -48,8 +48,8 @@ If $ARGUMENTS is `?` or `help`:
    ### Connected Devices
    | # | Device | Serial | OTP | Slot 2 |
    |---|--------|--------|-----|--------|
-   | 1 | YubiKey 5 NFC | 15194777 | enabled | programmed |
-   | 2 | YubiKey 5C NFC | 16769179 | enabled | programmed |
+   | 1 | YubiKey 5 NFC | 12345678 | enabled | programmed |
+   | 2 | YubiKey 5C NFC | 87654321 | enabled | programmed |
 
    ### Available Providers
    - yubikey: available (2 devices)
@@ -57,7 +57,7 @@ If $ARGUMENTS is `?` or `help`:
    - mobile: available (via NanoClaw)
 
    ### Enrollment Status
-   - Not enrolled / Enrolled (station: YK-15194777, mobile: YK-16769179)
+   - Not enrolled / Enrolled (station: YK-12345678, mobile: YK-87654321)
    ```
 
 3. If no devices are detected and ykman is not installed, suggest running prerequisites first.
@@ -98,7 +98,7 @@ For each key that needs programming:
 
 2. Present the slot audit results:
    ```
-   ### Key: YubiKey 5 NFC (15194777)
+   ### Key: YubiKey 5 NFC (12345678)
    - Slot 1: programmed (FORGE never modifies slot 1)
    - Slot 2: empty
    ```
@@ -134,9 +134,9 @@ For each key that needs programming:
 
 7. Present the result:
    ```
-   ✓ Slot 2 programmed on YubiKey 15194777
+   ✓ Slot 2 programmed on YubiKey 12345678
      Generated secret: bd86e53d3507ba65374cf60a61bd48220d8d8dc3
-     Saved to: ~/.forge/secrets/15194777-slot2.key (mode 600)
+     Saved to: ~/.forge/secrets/12345678-slot2.key (mode 600)
 
      ⚠️ This file is the ONLY way to program a replacement key with the same secret.
      Store it securely (e.g., encrypted vault, printed in a safe).
@@ -153,8 +153,8 @@ For each key that needs programming:
 2. Determine which key is station (desktop USB) and which is mobile (keychain). Ask the user:
    ```
    Assign key roles:
-   - YubiKey 5 NFC (15194777) — Station (desktop USB) or Mobile (keychain)?
-   - YubiKey 5C NFC (16769179) — will be assigned the other role
+   - YubiKey 5 NFC (12345678) — Station (desktop USB) or Mobile (keychain)?
+   - YubiKey 5C NFC (87654321) — will be assigned the other role
 
    Which key is your STATION key (stays plugged into your desktop)?
    Enter serial number or 1/2:
@@ -169,8 +169,8 @@ For each key that needs programming:
 4. Present result:
    ```
    ✓ Keys enrolled with FORGE
-     Station: YK-15194777 (YubiKey 5 NFC)
-     Mobile:  YK-16769179 (YubiKey 5C NFC)
+     Station: YK-12345678 (YubiKey 5 NFC)
+     Mobile:  YK-87654321 (YubiKey 5C NFC)
    ```
 
 ---
@@ -265,8 +265,8 @@ After all steps, present a final summary:
 
 | Component | Status |
 |-----------|--------|
-| Station key | YK-15194777 — enrolled, slot 2 programmed |
-| Mobile key | YK-16769179 — enrolled, slot 2 programmed |
+| Station key | YK-12345678 — enrolled, slot 2 programmed |
+| Mobile key | YK-87654321 — enrolled, slot 2 programmed |
 | Auth provider | yubikey |
 | Messaging | Telegram (chat ID: 123456789) |
 | AGENTS.md | enabled: true |

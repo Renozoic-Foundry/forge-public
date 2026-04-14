@@ -11,8 +11,6 @@ framework:
   # rather than being silently overwritten.
   paths:
     - ".forge/"
-    - ".claude/commands/approve.md"
-    - ".claude/commands/bootstrap.md"
     - ".claude/commands/brainstorm.md"
     - ".claude/commands/bug.md"
     - ".claude/commands/close.md"
@@ -39,7 +37,6 @@ framework:
     - ".claude/commands/tab.md"
     - ".claude/commands/test.md"
     - ".claude/commands/trace.md"
-    - ".claude/commands/validate.md"
     - ".claude/commands/configure-nanoclaw.md"
     - ".claude/commands/nanoclaw.md"
     - ".claude/commands/forge-init.md"

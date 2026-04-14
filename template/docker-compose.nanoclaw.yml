@@ -1,6 +1,6 @@
 services:
   nanoclaw:
-    image: ghcr.io/forge-framework/nanoclaw:latest
+    image: ghcr.io/Renozoic-Foundry/nanoclaw:latest
     container_name: nanoclaw
     restart: unless-stopped
     ports:

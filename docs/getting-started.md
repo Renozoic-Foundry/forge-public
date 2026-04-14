@@ -28,13 +28,13 @@ Run the one-liner install script for your platform.
 **bash (macOS / Linux / Git Bash on Windows):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bwcarty/forge-public/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash
 ```
 
 **PowerShell (Windows):**
 
 ```powershell
-irm https://raw.githubusercontent.com/bwcarty/forge-public/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
 ```
 
 The install script adds FORGE's slash commands to your Claude Code configuration. It does not modify your project files.
@@ -48,10 +48,8 @@ The install script adds FORGE's slash commands to your Claude Code configuration
 Create a new project from the FORGE template using Copier:
 
 ```bash
-copier copy gh:bwcarty/forge-public my-project --trust
+copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project
 ```
-
-> **Note:** The `--trust` flag is required because the FORGE template includes post-copy tasks. Only use `--trust` with template sources you trust.
 
 Copier will prompt you for project details (name, description, etc.) and then generate the project scaffold. The resulting directory includes:
 
@@ -71,39 +69,15 @@ cd my-project
 
 ---
 
-## Step 3 — Discover and plan your change
+## Step 3 — Create a spec
 
-Every change in FORGE starts with a spec, but you rarely write one manually. The typical path uses AI-driven discovery to get from idea to spec. Open your AI IDE in the project directory.
-
-### Option A: Start from a vague idea
-
-If you have a general area to explore but haven't settled on specifics, start with `/interview`:
+Every change in FORGE starts with a spec — a versioned document that captures the objective, scope, acceptance criteria, and test plan. Open your AI IDE in the project directory and run:
 
 ```
-/interview "I want to add CLI validation to configlint"
+/spec "add a --version flag to configlint"
 ```
 
-The AI runs a Socratic elicitation — asking clarifying questions, surfacing edge cases, and helping you think through the problem. The output is a structured PRD (product requirements document) that captures what you actually need.
-
-### Option B: Start from a known need
-
-If you already know roughly what to build, jump straight to `/brainstorm`:
-
-```
-/brainstorm
-```
-
-The AI scans your backlog, signals, and project context, then recommends spec candidates ranked by priority. You discuss the recommendations in conversation — ask follow-up questions, combine ideas, or refine scope.
-
-### The AI writes the spec
-
-Once you've settled on a change, tell the AI to write the spec:
-
-```
-"Write a spec for adding a --version flag to configlint"
-```
-
-The AI generates a spec file in `docs/specs/` containing:
+The AI assistant generates a spec file in `docs/specs/` containing:
 
 - **Objective** — what the change accomplishes and why
 - **Scope** — what is in and out of scope
@@ -111,15 +85,15 @@ The AI generates a spec file in `docs/specs/` containing:
 - **Acceptance criteria** — measurable conditions that define "done"
 - **Test plan** — how to verify the change works
 
-The spec is assigned a number (e.g., `001`) and starts in `draft` status. Review it, request changes with `/revise`, or approve as-is. You do not need to run `/spec` directly — the AI handles spec creation as part of the conversation.
+The spec is assigned a number (e.g., `001`) and starts in `draft` status. The assistant may ask clarifying questions before finalizing.
 
-> **Note:** For a complete example of what a finished spec looks like, see the [example spec](example-spec.md).
+> **Note:** For a complete example of what a finished spec looks like, see the [hello-forge example](examples/hello-forge/docs/specs/001-hello-world.md).
 
 ---
 
 ## Step 4 — Implement the spec
 
-With the spec approved, run:
+With the spec created, run:
 
 ```
 /implement 001
@@ -136,7 +110,7 @@ The AI assistant reads the spec and begins implementation. During this process, 
 
 Evidence gates are hard stops that require demonstrable proof before a spec can proceed. Each gate produces a verifiable outcome, not just an assertion. If a gate fails, the assistant reports what went wrong and what needs to change.
 
-When implementation completes, the spec transitions to `implemented` status. The AI also appends a structured entry (timestamp, spec ID, outcomes) to the session log automatically.
+When implementation completes, the spec transitions to `implemented` status.
 
 ---
 
@@ -154,23 +128,9 @@ During close, the operator:
 2. Confirms all deliverables match the acceptance criteria
 3. Approves the spec transition from `implemented` to `closed`
 
-The close process also captures signals — observations about what worked well, what friction occurred, and what process improvements to consider. These signals feed the Evolve Loop, where FORGE's own process improves over time. Like `/implement`, `/close` appends a structured entry to the session log automatically.
+The close process also captures signals — observations about what worked well, what friction occurred, and what process improvements to consider. These signals feed the Evolve Loop, where FORGE's own process improves over time.
 
 > **Note:** Closing a spec is a human decision. FORGE does not auto-close specs — the operator retains final authority over what ships.
-
----
-
-## Step 6 — Finalize the session log
-
-Before you stop working, run:
-
-```
-/session
-```
-
-Throughout the session, `/implement` and `/close` have been appending structured entries to the session log automatically. The `/session` command reads those accumulated entries, mines the conversation for additional context, and drafts a complete session log for your review.
-
-One of FORGE's two hard rules is "every session ends with a session log." The data is never lost (auto-capture ensures that), but `/session` synthesizes it into a coherent record.
 
 ---
 
@@ -178,15 +138,11 @@ One of FORGE's two hard rules is "every session ends with a session log." The da
 
 You just ran one full Solve Loop:
 
-1. **Discover** — explored the problem with `/interview` or `/brainstorm`
-2. **Spec** — AI wrote the spec; you reviewed and approved
-3. **Implement** — built it with evidence gates verifying each criterion
-4. **Close** — reviewed, approved, and captured process signals
-5. **Session** — finalized the session log before stopping
+1. **Spec** — defined the change with objective, scope, and acceptance criteria
+2. **Implement** — built it with evidence gates verifying each criterion
+3. **Close** — reviewed, approved, and captured process signals
 
 This cycle repeats for every change, whether it is a one-line fix or a multi-week feature. The change lane determines how much ceremony each spec requires.
-
-Over time, the **Evolve Loop** surfaces automatically — reviewing accumulated signals, proposing process improvements, and keeping FORGE's workflow tuned to your project. See the [concept overview](concept-overview.md) for details.
 
 ---
 
@@ -198,4 +154,4 @@ Over time, the **Evolve Loop** surfaces automatically — reviewing accumulated 
 
 ---
 
-*Last verified against Spec 221 on 2026-04-11.*
+*Last verified against Spec 213 on 2026-04-11.*

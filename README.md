@@ -84,6 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/
 |---|---|---|
 | **Claude Code** | Installs prereqs + plants `/forge-bootstrap` command | Run `/forge-bootstrap` in any project |
 | **Claude Code** + `--init` | Installs prereqs + bootstraps project | Run `/onboarding` in the project |
+
 **Want the full walkthrough?** See the [Getting Started tutorial](docs/getting-started.md) — zero to first closed spec in a single session. Or read the [Concept Overview](docs/concept-overview.md) to understand what FORGE is and why it exists.
 
 **Want to see the result?** See [docs/examples/hello-forge/](docs/examples/hello-forge/) for what a bootstrapped project looks like after `/forge init` and a first spec cycle.

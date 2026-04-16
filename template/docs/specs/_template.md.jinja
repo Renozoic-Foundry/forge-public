@@ -7,12 +7,30 @@
 <!-- - Approved-SHA: (set automatically by /implement — do not edit manually) -->
 - Trigger: <!-- error found in chat | error found in tests | user correction | agent recommendation | evolve loop review | harness failure | backlog promotion | other -->
 <!-- - Dependencies: NNN, NNN  (spec IDs this spec depends on — omit or "—" if none) -->
+<!-- - Consensus-Review: true | auto  (optional — omit to skip consensus review)
+     true: always run /consensus before /close
+     auto: trigger consensus when ANY of these criteria are met:
+       - spec is in sync manifest as public-facing
+       - BV >= 4 with scope touching documentation or external interfaces
+       - Change-Lane is standard-feature AND R >= 3
+     omitted: no consensus review (default) -->
 - Owner: {{ default_owner }}
 - Author: <name>
 - Reviewer: {{ default_owner }}
 - Approver: {{ default_owner }}
 - Implementation owner: <name>
 - Last updated: YYYY-MM-DD
+
+## Contents
+
+- [Objective](#objective) — problem and desired outcome
+- [Scope](#scope) — in/out boundaries
+- [Requirements](#requirements) — what must be built
+- [Acceptance Criteria](#acceptance-criteria) — pass/fail checklist
+- [Test Plan](#test-plan) — verification approach
+- [Implementation Summary](#implementation-summary) — changed files
+- [Evidence](#evidence) — gate results and test output
+- [Revision Log](#revision-log) — change history
 
 ## Objective
 

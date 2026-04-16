@@ -64,4 +64,4 @@ See [QUICK-REFERENCE.md](QUICK-REFERENCE.md) for detailed usage patterns and wor
 
 ---
 
-*Last verified against Spec 214.*
+*Last verified against Spec 263 on 2026-04-15.*

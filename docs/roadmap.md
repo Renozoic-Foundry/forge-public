@@ -8,10 +8,10 @@ Each phase builds on the previous. No phase can be skipped — the evidence gate
 
 ## Current State
 
-**All four autonomy phases are delivered as template infrastructure.** FORGE operates at **L2 autonomy** in daily use (supervised, command chaining) with all infrastructure for L3–L4 in place. 120 specs closed, 7 draft, 11 deprecated across 23 sessions (2026-03-13 through 2026-03-28). 139 total spec entries.
+**All four autonomy phases are delivered as template infrastructure.** FORGE operates at **L2 autonomy** in daily use (supervised, command chaining) with all infrastructure for L3–L4 in place. 264 specs across 59 sessions (2026-03-13 through 2026-04-15). Over 250 specs closed, 13 draft, 11 deprecated.
 
 **What works today:**
-- Spec-driven development with evidence gates (27 active slash commands + 6 deprecated)
+- Spec-driven development with evidence gates (29 active slash commands)
 - Agent role separation with context-scoped isolation (Spec 099) — DA and validator as isolated subagents
 - OCI container isolation for permission enforcement
 - Budget tracking (time-based) with dynamic model routing (Spec 085)
@@ -70,14 +70,20 @@ Each phase builds on the previous. No phase can be skipped — the evidence gate
 - **Session identity and spec owner resolution** (Spec 133)
 - **Digest ingestion pipeline** for research integration (Spec 136)
 
-**What's next (7 draft specs):**
-- Spec 134 — Multi-Agent Concurrent Session Model (score 33)
-- Spec 135 — Review Engagement Canary (score 30)
+**What's next (13 draft specs):**
+- Spec 222 — Agent Integration Protocol (score 30, blocked by 122 revision)
 - Spec 090 — Shared Team Baselines (score 28)
-- Spec 103 — Git-Signed Audit Trail for Lane B (score 26)
+- Spec 225 — Output Verbosity Setting (score 27)
+- Spec 231 — /onboarding Rename Evaluation (score 27)
+- Spec 177 — FORGE as Claude Code Plugin Evaluation (score 27)
+- Spec 247 — Operator Effort Attribution (score 26)
 - Spec 109 — Cross-Project Knowledge Bridge (score 26)
 - Spec 120 — DX Metrics Dashboard (score 25)
 - Spec 122 — Multi-Vendor Model Strategy (score 23)
+- Spec 230 — FORGE Activity Visualization (score 22)
+- Spec 254 — Tracking File Conflict Elimination (score 21)
+- Spec 135 — Review Engagement Canary (score 30, deprioritized)
+- Spec 233 — Move FORGE Files Under .forge/ (score 17)
 
 ---
 
@@ -123,7 +129,7 @@ Agents working from stale training data is a silent failure mode — especially 
 - **Ansvar EU Regulations MCP** — 49 EU regulations with daily EUR-Lex sync, raw text only (Lane B)
 - **Grounded Docs MCP** — Self-hosted indexing of purchased IEC/ISO PDFs (Lane B)
 
-The `.mcp.json` in the cookiecutter template declares servers per lane. Lane B CLAUDE.md enforces a regulatory accuracy rule: agents must query MCP for current standard text and cite specific articles.
+The `.mcp.json` in the Copier template declares servers per lane. Lane B CLAUDE.md enforces a regulatory accuracy rule: agents must query MCP for current standard text and cite specific articles.
 
 ### Single Source of Truth for Spec Status
 Spec status currently lives in 4 files (spec file, README, backlog, CHANGELOG). Every transition must update all 4 in lockstep — a consistency burden and source of silent desync. A custom MCP server exposing spec lifecycle as a queryable tool would eliminate this. The MCP server becomes the authoritative source; the 4 files become read views.
@@ -132,7 +138,7 @@ Spec status currently lives in 4 files (spec file, README, backlog, CHANGELOG). 
 FORGE's original design included a `/sync` command for bidirectional upstream/downstream updates. Cookiecutter (via Cruft) supports downstream pulls but not upstream pushes. Copier (copier.readthedocs.io) natively supports `copier update` with conflict resolution. `/sync` would orchestrate: Copier update pull + conflict resolution + evidence gate workflow + upstream improvement push.
 
 ### Dual-Lane Architecture (Lane A / Lane B)
-A `compliance_profile` cookiecutter variable controls Lane B features. When set (e.g., `eu-machinery`, `iso-26262`, `internal`), the template bootstraps the compliance engine: extended spec templates, traceability commands, configurable compliance gates, regulatory MCP servers, and compliance artifact generators. When empty (default), the lean Lane A experience is unchanged.
+A `compliance_profile` Copier variable controls Lane B features. When set (e.g., `eu-machinery`, `iso-26262`, `internal`), the template bootstraps the compliance engine: extended spec templates, traceability commands, configurable compliance gates, regulatory MCP servers, and compliance artifact generators. When empty (default), the lean Lane A experience is unchanged.
 
 ### Lane B — Compliance Engine (Regulation-Agnostic)
 Lane B is not hardcoded to any single regulatory framework. It provides the **engine** — traceability, gates, audit artifacts — and specific regulations are plugged in as **compliance profiles**. Each profile defines:

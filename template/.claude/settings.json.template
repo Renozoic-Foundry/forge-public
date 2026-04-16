@@ -17,6 +17,17 @@
             "statusMessage": "Checking edit-gate..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .forge/bin/check-commit-guard.sh",
+            "timeout": 3000,
+            "statusMessage": "Checking commit guard..."
+          }
+        ]
       }
     ],
     "PostToolUse": [

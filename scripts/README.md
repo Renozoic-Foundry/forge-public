@@ -30,6 +30,7 @@ If you are maintaining a private fork of FORGE, these scripts are your QA toolki
 | `validate-spec-index.sh` | Validate `docs/specs/README.md` consistency |
 | `validate-readme-stats.sh` | Validate README stats against spec count |
 | `validate-public-docs.sh` | Validate public-facing docs (links, deprecated refs) |
+| `build-a-consumer-project.py` | Build a-consumer-project distribution from forge-public (relocated from tmp/ by Spec 259) |
 
 ## Usage
 

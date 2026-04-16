@@ -45,6 +45,7 @@ docs/sessions/context-snapshot.md
 .forge/state/active-role.json
 .forge/state/artifact-links.json
 .forge/state/implementing.json
+.forge/state/active-close
 !.forge/handoffs/.gitkeep
 !.forge/audit/.gitkeep
 !.forge/security/.gitkeep

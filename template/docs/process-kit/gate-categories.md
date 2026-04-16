@@ -25,13 +25,13 @@ AI prepares evidence and presents it; human makes the final call. These checks i
 
 | Check | Description | Used in |
 |-------|-------------|---------|
-| UX/aesthetic judgment | Does this look/feel/sound right? Commands, onboarding flows, visual output | /close, /handoff |
+| UX/aesthetic judgment | Does this look/feel/sound right? Commands, onboarding flows, visual output | /close |
 | Strategic alignment | Is this what we actually want, not just what was specified? | /close (Step 5) |
 | Novel situation assessment | First time doing something — has the AI misunderstood the problem? | /implement (DA gate) |
-| Tone and voice | User-facing copy, error messages, documentation narrative, naming | /close, /handoff |
+| Tone and voice | User-facing copy, error messages, documentation narrative, naming | /close |
 | Ethical/legal judgment | Should we do this? Liability, compliance implications, privacy | /close |
-| External-facing content | README updates, articles, PR descriptions, publications | /close, /handoff |
-| Physical/practical logic | Do real-world recommendations make physical sense? (see below) | /close, /handoff |
+| External-facing content | README updates, articles, PR descriptions, publications | /close |
+| Physical/practical logic | Do real-world recommendations make physical sense? (see below) | /close |
 | Domain expertise gaps | AI flags uncertainty in regulatory, industry-specific, or hardware domains | /close, /implement |
 | Irreversible external actions | git push, publish, send communications, delete production data | /close (Step 4) |
 

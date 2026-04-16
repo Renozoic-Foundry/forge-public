@@ -24,7 +24,7 @@ If $ARGUMENTS is `?` or `help`:
 
   Data sources:
     docs/sessions/*.md        Session logs (decisions, pain points, spec triggers)
-    docs/sessions/signals.md  Retro/harvest signals (SIG-NNN entries)
+    docs/sessions/signals.md  Retrospective signals (SIG-NNN entries)
     docs/sessions/error-log.md   Error autopsies (EA-NNN)
     docs/sessions/insights-log.md  Chat insights (CI-NNN)
     docs/sessions/scratchpad.md  Open notes

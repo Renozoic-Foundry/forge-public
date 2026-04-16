@@ -184,7 +184,7 @@ Constraints:
    Read `.forge/metrics/command-costs.yaml`. Filter entries to today. Summarize: total commands, total estimated cost, tier distribution. Include in the context snapshot under `## Session Cost`.
 
 Then report:
-- **Validation queue**: specs at `implemented` awaiting `/handoff` (from step 1) — this is the top priority
+- **Validation queue**: specs at `implemented` awaiting `/close` (from step 1) — this is the top priority
 - **Active work**: any open spec triggers or process improvement items from the last session log that haven't been converted to specs yet
 - **Agent activity** (Spec 134): If `docs/sessions/activity-log.jsonl` exists and has entries, read it and summarize events since the last operator session log. Group by agent_id. For each agent: list specs started, specs closed, gates failed, errors. If no activity log or empty, skip silently.
 - **Next recommended spec**: the highest-ranked backlog item with status `draft` or `approved` that is ready to implement — state its spec ID, file path, score, and the first implementation step. Only recommend new implementation if the validation queue is empty or the user has deferred validation.

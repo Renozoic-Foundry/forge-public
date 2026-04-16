@@ -19,7 +19,7 @@ If $ARGUMENTS is `?` or `help`:
     - Confirms the spec is at `implemented` status
     - Transitions to `closed` (spec file, README, backlog, CHANGELOG)
     - Reviews "Out of scope" items for disposition (promote/backlog/drop)
-    - Auto-chains: /retro (signal capture) → /matrix (priority re-scoring)
+    - Auto-chains: signal capture → /matrix (priority re-scoring)
     - Pauses at deferred scope review and "pick next" decision points
     - Auto-commits and pushes outstanding changes
   See: AGENTS.md (Evidence Gates), docs/process-kit/human-validation-runbook.md
@@ -114,11 +114,16 @@ Confirm spec status is `implemented`:
 
 If the spec has an `Approved-SHA:` field in frontmatter:
 
-1. **Extract sections**: Extract the full text of the `## Scope` section (from `## Scope` heading to the next `##` heading, exclusive) and the `## Acceptance Criteria` section (from `## Acceptance Criteria` heading to the next `##` heading, exclusive).
-2. **Combine and normalize**: Concatenate the two extracted sections (Scope first, then Acceptance Criteria). Trim leading and trailing whitespace from the combined text.
+1. **Extract sections**: Extract the full text of these four sections (each from its `##` heading to the next `##` heading, exclusive):
+   - `## Scope`
+   - `## Requirements`
+   - `## Acceptance Criteria`
+   - `## Test Plan`
+2. **Combine and normalize**: Concatenate the four extracted sections in order (Scope, Requirements, Acceptance Criteria, Test Plan). Trim leading and trailing whitespace from the combined text.
 3. **Compute hash**: Compute the SHA-256 hash of the combined, trimmed text. Produce the 64-character lowercase hex digest.
 4. **Compare**: Compare the computed hash to the `Approved-SHA:` value in frontmatter.
-5. **If MATCH**: Report "Spec integrity: verified" and emit `GATE [spec-integrity]: PASS — SHA-256 matches approved hash.` Continue to next step.
+5. **Old-format SHA detection**: If the hash does NOT match, check whether the spec was approved under the old format (Scope + ACs only). Extract only the Scope and Acceptance Criteria sections, combine, and compute a SHA-256 of that subset. If this old-format hash matches the stored `Approved-SHA:`, the spec was approved before the extended SHA scope was introduced. Report: "Spec integrity: old-format SHA detected (Scope + ACs only). Recomputing with extended scope (Scope + Requirements + ACs + Test Plan)." Update `Approved-SHA:` to the new four-section hash and log in the revision log: `YYYY-MM-DD: Approved-SHA recomputed from old format (Scope+ACs) to extended format (Scope+Requirements+ACs+TestPlan).` Emit `GATE [spec-integrity]: PASS — old-format SHA migrated and verified.` Continue.
+6. **If MATCH**: Report "Spec integrity: verified" and emit `GATE [spec-integrity]: PASS — SHA-256 matches approved hash.` Continue to next step.
 6. **If MISMATCH**: HALT. Display:
    - "SPEC INTEGRITY FAILURE — spec was modified after approval"
    - Show a diff of the changed Scope and/or Acceptance Criteria sections (compare current text to what would produce the original hash — since we cannot reverse the hash, show the current sections and note they differ from the approved version)
@@ -270,6 +275,8 @@ Before transitioning to closed, spawn an independent validator to verify accepta
 
       IMPORTANT: You are performing INDEPENDENT validation. You have NO context about how the implementation was done or why. Judge only by what you observe in the spec and codebase.
 
+      IMPORTANT: Do NOT read or consider the `## Evidence` section of the spec file. The Evidence section was written by the implementing agent and could anchor your judgment. Form your own evidence by examining the codebase, running tests, and reading the actual files directly. Base your findings solely on what you observe, not on what the implementer reported.
+
       IMPORTANT: You are READ-ONLY for source files. You may use Read, Glob, Grep, and Bash (for running tests). You do NOT have Write or Edit tools. Do not attempt to modify any file.
 
       Produce your output as a JSON code block with this structure:
@@ -368,6 +375,8 @@ After all Step 2 gates complete, generate the Review Brief. This is the primary 
    - Spec is a novel pattern (first time doing something like this) → add novel situation item
    - Spec includes irreversible external actions (push, publish) → add irreversible action item
 
+2b. **LOC proportionality signal** (Spec 252): Read the Stage 2 code quality reviewer's metrics (`new_lines_of_code`, `files_modified`, `files_in_scope`) and the spec's E score from frontmatter. Include a proportionality line in the Review Brief: "Implementation size: N lines across M files (spec E=X)." If the agent judges the implementation size as disproportionate to the spec's E score and scope, escalate to the "Needs Your Review" section: "Review for over-engineering — implementation is larger than expected for E=X." This is a qualitative signal based on agent judgment, not a mechanical threshold.
+
 3. **Output the Review Brief**:
    ```
    ## Review Brief — Spec NNN
@@ -440,14 +449,33 @@ After all Step 2 gates complete, generate the Review Brief. This is the primary 
      > | **1** | `approve` | Confirm all items reviewed — proceed to close |
      > | **2** | `show <item>` | Expand a Machine-Handled item for inspection |
      > | **3** | `reject` | Halt close — return spec to implemented for rework |
+     > | **4** | `consensus` | Defer to /consensus — run structured multi-role review before deciding |
      >
      > _(Type the number or keyword directly)_
 
-     Wait for response. On `approve`: proceed to Step 3. On `reject`: stop and report "Close halted by reviewer." On `show`: expand the requested item, then re-present the choice block.
+     Wait for response. On `approve`: proceed to Step 3. On `reject`: stop and report "Close halted by reviewer." On `show`: expand the requested item, then re-present the choice block. On `consensus`: run /consensus inline for this spec, log the outcome in the session JSON sidecar, then re-present the choice block with consensus outcome.
    - **Delegated mode**: The Review Brief has no "Needs Your Review" items (all machine-verifiable). Skip human prompt. Proceed directly to Step 3 with the delegated close addendum.
    - **PAL mode**: Present the Review Brief. Deliver via NanoClaw for hardware-authenticated approval. Wait for tap/reject response. Then proceed to Step 3.
 
 Emit: `GATE [review-brief]: PASS — Review Brief generated. Mode: <mode>. Machine-verified: <N>. Needs review: <N>. Machine-handled: <N>.`
+
+### [mechanical] Consensus outcome logging (Spec 258)
+
+If /consensus was invoked during this /close session (via the "consensus" choice option above), log the outcome to the session JSON sidecar. Find or create the JSON sidecar file at `docs/sessions/<today-date>-NNN.json`. Append a consensus entry:
+```json
+{
+  "consensus_reviews": [
+    {
+      "spec_id": "NNN",
+      "timestamp": "<ISO 8601>",
+      "roles": ["<role1>", "<role2>", "..."],
+      "recommendations": {"<role>": "<PROCEED|REVISE|BLOCK>"},
+      "operator_decision": "accepted|modified|rejected"
+    }
+  ]
+}
+```
+If no /consensus was invoked: skip silently.
 
 ## [mechanical] Step 3 — Status transition
 Perform the `closed` status transition:
@@ -563,12 +591,24 @@ Append a structured "spec closed" entry to today's session log:
    - **Lane**: <change-lane>
    - **Action**: Spec closed via /close
    - **Gate outcomes**: <summary of all gates — e.g., "5 PASS, 0 FAIL">
-   - **Signals captured**: <count from /retro chain, or "pending">
+   - **Signals captured**: <count from signal capture step, or "pending">
    ```
 3. Report: "Session log updated: spec NNN closed."
 
 ## [mechanical] Step 4 — Auto-commit and push
+
+**Commit guard marker (Spec 257)**: Before committing, set the active-close marker so the specless commit guard allows the commit:
+```bash
+mkdir -p .forge/state
+echo "close-NNN" > .forge/state/active-close
+```
+
 Run `git status`. If there are outstanding changes, stage relevant files and commit: "Close Spec NNN — <title>".
+
+**Commit guard cleanup (Spec 257)**: After committing (or if no commit was needed), clear the active-close marker:
+```bash
+rm -f .forge/state/active-close
+```
 
 
 After committing, push to remote:
@@ -644,8 +684,8 @@ c. For each disposition:
 
 If the spec has no "Out of scope" section or it is empty, skip silently and proceed.
 
-## [mechanical] Step 6 — Auto-chain /retro
-Run the `/retro` retrospective inline for this spec. Three signal categories:
+## [mechanical] Step 6 — Signal Capture
+Run the retrospective signal capture inline for this spec. Three signal categories:
 - **Content**: What worked/didn't in the deliverable itself
 - **Process**: What worked/didn't in the workflow
 - **Architecture**: Design insights for future work
@@ -737,13 +777,37 @@ d. Present a Choice Block (Spec 025, see `docs/process-kit/implementation-patter
 > | **2** | `close NNN` | Close another implemented spec (type spec number) |
 > | **3** | `brainstorm` | Generate new spec recommendations |
 > | **4** | `interview` | Explore next problem area before speccing (if backlog is empty) |
-> | **5** | `stop` | End session |
+> | **5** | `consensus` | Defer a decision to /consensus for structured multi-role input |
+> | **6** | `stop` | End session |
 >
 > _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_
 
 e. Report: "Spec NNN is now `closed`. Commit: <done/skipped>."
 
 Remind to update `Last evolve loop review:` in today's session log.
+
+## [mechanical] Step 10 — Post-close context compaction (Spec 256)
+
+After Step 9 completes, check whether automatic context compaction should trigger. This step runs silently when compaction is not needed.
+
+1. **Read config**: Check AGENTS.md for `forge.context.optimization.level` and `forge.context.optimization.compact_threshold_pct`.
+   - If the config block is absent or `level` is `minimal`: skip — no auto-compaction. Current behavior preserved.
+   - If `level` is `balanced`: proceed to threshold check (step 2).
+   - If `level` is `aggressive`: skip threshold check, proceed directly to compaction (step 3).
+
+2. **Threshold check** (balanced only): Estimate whether current context usage exceeds `compact_threshold_pct` (default 60%) of the model's context window.
+   - If context usage is **below** the threshold: skip compaction. Report nothing (silent skip).
+   - If context usage is **at or above** the threshold: proceed to compaction (step 3).
+
+3. **Compaction trigger**:
+   a. Display status message **before** compaction begins: `Compacting context (optimization: <level>, threshold: <pct>%)...`
+   b. Trigger `/compact` to summarize and reduce context.
+   c. After compaction completes, the context compaction rule in AGENTS.md applies: all authorization-required commands are treated as unissued.
+
+**Constraints**:
+- This step ONLY runs after /close has fully completed (all gates passed, commit done, pick-next presented).
+- No compaction occurs mid-command or during active spec work.
+- The `/compact` output preserves key session state: which spec was just closed, the pick-next options, and any pending closing queue items.
 
 ---
 

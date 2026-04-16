@@ -12,7 +12,6 @@ structure:
     - "backlog.md"
     - "Chain-Next"
     - "/close"
-    - "/handoff"
   forbidden_strings:
     - "TODO"
     - "FIXME"
@@ -28,7 +27,6 @@ references:
     - "docs/process-kit/choice-block.md"
   commands_must_exist:
     - "close"
-    - "handoff"
     - "spec"
     - "tab"
 

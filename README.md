@@ -2,60 +2,19 @@
 
 AI coding assistants lose context between sessions, drift from the original goal, and declare work done before it meets acceptance criteria. FORGE fixes that with specs, evidence gates, and a structured delivery process that remains reliable as agent autonomy increases.
 
+## Contents
+
+- [Quickstart](#quickstart) — install and bootstrap in minutes
+- [What is FORGE?](#what-is-forge) — the problem, the approach, how it works
+- [MCP Documentation Servers](#mcp-documentation-servers) — optional doc servers
+- [Architecture Overview](#architecture-overview) — layer model and module system
+- [Key Concepts](#key-concepts) — specs, evidence gates, loops, lanes
+- [Agent Runtime](#agent-runtime) — autonomy levels and NanoClaw integration
+- [Contributing](#contributing) — how to contribute
+- [Compliance Disclaimer](#compliance-disclaimer) — what FORGE is not
+- [License](#license) — MIT
+
 ## Quickstart
-
-One command to install FORGE — the script detects your environment and adapts:
-
-```bash
-# macOS / Linux / Git Bash on Windows
-curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash
-
-# Windows PowerShell
-irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
-```
-
-The install script handles prerequisites (Python, Git, Copier), detects Claude Code, and provides environment-appropriate next steps. Safe to run multiple times.
-
-> **IDE reload required:** If your IDE is already open when you run the install script, reload the window so it picks up the new `/forge-bootstrap` command (VS Code: `Ctrl+Shift+P` → "Developer: Reload Window").
-
-**Install + bootstrap a project in one shot:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash -s -- --init my-project
-```
-
-### What happens after install
-
-| Your environment | What the script does | Your next step |
-|---|---|---|
-| **Claude Code** | Installs prereqs + plants `/forge-bootstrap` command | Run `/forge-bootstrap` in any project |
-| **Claude Code** + `--init` | Installs prereqs + bootstraps project | Run `/onboarding` in the project |
-| **Other AI IDE** (Cursor, Windsurf, Copilot, etc.) | Installs prereqs | `copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project`, then open in your IDE — it reads `AGENTS.md` |
-| **Private fork** | `bash install.sh --repo <url>` — same flow with git auth preflight | Same as above, using your fork URL |
-
-### Manual path (power users)
-
-```bash
-pip install copier
-copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project
-cd my-project
-```
-
-Then open the project in your AI-assisted IDE and run `/now` (Claude Code) or let your assistant read `AGENTS.md`.
-
-**Want the full walkthrough?** See the [Getting Started tutorial](docs/getting-started.md) — zero to first closed spec in a single session. Or read the [Concept Overview](docs/concept-overview.md) to understand what FORGE is and why it exists.
-
-**Want to see the result?** See [docs/examples/hello-forge/](docs/examples/hello-forge/) for what a bootstrapped project looks like after `/forge init` and a first spec cycle.
-
-### What onboarding configures
-
-The AI-guided onboarding handles everything interactively:
-- Project identity (name, stack, test/lint commands)
-- Optional modules (compliance profiles, async gate delivery, browser testing, publications, MCP servers)
-- Agent selection (Claude Code, Cursor, Copilot, Codex, Cline)
-- Autonomy level (L0 manual → L4 full autonomy)
-- Credentials and environment setup
-
-Each module includes an "explain" option if you're unsure what it does — ask before deciding.
 
 ### Prerequisites
 
@@ -81,18 +40,90 @@ Git for Windows includes Git Bash. The PowerShell wrappers (`.ps1`) auto-detect 
 
 </details>
 
-### Sync upstream improvements
+### Install
+
+One command to install FORGE — the script detects your environment and adapts:
 
 ```bash
-# Pull framework updates
-copier update
+# macOS / Linux / Git Bash on Windows
+curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
 ```
+
+The install script handles prerequisites (Python, Git, Copier), detects Claude Code, and provides environment-appropriate next steps. Safe to run multiple times.
+
+> **IDE reload required:** If your IDE is already open when you run the install script, reload the window so it picks up the new `/forge-bootstrap` command (VS Code: `Ctrl+Shift+P` → "Developer: Reload Window").
+
+### Bootstrap your project
+
+**New project:**
+```bash
+mkdir my-project && cd my-project
+# In Claude Code: run /forge-bootstrap
+# Other IDEs: copier copy https://github.com/Renozoic-Foundry/forge-public.git .
+```
+
+**Existing project** (add FORGE to an existing repo):
+```bash
+cd my-existing-repo
+# In Claude Code: run /forge-bootstrap
+# Other IDEs: copier copy https://github.com/Renozoic-Foundry/forge-public.git .
+```
+FORGE files are added alongside your existing code. Copier prompts before overwriting any conflicting files.
+
+**One-shot install + bootstrap:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash -s -- --init my-project
+```
+
+### What happens after install
+
+| Your environment | What the script does | Your next step |
+|---|---|---|
+| **Claude Code** | Installs prereqs + plants `/forge-bootstrap` command | Run `/forge-bootstrap` in any project |
+| **Claude Code** + `--init` | Installs prereqs + bootstraps project | Run `/onboarding` in the project |
+**Want the full walkthrough?** See the [Getting Started tutorial](docs/getting-started.md) — zero to first closed spec in a single session. Or read the [Concept Overview](docs/concept-overview.md) to understand what FORGE is and why it exists.
+
+**Want to see the result?** See [docs/examples/hello-forge/](docs/examples/hello-forge/) for what a bootstrapped project looks like after `/forge init` and a first spec cycle.
+
+<details>
+<summary>Other AI IDEs (Cursor, Windsurf, Copilot, etc.)</summary>
+
+| Your environment | What the script does | Your next step |
+|---|---|---|
+| **Other AI IDE** | Installs prereqs | `copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project`, then open in your IDE — it reads `AGENTS.md` |
+| **Private fork** | `bash install.sh --repo <url>` — same flow with git auth preflight | Same as above, using your fork URL |
+
+**Manual path (power users):**
+```bash
+pip install copier
+copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project
+cd my-project
+```
+Then open the project in your AI-assisted IDE and let your assistant read `AGENTS.md`.
+
+</details>
+
+FORGE works with any AI-assisted IDE. Not using Claude Code? See the collapsed section above for Cursor, Windsurf, Copilot, and manual paths.
+
+### Keeping up to date
+
+| What to update | Claude Code | Other IDEs |
+|---|---|---|
+| **FORGE framework** (install script, `/forge-bootstrap`) | Re-run the install script | Re-run the install script |
+| **Your project** (commands, templates, process kit) | `/forge stoke` | `copier update` |
+
+Framework updates install new versions of the bootstrap command. Project updates pull the latest template changes into your project — new commands, refined gates, better defaults — while preserving your customizations.
 
 ## What is FORGE?
 
 FORGE is an opinionated development framework that synthesizes five foundational standards into a coherent workflow for human-AI collaborative software delivery. The underlying methodology — Evidence-Gated Iterative Delivery (EGID) — ensures every lifecycle transition requires demonstrable proof.
 
 **The speed multiplier:** Traditional spec-driven development is thorough but slow. FORGE inverts that tradeoff — AI generates detailed specs from a brief description (objective, scope, acceptance criteria, test plan), then implements them with evidence at every gate. The human role shifts from writing documentation to reviewing and approving, where judgment adds the most value. At higher autonomy levels, AI can chain from spec creation straight through to validated closure — but by default, every AI-written spec is gated from implementation until a human approves it.
+
+**The Solve/Evolve double-loop:** FORGE doesn't just deliver work — it learns from it. The **Solve Loop** (`/spec` → `/implement` → `/close`) delivers each change with evidence gates. The **Evolve Loop** captures signals from every session — errors, corrections, friction — and proposes process improvements as new specs. `/session` logs what happened. `/note` captures insights mid-work. `/evolve` reviews accumulated patterns and adapts the process. Static frameworks calcify; FORGE compounds. See [Design Philosophy](docs/design-philosophy.md) for the full treatment.
 
 ### Core framework (every project)
 
@@ -233,7 +264,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 247 specs across 57 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 264 specs across 59 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

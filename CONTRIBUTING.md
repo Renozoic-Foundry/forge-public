@@ -2,6 +2,20 @@
 
 FORGE is a living framework that improves through use. Downstream projects (projects bootstrapped from this template) are the primary source of framework improvements. This document explains how to set up, develop, test, and contribute changes.
 
+> **Working on a team that uses FORGE?** If you're a developer in a project that uses FORGE (not contributing to the FORGE framework itself), see [Team Guide](docs/team-guide.md) — it explains specs, PR reviews, and how to make changes without FORGE commands.
+
+## Contents
+
+- [Prerequisites](#prerequisites) — what you need
+- [Development Setup](#development-setup) — clone and test
+- [Spec Lifecycle](#spec-lifecycle) — how changes flow
+- [Testing](#testing) — Copier bootstrap and validation
+- [Command Naming Guidelines](#command-naming-guidelines)
+- [Upstream Learning Pipeline](#upstream-learning-pipeline) — how improvements flow back
+- [Contributing from a Consumer Project](#contributing-from-a-consumer-project)
+- [Contribution Checklist](#contribution-checklist) — before you submit
+- [Pull Request Review](#pull-request-review) — what reviewers check
+
 ## Prerequisites
 
 Before contributing to FORGE you will need:

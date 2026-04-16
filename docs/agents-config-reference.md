@@ -29,7 +29,7 @@ These fields appear in the `forge:` YAML block under the **Runtime Configuration
 | `forge.lane` | enum | `A` | Active development lane. Currently only `A` is available. | Determines which feature set is active. |
 | `forge.gate.provider` | enum | `prompt` | Gate approval mechanism. Valid values: `prompt`, `pal`, `auto`. | `prompt`: chat-based approval. `pal`: hardware-authenticated (YubiKey). `auto`: use PAL if installed, fall back to prompt. |
 | `forge.gate.timeout` | integer (seconds) | `1800` | Maximum wait time for a gate approval before timing out. | After this duration, a pending gate approval times out and follows the configured fallback behavior. |
-| `forge.roles.separation` | enum | `none` | Role isolation level. Valid values: `none`, `context-scoped`, `full`. | `none`: all roles in main conversation. `context-scoped`: DA and validator as isolated subagents, implementer in main context. `full`: all roles as isolated subagents (implementer uses worktree). |
+| `forge.roles.separation` | enum | `context-scoped` | Role isolation level. Valid values: `none`, `context-scoped`, `full`. | `none`: all roles in main conversation (development shortcut, not recommended for production). `context-scoped` (default): DA and validator as isolated subagents, implementer in main context. `full`: all roles as isolated subagents (implementer uses worktree). |
 | `forge.roles.devils_advocate.enabled` | boolean | `true` | Enables or disables the Devil's Advocate gate globally. | When `false`, the DA review step is skipped across all specs and lanes. |
 | `forge.roles.devils_advocate.skip_lanes` | list of strings | `[hotfix]` | Lanes that bypass DA review. | Specs in listed lanes skip the DA gate even when DA is enabled. |
 | `forge.roles.devils_advocate.expiry_days` | integer | `7` | Days after which a spec modification triggers DA re-review. | If a spec is modified more than this many days after its last DA review, a new review is required. |
@@ -210,4 +210,4 @@ Three enforcement modes determine how gate approval happens:
 
 ---
 
-Last verified against Spec 217.
+Last verified against Spec 263 on 2026-04-15.

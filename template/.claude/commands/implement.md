@@ -70,6 +70,8 @@ After resolving the spec number (Step 0 or Step 1), check for an existing checkp
 
 **Checkpoint cleanup**: After the final step completes successfully (status → `implemented`), delete `.forge/checkpoint/implement-<spec-id>.json`.
 
+**Commit guard cleanup (Spec 257)**: After the final step completes successfully (status → `implemented`), delete `.forge/state/implementing.json` to clear the commit guard marker. This re-enables the specless commit guard — any subsequent `git commit` calls will be blocked until the next `/implement` or `/close` sets its marker.
+
 ---
 
 **Step 0 — Resolve `next` argument**:
@@ -159,8 +161,12 @@ Continue regardless — this is a warning, not a gate.
 
 After approval (status is now `in-progress`), compute a SHA-256 integrity hash:
 
-1. **Extract sections**: Extract the full text of the `## Scope` section (from `## Scope` heading to the next `##` heading, exclusive) and the `## Acceptance Criteria` section (from `## Acceptance Criteria` heading to the next `##` heading, exclusive).
-2. **Combine and normalize**: Concatenate the two extracted sections (Scope first, then Acceptance Criteria). Trim leading and trailing whitespace from the combined text.
+1. **Extract sections**: Extract the full text of these four sections (each from its `##` heading to the next `##` heading, exclusive):
+   - `## Scope`
+   - `## Requirements`
+   - `## Acceptance Criteria`
+   - `## Test Plan`
+2. **Combine and normalize**: Concatenate the four extracted sections in order (Scope, Requirements, Acceptance Criteria, Test Plan). Trim leading and trailing whitespace from the combined text.
 3. **Compute hash**: Compute the SHA-256 hash of the combined, trimmed text. Produce the 64-character lowercase hex digest.
 4. **Write to frontmatter**: Add `- Approved-SHA: <64-char hex>` to the spec file's frontmatter, immediately after the `Priority-Score:` line. If `Approved-SHA:` already exists, overwrite it (re-approval scenario).
 5. Report: "Spec integrity signature written: Approved-SHA: <first 8 chars>..."
@@ -689,6 +695,65 @@ Scan the changed files list (from `git diff --name-only` against the spec baseli
       ```
    b. If no human-judgment items are likely needed at `/close` (all ACs are machine-verifiable): note "This spec appears delegation-eligible at L3+ — all ACs are machine-verifiable."
    c. This summary is informational — the formal gate review happens at `/close`.
+
+### [mechanical] Step 9d — Post-Implementation Value Demo (Spec 261)
+
+After presenting the implementation summary, check if this spec qualifies for a value demonstration:
+
+**Trigger criteria** (all parsed from spec frontmatter — no free-text scanning):
+- `R >= 3` in the `Priority-Score:` field (high-risk spec — value of the fix is worth showing), OR
+- `Consensus-Review: true` in frontmatter (external-facing spec — demo aids human review)
+
+If **neither criterion is met**: skip silently. Most specs will skip.
+
+If **criteria met**: append a value demo option to the choice block:
+```
+## Value Demo Available
+This spec qualifies for a before/after value demonstration (R >= 3 or consensus-reviewed).
+```
+> | # | Action | What happens |
+> |---|--------|--------------|
+> | **demo** | Demonstrate value | Show 3-5 line before/after comparison |
+> | **skip** | Skip demo | Proceed to /close reminder |
+
+If the operator selects **demo**:
+- Produce a concise before/after comparison (max 5 lines) drawn from the spec's Objective and scope:
+  ```
+  ### Before (vulnerability/gap)
+  <1-2 lines describing what was broken/missing, from spec Objective>
+
+  ### After (protection/capability)
+  <1-2 lines describing what is now protected/fixed, from implementation evidence>
+  ```
+- Source the "before" content from the spec's Objective/Scope sections (documented state). Source the "after" from the implementation evidence and changed files. Do NOT hallucinate pre-fix states that aren't documented.
+
+If the operator selects **skip**: proceed normally.
+
+### [mechanical] Step 9e — Conditional Consensus Gate (Spec 258)
+
+After the implementation summary and value demo steps, check if this spec requires consensus review before /close:
+
+1. **Read spec frontmatter** for `Consensus-Review:` field.
+2. **Evaluate trigger**:
+   - If `Consensus-Review: true`: consensus is required.
+   - If `Consensus-Review: auto`: evaluate auto-trigger criteria:
+     - Spec is listed in the sync manifest as public-facing, OR
+     - BV >= 4 with scope touching documentation or external interfaces, OR
+     - Change-Lane is `standard-feature` AND R >= 3
+     If any auto-trigger criterion is met: consensus is required. Otherwise: skip.
+   - If `Consensus-Review:` is absent or any other value: skip silently.
+
+3. **If consensus required**: present a consensus gate notification:
+   ```
+   CONSENSUS GATE — Spec NNN has Consensus-Review enabled.
+   Run /consensus before /close to gather structured multi-role input.
+   ```
+   Add `consensus` as an option in the Next Action choice block below.
+
+4. **If consensus not required**: skip silently. Most specs will skip.
+
+This gate is advisory — it does NOT block /close. Consensus review is optional but recommended when triggered.
+
 10. Remind me to run `/close NNN` to confirm and transition to `closed`.
 
 ---
@@ -703,7 +768,8 @@ Implementation complete. **Do not run `/close` automatically.** A human must rev
 > | # | Action | What happens |
 > |---|--------|--------------|
 > | **1** | `/close NNN` | Validate and close this spec (after your review) |
-> | **2** | `/now` | Check project state for other work |
-> | **3** | `stop` | End session — review deliverables offline |
+> | **2** | `/consensus NNN` | Run structured multi-role consensus review before closing |
+> | **3** | `/now` | Check project state for other work |
+> | **4** | `stop` | End session — review deliverables offline |
 >
 > _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_

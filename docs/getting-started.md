@@ -6,6 +6,17 @@ FORGE is a project framework that gives AI-assisted development a structured del
 
 The underlying methodology is Evidence-Gated Iterative Delivery (EGID). You will complete one full Solve Loop cycle: create a spec, implement it, and close it.
 
+## Contents
+
+- [Prerequisites](#prerequisites) — what you need installed
+- [Step 1 — Install FORGE](#step-1--install-forge)
+- [Step 2 — Bootstrap a project](#step-2--bootstrap-a-project)
+- [Step 3 — Create a spec](#step-3--create-a-spec)
+- [Step 4 — Implement the spec](#step-4--implement-the-spec)
+- [Step 5 — Close the spec](#step-5--close-the-spec)
+- [What you completed](#what-you-completed) — the full Solve Loop
+- [Next steps](#next-steps) — where to go from here
+
 ---
 
 ## Prerequisites
@@ -154,4 +165,4 @@ This cycle repeats for every change, whether it is a one-line fix or a multi-wee
 
 ---
 
-*Last verified against Spec 213 on 2026-04-11.*
+*Last verified against Spec 263 on 2026-04-15.*

@@ -49,4 +49,4 @@ If $ARGUMENTS is `?` or `help`:
      d. Add a CHANGELOG entry noting the reset.
      e. Add a revision entry: `YYYY-MM-DD: Status reset to approved — new scope requires /implement.`
    - If **clarification only** (typos, wording, no new ACs): do not change status.
-7. Report what was changed. If status was reset, remind: "Run `/implement NNN` to deliver the new scope." Otherwise, remind to run `/handoff NNN` then `/close NNN`.
+7. Report what was changed. If status was reset, remind: "Run `/implement NNN` to deliver the new scope." Otherwise, remind to run `/close NNN`.

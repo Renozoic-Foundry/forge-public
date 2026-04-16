@@ -17,6 +17,7 @@ Evaluate the spec against these six domains:
 - Are requirements internally consistent?
 - Are acceptance criteria testable and unambiguous?
 - Are there missing requirements implied by the objective but not listed?
+- Are there negative constraints worth articulating? What should this implementation explicitly NOT do?
 
 ### 2. Security and Secrets
 - Could this change expose secrets, credentials, or PII?

@@ -53,8 +53,10 @@ Change lanes (`hotfix`, `small-change`, `standard-feature`, `process-only`) cont
 
 ## Next steps
 
+- [Team Guide](team-guide.md) — For developers on a team that uses FORGE — what specs are, how to review PRs, and how to contribute without FORGE commands
+- [Design Philosophy](design-philosophy.md) — Why FORGE is built the way it is, and what each design decision unlocks for you
 - [Getting Started](getting-started.md) — Set up FORGE and run your first spec
 
 ---
 
-*Last verified against Spec 212 on 2026-04-11.*
+*Last verified against Spec 263 on 2026-04-15.*

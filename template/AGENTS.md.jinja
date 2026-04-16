@@ -36,6 +36,38 @@ forge.strategic_scope: |
 forge.context.session_briefing: true
 ```
 
+```yaml
+# Context optimization — controls automatic compaction behavior (Spec 256)
+# Reduces token costs in long sessions by compacting context at natural transition points.
+#
+# Tiers:
+#   minimal   — No auto-compaction. Standard verbose output. Current default behavior.
+#                Best for: short sessions, debugging, when you need full context history.
+#                Trade-off: highest token cost in long multi-spec sessions.
+#
+#   balanced  — Auto-compact after /close when context exceeds compact_threshold_pct.
+#                Standard output verbosity preserved. Compaction only at natural transitions.
+#                Best for: typical multi-spec sessions where cost matters but output quality is priority.
+#                Trade-off: brief pause after /close when compaction triggers; recent context summarized.
+#
+#   aggressive — Auto-compact after /close (always, regardless of threshold).
+#                Reduced output verbosity: shorter section headers, compressed tables, abbreviated labels.
+#                Best for: rapid multi-spec sprints, cost-sensitive environments, high-volume batch work.
+#                Trade-off: terser output may omit context helpful for human review; frequent compaction
+#                pauses; reduced output may make /close Review Briefs harder to scan.
+#
+# compact_threshold_pct: percentage of model context window that triggers compaction.
+#   Only applies to balanced tier (aggressive always compacts).
+#   Default: 60. Range: 10-90. Lower = more frequent compaction, higher = less frequent.
+#
+# Note: compaction NEVER fires mid-command. It only triggers at natural transition points
+# (after /close completes). Active spec work (/implement, /close, /review) is never interrupted.
+# Information required for AC verification at /close is never removed by compaction.
+forge.context.optimization:
+  level: minimal                  # minimal | balanced | aggressive
+  compact_threshold_pct: 60       # percentage of context window that triggers compaction (balanced only)
+```
+
 ## Capabilities
 
 - Code generation, modification, and refactoring
@@ -408,8 +440,8 @@ The `forge.roles.separation` setting controls whether role isolation is structur
 
 | Level | DA | Implementer | Validator | Use case |
 |-------|-----|-------------|-----------|----------|
-| `none` | Main conversation | Main conversation | Main conversation | Default — backward compatible |
-| `context-scoped` | Isolated subagent | Main conversation | Isolated subagent | Lane A recommended — independent judgment for review roles |
+| `none` | Main conversation | Main conversation | Main conversation | Development shortcut — not recommended for production |
+| `context-scoped` | Isolated subagent | Main conversation | Isolated subagent | Default — independent judgment for review roles |
 | `full` | Isolated subagent | Isolated subagent (worktree) | Isolated subagent | Lane B / regulated — full process isolation |
 
 **Context isolation matrix:**
@@ -439,9 +471,9 @@ forge:
     provider: prompt             # prompt | pal | auto
     timeout: 1800                # seconds (default 30 min)
   roles:
-    separation: none         # none | context-scoped | full (Spec 099)
-                             # none: current behavior — all roles in main conversation
-                             # context-scoped: DA + validator as isolated subagents, implementer in main context
+    separation: context-scoped  # none | context-scoped | full (Spec 099)
+                             # none: development shortcut — all roles in main conversation (not recommended for production)
+                             # context-scoped (default): DA + validator as isolated subagents, implementer in main context
                              # full: all roles as isolated subagents (implementer uses worktree)
     devils_advocate:
       enabled: true          # false to disable DA gate globally
@@ -746,6 +778,22 @@ nanoclaw:
 
 Without NanoClaw enabled, FORGE operates in terminal mode (current behavior) — all gates are resolved in the conversation context.
 {% endif %}
+
+## Consensus Tracking (Spec 258)
+
+```yaml
+consensus_tracking:
+  enabled: true                  # enable consensus outcome logging in session JSON sidecars
+  acceptance_rate:
+    formula: "accepted / (accepted + modified + rejected)"
+    window_days: 30              # rolling window for acceptance rate calculation
+    data_source: "docs/sessions/*.json"  # session JSON sidecar files
+    # Acceptance rate measures how often operator accepts consensus recommendations unchanged.
+    # Surfaced in /evolve F4 (score calibration) and /now (status line).
+    # Relationship to autonomy: sustained high acceptance rate (>0.8 over 30 days)
+    # is an input signal for trust calibration -- it does NOT auto-escalate autonomy levels.
+    # Autonomy level changes always require explicit operator decision via /config-change.
+```
 
 ## Repo Conventions
 

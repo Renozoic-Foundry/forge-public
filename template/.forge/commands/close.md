@@ -19,7 +19,7 @@ If $ARGUMENTS is `?` or `help`:
     - Confirms the spec is at `implemented` status
     - Transitions to `closed` (spec file, README, backlog, CHANGELOG)
     - Reviews "Out of scope" items for disposition (promote/backlog/drop)
-    - Auto-chains: /retro (signal capture) → /matrix (priority re-scoring)
+    - Auto-chains: signal capture → /matrix (priority re-scoring)
     - Pauses at deferred scope review and "pick next" decision points
     - Auto-commits and pushes outstanding changes
   See: AGENTS.md (Evidence Gates), docs/process-kit/human-validation-runbook.md
@@ -114,11 +114,16 @@ Confirm spec status is `implemented`:
 
 If the spec has an `Approved-SHA:` field in frontmatter:
 
-1. **Extract sections**: Extract the full text of the `## Scope` section (from `## Scope` heading to the next `##` heading, exclusive) and the `## Acceptance Criteria` section (from `## Acceptance Criteria` heading to the next `##` heading, exclusive).
-2. **Combine and normalize**: Concatenate the two extracted sections (Scope first, then Acceptance Criteria). Trim leading and trailing whitespace from the combined text.
+1. **Extract sections**: Extract the full text of these four sections (each from its `##` heading to the next `##` heading, exclusive):
+   - `## Scope`
+   - `## Requirements`
+   - `## Acceptance Criteria`
+   - `## Test Plan`
+2. **Combine and normalize**: Concatenate the four extracted sections in order (Scope, Requirements, Acceptance Criteria, Test Plan). Trim leading and trailing whitespace from the combined text.
 3. **Compute hash**: Compute the SHA-256 hash of the combined, trimmed text. Produce the 64-character lowercase hex digest.
 4. **Compare**: Compare the computed hash to the `Approved-SHA:` value in frontmatter.
-5. **If MATCH**: Report "Spec integrity: verified" and emit `GATE [spec-integrity]: PASS — SHA-256 matches approved hash.` Continue to next step.
+5. **Old-format SHA detection**: If the hash does NOT match, check whether the spec was approved under the old format (Scope + ACs only). Extract only the Scope and Acceptance Criteria sections, combine, and compute a SHA-256 of that subset. If this old-format hash matches the stored `Approved-SHA:`, the spec was approved before the extended SHA scope was introduced. Report: "Spec integrity: old-format SHA detected (Scope + ACs only). Recomputing with extended scope (Scope + Requirements + ACs + Test Plan)." Update `Approved-SHA:` to the new four-section hash and log in the revision log: `YYYY-MM-DD: Approved-SHA recomputed from old format (Scope+ACs) to extended format (Scope+Requirements+ACs+TestPlan).` Emit `GATE [spec-integrity]: PASS — old-format SHA migrated and verified.` Continue.
+6. **If MATCH**: Report "Spec integrity: verified" and emit `GATE [spec-integrity]: PASS — SHA-256 matches approved hash.` Continue to next step.
 6. **If MISMATCH**: HALT. Display:
    - "SPEC INTEGRITY FAILURE — spec was modified after approval"
    - Show a diff of the changed Scope and/or Acceptance Criteria sections (compare current text to what would produce the original hash — since we cannot reverse the hash, show the current sections and note they differ from the approved version)
@@ -270,6 +275,8 @@ Before transitioning to closed, spawn an independent validator to verify accepta
 
       IMPORTANT: You are performing INDEPENDENT validation. You have NO context about how the implementation was done or why. Judge only by what you observe in the spec and codebase.
 
+      IMPORTANT: Do NOT read or consider the `## Evidence` section of the spec file. The Evidence section was written by the implementing agent and could anchor your judgment. Form your own evidence by examining the codebase, running tests, and reading the actual files directly. Base your findings solely on what you observe, not on what the implementer reported.
+
       IMPORTANT: You are READ-ONLY for source files. You may use Read, Glob, Grep, and Bash (for running tests). You do NOT have Write or Edit tools. Do not attempt to modify any file.
 
       Produce your output as a JSON code block with this structure:
@@ -367,6 +374,8 @@ After all Step 2 gates complete, generate the Review Brief. This is the primary 
    - Spec touches auth, security, or credentials → add security review item (always human-judgment, not just confidence-gated)
    - Spec is a novel pattern (first time doing something like this) → add novel situation item
    - Spec includes irreversible external actions (push, publish) → add irreversible action item
+
+2b. **LOC proportionality signal** (Spec 252): Read the Stage 2 code quality reviewer's metrics (`new_lines_of_code`, `files_modified`, `files_in_scope`) and the spec's E score from frontmatter. Include a proportionality line in the Review Brief: "Implementation size: N lines across M files (spec E=X)." If the agent judges the implementation size as disproportionate to the spec's E score and scope, escalate to the "Needs Your Review" section: "Review for over-engineering — implementation is larger than expected for E=X." This is a qualitative signal based on agent judgment, not a mechanical threshold.
 
 3. **Output the Review Brief**:
    ```
@@ -563,12 +572,24 @@ Append a structured "spec closed" entry to today's session log:
    - **Lane**: <change-lane>
    - **Action**: Spec closed via /close
    - **Gate outcomes**: <summary of all gates — e.g., "5 PASS, 0 FAIL">
-   - **Signals captured**: <count from /retro chain, or "pending">
+   - **Signals captured**: <count from signal capture step, or "pending">
    ```
 3. Report: "Session log updated: spec NNN closed."
 
 ## [mechanical] Step 4 — Auto-commit and push
+
+**Commit guard marker (Spec 257)**: Before committing, set the active-close marker so the specless commit guard allows the commit:
+```bash
+mkdir -p .forge/state
+echo "close-NNN" > .forge/state/active-close
+```
+
 Run `git status`. If there are outstanding changes, stage relevant files and commit: "Close Spec NNN — <title>".
+
+**Commit guard cleanup (Spec 257)**: After committing (or if no commit was needed), clear the active-close marker:
+```bash
+rm -f .forge/state/active-close
+```
 
 
 After committing, push to remote:
@@ -644,8 +665,8 @@ c. For each disposition:
 
 If the spec has no "Out of scope" section or it is empty, skip silently and proceed.
 
-## [mechanical] Step 6 — Auto-chain /retro
-Run the `/retro` retrospective inline for this spec. Three signal categories:
+## [mechanical] Step 6 — Signal Capture
+Run the retrospective signal capture inline for this spec. Three signal categories:
 - **Content**: What worked/didn't in the deliverable itself
 - **Process**: What worked/didn't in the workflow
 - **Architecture**: Design insights for future work

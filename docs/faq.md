@@ -71,4 +71,4 @@ Usually no. The typical workflow is: `/interview` (to explore and define the pro
 
 ---
 
-Last verified against Spec 221.
+Last verified against Spec 263 on 2026-04-15.

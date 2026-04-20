@@ -54,9 +54,19 @@ f. **Session identity check** (Spec 133): Resolve the current operator identity 
    - If the user provides a different name: use that name instead.
    Store the confirmed identity in the context snapshot under `## Session identity` (written in Step 9).
 
+g. **Methodology resolution** (Spec 187): Read `forge.methodology` from AGENTS.md (default: `none`).
+   Use the methodology value to adapt terminology in this command's output:
+   - `scrum`: "Daily standup" headers, "Sprint backlog" for next spec, "Definition of Done" for validation
+   - `safe`: "Iteration sync" headers, "PI backlog" for next spec, "Iteration demo" for validation
+   - `kanban`: "Board review" headers, "Pull queue" for next spec, "Done column" for validation
+   - `devops`: "Status check" headers, "Pipeline queue" for next spec, "Release validation" for validation
+   - `safety-critical`: "Safety status review" headers, "Hazard log" for next spec, "V&V gate" for validation
+   - `none` (default): "Project status" headers, standard FORGE terminology
+   Store as `methodology_label` for use in output sections below.
+
 Present a **Session Brief** section before the main output:
 ```
-## Session Brief — "Last time on [project]"
+## <methodology_label.header> — "Last time on [project]"
 
 **Recent sessions** (last 3):
 - <date>: <1-line summary from each session>
@@ -78,6 +88,54 @@ Constraints:
 - Keep the entire brief to ≤15 lines (summarize aggressively — one line per session, one line per signal)
 - If a section has no items, omit that section entirely (don't show empty headers)
 - Read only the Summary and Pain Points sections from session logs (not the full files) to minimize token cost
+
+## [mechanical] Step 0c — /configure first-use nudge (Spec 286)
+
+Read `.forge/onboarding.yaml` if it exists. If the file is missing, unreadable, or unparseable: skip this step silently (do not block `/now` execution).
+
+If the file parses and `status: complete` AND `configure_nudge_shown` is `false` or absent:
+- Extract at least one defaulted setting value from the parsed yaml (prefer `project.primary_stack`; fall back to `features.devcontainer` or the literal `autonomy=L1` + `agents=Claude Code` pair if stack is null/deferred).
+- Emit a single one-line nudge immediately after the Session Brief (or at the top of output if the Session Brief was skipped):
+  ```
+  Defaults applied: stack=<primary_stack or "deferred">, autonomy=L1, agents=Claude Code. Adjust any setting via `/configure`.
+  ```
+- After emitting the line, set `configure_nudge_shown: true` in `.forge/onboarding.yaml` (preserve all other keys and formatting; add the key under the `status:` line if absent). Write the file.
+
+If `status` is not `complete` OR `configure_nudge_shown: true`: skip this step silently.
+
+Do not add any further prompts, choice blocks, or follow-up interaction — this is a one-line advisory only. The nudge must never appear again after the first emission (dismissal persists via the flag).
+
+If `.forge/onboarding.yaml` lacks the `configure_nudge_shown` key entirely (pre-existing projects), treat that as "not shown" — the nudge will appear once on the next `/now`, then dismiss.
+
+## [mechanical] Step 0d — MCP integrity probe (Spec 284)
+
+Persistent fail-closed visibility for the hash-verified MCP server lockfiles. Runs on every `/now` invocation — if any probe fails, the advisory re-appears until resolved (not one-shot).
+
+Read `.mcp.json` (project root). If absent: skip this step silently (consumer project has no MCP config yet). If present but has no `mcpServers` entries: skip silently.
+
+For each MCP server referenced in `.mcp.json`:
+
+1. **context7 probe** (if `mcpServers.context7` exists):
+   - Check `.mcp-lock/npm/package-lock.json` exists → if missing: emit `⚠ MCP integrity: context7 lockfile missing at .mcp-lock/npm/package-lock.json — server will fail-closed on activation. Restore via /forge stoke or remove server from .mcp.json.`
+   - Check `npm` is on PATH (shell `command -v npm`) → if missing: emit `⚠ MCP integrity: npm not installed — context7 server will fail-closed. Install npm ≥ 7 or remove server from .mcp.json.`
+   - If both checks pass: no line emitted (silent pass).
+
+2. **fetch probe** (if `mcpServers.fetch` exists):
+   - Check `.mcp-lock/python/requirements.lock` exists → if missing: emit `⚠ MCP integrity: fetch lockfile missing at .mcp-lock/python/requirements.lock — server will fail-closed on activation.`
+   - Check `pip` (or `python -m pip`) is on PATH → if missing: emit `⚠ MCP integrity: pip not installed — fetch server will fail-closed. Install Python ≥ 3.10 with pip ≥ 22.3 or remove server.`
+   - If both checks pass: no line emitted.
+
+3. **Staleness probe** (only runs if `.mcp-lock/` is present AND `docs/process-kit/mcp-pinning-policy.md` exists):
+   - Read `Last verified:` from the top of `docs/process-kit/mcp-pinning-policy.md`. Compute days since that date.
+   - For `context7`: threshold = 60 days. If age > threshold: emit `MCP pin stale: @upstash/context7-mcp verified <N> days ago (threshold 60). Bump-verification checklist: docs/process-kit/mcp-pinning-policy.md.`
+   - For `mcp-server-fetch`: threshold = 365 days. If age > threshold: emit similar one-line advisory.
+   - If all pins fresh: silent.
+
+4. **Generic tooling check** (even when lockfiles present and PATH-tools available): if `npm --version` reports < 7, or `pip --version` reports < 22.3, emit `⚠ MCP integrity: <tool> version <v> is below minimum — MCP server will fail-closed. Upgrade to <min>+.`
+
+If any probe in steps 1–4 emits an advisory, include a trailing line: `Run /configure and choose MCP servers (#8) to disable servers without lockfiles, or see docs/process-kit/mcp-pinning-policy.md.`
+
+This step is silent on clean pass. It is NOT dismissible by a flag — the advisory surfaces on every `/now` run until the underlying condition is fixed (that is the persistent fail-closed design).
 
 ---
 
@@ -152,6 +210,19 @@ Constraints:
    - docs/process-kit/<filename>.md — last updated: <date> (<N> days ago)
    ```
    If all runbooks are current, skip silently.
+
+8c. **Process-kit external-source freshness check** (Spec 278): Read `forge.process_kit.freshness_threshold_days` from AGENTS.md (default: **180** if absent or unset). Scan `.md` files under `docs/process-kit/` AND `template/docs/process-kit/` for a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker within the first 10 lines.
+   - For each file carrying the marker: compare the date to today. If the date is older than the threshold, flag the guide as stale.
+   - Files without the marker are skipped silently (not every guide needs one — the convention applies only to guides that cite external authorities; see `docs/process-kit/runbook.md` § Process-Kit Doc Freshness Convention).
+   - If any flagged: report
+     ```
+     ## Stale process-kit guides
+     The following guides cite external authorities but have not been re-verified in <threshold>+ days:
+     - <path> — last verified: <date> (<N> days ago) against <source-url>
+     ```
+     Include a trailing hint: "Revalidate by reading `docs/process-kit/runbook.md` § Process-Kit Doc Freshness Convention."
+   - If none flagged, skip silently.
+   - This is advisory only — it does not block subsequent commands.
 
 9. **Write context snapshot**: After gathering all data above, write `docs/sessions/context-snapshot.md` (gitignored) with the following structured sections. This snapshot is used by subsequent commands for display-only lookups, reducing redundant file reads.
    ```

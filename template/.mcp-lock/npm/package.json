@@ -1,0 +1,9 @@
+{
+  "name": "forge-mcp-lock",
+  "version": "0.0.0",
+  "private": true,
+  "description": "FORGE vendored lockfile for MCP integrity verification. DO NOT EDIT MANUALLY — regenerate via the command in docs/process-kit/mcp-pinning-policy.md.",
+  "dependencies": {
+    "@upstash/context7-mcp": "2.1.7"
+  }
+}

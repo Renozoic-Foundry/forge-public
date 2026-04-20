@@ -1,14 +1,15 @@
 {
+  "_comment": "MCP servers are hash-verified against .mcp-lock/ before activation. See .mcp-lock/README.md and docs/process-kit/mcp-pinning-policy.md. Do not replace the hash-verified runners below with bare 'npx -y' + moving-target version strings or unpinned 'uvx pkg' — those bypass integrity verification (Spec 284).",
   "mcpServers": {
     "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"],
-      "description": "Versioned library documentation lookup. Use resolve-library-id then get-library-docs for any third-party library before writing code against it."
+      "command": "sh",
+      "args": ["-c", "cd .mcp-lock/npm && npm ci --no-audit --no-fund --silent 2>/dev/null && ./node_modules/.bin/context7-mcp"],
+      "description": "Versioned library documentation lookup. Use resolve-library-id then get-library-docs for any third-party library before writing code against it. Hash-verified via .mcp-lock/npm/package-lock.json."
     },
     "fetch": {
-      "command": "uvx",
-      "args": ["mcp-server-fetch"],
-      "description": "Fetch any URL and return it as markdown. Use for one-off documentation lookups, RFC text, or any URL not covered by Context7."
+      "command": "sh",
+      "args": ["-c", "python -m pip install --require-hashes --quiet -r .mcp-lock/python/requirements.lock 2>/dev/null && python -m mcp_server_fetch"],
+      "description": "Fetch any URL and return it as markdown. Use for one-off documentation lookups, RFC text, or any URL not covered by Context7. Hash-verified via .mcp-lock/python/requirements.lock."
     }
   }
 }

@@ -101,6 +101,11 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
      <CEfO review block>
      ```
    - If `forge.dispatch_rules.enabled` is `false` or absent: skip silently.
+6d. **MCP pin review (Spec 284)**: Read `docs/process-kit/mcp-pinning-policy.md`. Check the `Last verified:` date at the top. For each pin documented in the policy's "What's pinned" section:
+   - Compare current `Last verified:` age against the per-package threshold (context7=60 days, fetch=365 days).
+   - If stale: emit a one-line advisory: `MCP pin stale: <package> pinned <N> days ago, threshold <T>. Run bump-verification checklist in docs/process-kit/mcp-pinning-policy.md before rotating.`
+   - If all pins fresh: emit a one-line confirmation: `MCP pins current: <package1>@<v1> verified <N1>d ago, <package2>@<v2> verified <N2>d ago.`
+   - This is an advisory checklist item — does NOT auto-bump pins. Operator executes the bump-verification checklist manually when ready.
 7. Update `Last score calibration:` in docs/backlog.md.
 8. **Signal pattern analysis (Spec 044):** Read `docs/sessions/signals.md`. Apply structured pattern detection:
    a. **Parse**: Extract from each signal entry: type tag (e.g. `[process]`, `[tooling]`, `[template]`), affected component(s), root-cause keywords (words in title/description that could recur).

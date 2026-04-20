@@ -68,6 +68,17 @@ forge.context.optimization:
   compact_threshold_pct: 60       # percentage of context window that triggers compaction (balanced only)
 ```
 
+```yaml
+# Process-kit doc freshness (Spec 278)
+# Threshold for /now's external-source freshness check. Process-kit guides that carry
+# a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker are flagged as
+# stale when the date is older than this many days. Advisory only — never blocks
+# /implement or /close. Default: 180 days (~6 months).
+# See docs/process-kit/runbook.md § Process-Kit Doc Freshness Convention.
+forge.process_kit:
+  freshness_threshold_days: 180
+```
+
 ## Capabilities
 
 - Code generation, modification, and refactoring

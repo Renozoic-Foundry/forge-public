@@ -2,6 +2,18 @@
 
 FORGE synthesizes five established methodologies into a cohesive framework for human-AI collaborative development. [ACKNOWLEDGEMENTS.md](../ACKNOWLEDGEMENTS.md) lists *what* inspired FORGE. This document explains *how those ideas combine and what problems they solve for you*.
 
+## Mission and Vision
+
+FORGE's mission is to make each individual developer the CEO of a continuously-optimizing development company. FORGE provides strategic advisors, executive staff, and auditable process at every step — but the developer decides exactly what happens, when, and why.
+
+The CEO metaphor is not rhetoric — it has concrete scaffolding. FORGE provides a standing review panel of executive and adversarial roles (the CxO agents — CTO, COO, CISO, CMO, CRO, CResO, CXO, CQO, CCO, CFO, CEfO — alongside Devil's Advocate and Maverick Thinker) that can be convened via `/consensus` for structured multi-perspective review. Command agents act as executive staff who do the work: `/matrix` is your PM, `/brainstorm` is your business analyst, `/implement` is your build agent, `/evolve` is your enterprise architect. Evidence gates, session logs, signal capture (error autopsies, chat insights, unified signals), and multi-layer audit trails mean every lifecycle transition is captured in a reviewable artifact — the company runs on evidence, not assertion.
+
+"Continuously-optimizing" is the operative word. FORGE's signal → pattern → spec loop means that every debugging conversation, every correction, every validated pattern becomes institutional knowledge that compounds across sessions. When a class of failure repeats across multiple sessions, the pattern analysis engine recommends a spec to fix the process itself — not just the individual bug. The [debugging-in-forge.md](articles/debugging-in-forge.md) article documents this loop with concrete examples drawn from FORGE's own development history. The framework improves itself as you use it.
+
+Human authority is inviolable. FORGE has iteratively hardened its authorization enforcement — starting from prose guidance and advancing to mechanical runtime hooks as real incidents revealed weaker controls were insufficient. No agent confirms on your behalf. No command auto-chains past a gate that hasn't received explicit human approval — whether live (L1/L2) or asynchronously via messaging (L3/L4). Every signal draft, every spec, every close requires explicit operator approval. The developer is the CEO; the AI is staff.
+
+FORGE is structured so that the workflow exists to produce evidence — specs, gate outcomes, and signal capture — rather than evidence existing to document the workflow. This is the difference between process compliance and outcome accountability. FORGE is a process governance scaffold that happens to include workflow: the workflow exists to produce the evidence; the evidence exists to close the trust gap between human intent and AI execution.
+
 ## Contents
 
 - [The Solve/Evolve Double-Loop](#the-solveevolve-double-loop--a-methodology-that-improves-itself) — adaptive process

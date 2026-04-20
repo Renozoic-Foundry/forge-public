@@ -25,6 +25,8 @@ framework:
     - ".claude/commands/matrix.md"
     - ".claude/commands/note.md"
     - ".claude/commands/now.md"
+    - ".claude/commands/onboarding.md"  # Spec 266 — classification added during onboarding simplification
+    - ".claude/commands/configure.md"  # Spec 266 — new: post-onboarding advanced settings menu
     - ".claude/commands/evolve.md"
     - ".claude/commands/parallel.md"
     - ".claude/commands/retro.md"
@@ -74,6 +76,7 @@ merge:
     - "AGENTS.md"
     - ".gitignore"
     - ".mcp.json"
+    - ".mcp-lock/"  # Spec 284 — vendored hash-verified lockfiles for MCP servers. Operator may add entries; never strip.
 
 obsolete:
   description: "Old FORGE/EGID files superseded by current versions"

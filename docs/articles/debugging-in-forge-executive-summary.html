@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FORGE Doesn&#x27;t Have a Debug Command — And That&#x27;s the Point — Executive Summary</title>
+  <style>
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+    background: #1B1B1F;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Slide deck container */
+#deck {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* Individual slides */
+.slide {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+.slide.active { display: flex; }
+
+/* ── Colour palette ─────────────── */
+:root {
+    --navy:   #0B2E4F;
+    --accent: #E87422;
+    --grey:   #555B6E;
+    --light:  #F4F4F6;
+    --white:  #FFFFFF;
+    --dark:   #1B1B1F;
+}
+
+/* ── Slide type: title ──────────── */
+.slide-title {
+    background: var(--navy);
+    padding: 0;
+    justify-content: flex-start;
+}
+.slide-title .title-eyebrow {
+    margin: 10% 6% 0;
+    font-size: 1.2em;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.slide-title h1 {
+    margin: 1% 6%;
+    font-size: 3.6em;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--white);
+}
+.slide-title .title-tagline {
+    margin: 2% 6% 0;
+    font-size: 1.35em;
+    color: var(--white);
+    opacity: 0.9;
+}
+.slide-title .title-byline {
+    position: absolute;
+    bottom: 8%;
+    left: 6%;
+    font-size: 1.05em;
+    color: var(--light);
+}
+.slide-title .title-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    height: 6px;
+    background: var(--accent);
+}
+
+/* ── Slide header (non-title slides) ─── */
+.slide-header {
+    padding: 2% 6% 0;
+    border-bottom: 2px solid var(--light);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 13%;
+}
+.header-bar {
+    width: 8px;
+    min-width: 8px;
+    height: 48px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+.header-text h2 {
+    font-size: 1.7em;
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1.2;
+}
+.header-text .kicker {
+    font-size: 0.95em;
+    color: var(--grey);
+    margin-top: 2px;
+}
+
+/* ── Slide footer ─────────────── */
+.slide-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4% 6%;
+    font-size: 0.75em;
+    color: var(--grey);
+    border-top: 1px solid var(--light);
+    flex-shrink: 0;
+}
+
+/* ── Slide body ──────────────── */
+.slide-body {
+    flex: 1;
+    padding: 2% 6%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Content slide ─────────────── */
+.quote-box {
+    background: var(--light);
+    border-left: 12px solid var(--accent);
+    padding: 3% 4%;
+    font-size: 1.25em;
+    color: var(--dark);
+    line-height: 1.5;
+    flex-shrink: 0;
+}
+.quote-attrib {
+    font-size: 0.85em;
+    color: var(--grey);
+    margin-top: 8px;
+}
+.emphasis-text {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--navy);
+}
+.body-text {
+    font-size: 1.15em;
+    color: var(--dark);
+    white-space: pre-line;
+    line-height: 1.55;
+}
+
+/* ── Flow slide ────────────────── */
+.flow-row {
+    display: flex;
+    gap: 2%;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.flow-box {
+    flex: 1;
+    background: var(--navy);
+    color: var(--white);
+    border-radius: 8px;
+    padding: 4% 5%;
+    text-align: center;
+}
+.flow-box .flow-label {
+    font-size: 1.5em;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.flow-box .flow-desc {
+    font-size: 0.85em;
+    opacity: 0.9;
+    white-space: pre-line;
+}
+.flow-arrow {
+    align-self: center;
+    font-size: 2em;
+    color: var(--grey);
+    flex-shrink: 0;
+}
+.callout-box {
+    background: var(--light);
+    border-left: 12px solid var(--accent);
+    padding: 2.5% 4%;
+    flex: 1;
+}
+.callout-q { font-size: 0.95em; color: var(--grey); margin-bottom: 4px; }
+.callout-q2 { font-size: 1.25em; font-weight: 700; color: var(--dark); margin-bottom: 12px; }
+.callout-a { font-size: 0.95em; color: var(--grey); margin-bottom: 4px; }
+.callout-a2 { font-size: 1.25em; font-weight: 700; color: var(--navy); }
+
+/* ── Cards slide ───────────────── */
+.cards-row {
+    display: flex;
+    gap: 2%;
+    flex: 1;
+}
+.card {
+    flex: 1;
+    border: 1px solid var(--light);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.card-band {
+    padding: 4% 6%;
+    color: var(--white);
+}
+.card-band .card-abbr { font-size: 1.6em; font-weight: 700; }
+.card-band .card-name { font-size: 0.9em; }
+.card-content { padding: 4% 6%; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.card-count { font-size: 3em; font-weight: 700; }
+.card-count-label { font-size: 0.8em; color: var(--grey); margin-top: -8px; }
+.card-scope { font-size: 1em; font-weight: 700; color: var(--dark); white-space: pre-line; }
+.card-desc { font-size: 0.85em; color: var(--grey); }
+
+/* ── Rows slide ────────────────── */
+.rows-list { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.row-item { display: flex; align-items: flex-start; gap: 16px; }
+.row-num {
+    width: 36px; height: 36px; min-width: 36px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3em; font-weight: 700; color: var(--white);
+    flex-shrink: 0; margin-top: 2px;
+}
+.row-text { flex: 1; }
+.row-title { font-size: 1.1em; font-weight: 700; color: var(--navy); }
+.row-what { font-size: 0.9em; color: var(--dark); }
+.row-fix { font-size: 0.82em; color: var(--grey); }
+.row-example { font-size: 0.82em; color: var(--grey); font-style: italic; }
+
+/* ── Stages slide ──────────────── */
+.stages-list { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.stage-row {
+    display: grid;
+    grid-template-columns: 80px 60px 1fr 2fr;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 4px;
+    background: var(--light);
+    gap: 12px;
+}
+.stage-row.highlight { background: var(--accent); color: var(--white); }
+.stage-sig { font-size: 1em; font-weight: 700; }
+.stage-date { font-size: 0.85em; }
+.stage-level { font-size: 0.95em; font-weight: 700; }
+.stage-fix { font-size: 0.9em; }
+.stage-row.highlight .stage-date,
+.stage-row.highlight .stage-fix { color: var(--white); }
+.stage-row:not(.highlight) .stage-date,
+.stage-row:not(.highlight) .stage-fix { color: var(--grey); }
+.stages-takeaway {
+    font-size: 1.05em; font-weight: 700; color: var(--navy);
+    white-space: pre-line;
+    flex-shrink: 0;
+}
+
+/* ── Metrics slide ─────────────── */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    flex: 1;
+}
+.metric-box {
+    background: var(--light);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4%;
+    position: relative;
+}
+.metric-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    border-radius: 4px 4px 0 0;
+}
+.metric-box.navy::before { background: var(--navy); }
+.metric-box.accent::before { background: var(--accent); }
+.metric-num { font-size: 2.8em; font-weight: 700; margin-top: 8px; }
+.metric-box.navy .metric-num { color: var(--navy); }
+.metric-box.accent .metric-num { color: var(--accent); }
+.metric-label { font-size: 0.9em; color: var(--dark); text-align: center; }
+
+/* ── Two-col slide ─────────────── */
+.two-col-body { display: flex; gap: 3%; flex: 1; }
+.col-left, .col-right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.col-heading { font-size: 1em; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.pattern-row {
+    display: grid;
+    grid-template-columns: 1fr 40px 52px;
+    align-items: center;
+    background: var(--light);
+    padding: 6px 10px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    gap: 6px;
+}
+.pattern-name { color: var(--dark); }
+.pattern-count { font-weight: 700; color: var(--navy); text-align: center; }
+.pattern-sev {
+    font-size: 0.75em; font-weight: 700; color: var(--white);
+    padding: 2px 6px; border-radius: 10px; text-align: center;
+}
+.sev-high { background: var(--accent); }
+.sev-med  { background: var(--grey); }
+.trigger-item { display: flex; align-items: baseline; gap: 8px; font-size: 0.95em; color: var(--dark); }
+.trigger-dot {
+    width: 8px; height: 8px; min-width: 8px;
+    background: var(--accent); border-radius: 50%;
+    margin-top: 2px;
+}
+.col-footer1 { font-size: 0.9em; font-weight: 700; color: var(--grey); margin-top: 8px; }
+.col-footer2 { font-size: 0.82em; color: var(--grey); white-space: pre-line; }
+
+/* ── Dark slide ─────────────────── */
+.slide-dark { background: var(--navy); }
+.slide-dark .slide-header { border-bottom-color: rgba(255,255,255,0.15); }
+.slide-dark .header-text h2 { color: var(--white); }
+.slide-dark .slide-footer { border-top-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.5); }
+.dark-lines { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.dark-line { font-size: 1.35em; color: var(--light); line-height: 1.4; }
+.dark-line.highlight { font-size: 2.2em; font-weight: 700; color: var(--accent); margin: 8px 0; }
+.dark-bullets { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.dark-bullet { font-size: 1em; color: var(--white); display: flex; gap: 10px; }
+.dark-bullet::before { content: '•'; color: var(--accent); font-size: 1.1em; flex-shrink: 0; }
+
+/* ── Closing slide ──────────────── */
+.closing-body { flex: 1; padding: 2% 6%; display: flex; flex-direction: column; gap: 8px; }
+.closing-para { font-size: 1.2em; line-height: 1.5; }
+.closing-para.emphasis { font-weight: 700; color: var(--navy); }
+.closing-para.accent { font-weight: 700; color: var(--accent); }
+.closing-bottom {
+    background: var(--navy);
+    padding: 1.5% 6%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+.closing-bottom a {
+    color: var(--light);
+    font-size: 0.95em;
+    text-decoration: none;
+}
+.closing-bottom a:hover { text-decoration: underline; color: var(--accent); }
+.closing-label { color: var(--grey); font-size: 0.9em; }
+
+/* ── Navigation controls ─────────── */
+#nav {
+    position: fixed;
+    bottom: 16px;
+    right: 20px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+}
+#nav button {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--white);
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+#nav button:hover { background: rgba(255,255,255,0.25); }
+#slide-counter {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8em;
+    color: rgba(255,255,255,0.4);
+    z-index: 100;
+}
+
+  </style>
+</head>
+<body>
+<div id="deck">
+<div class="slide slide-title">
+  <div class="title-eyebrow">EXECUTIVE SUMMARY</div>
+  <h1>FORGE Doesn&#x27;t Have a Debug Command — And That&#x27;s the Point</h1>
+  <div class="title-tagline">How an AI-first development framework turns every debugging<br>conversation into a process improvement engine.</div>
+  <div class="title-byline">Brian Carty   |   April 2026</div>
+  <div class="title-strip"></div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>The question that prompted this article</h2>
+    <div class="kicker">An internal reviewer flagged what he saw as a gap.</div>
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="quote-box">
+  <div class="quote-text">&quot;Brian left one of the biggest parts of development: debugging.<br>Providing debugging insight to users will be crucial.<br>Debugging sessions provide the richest feedback for post-mortem analysis.&quot;</div>
+  <div class="quote-attrib">— Internal developer review, April 2026</div>
+</div>
+    <div class="emphasis-text">He was right about the value. Debugging sessions ARE the richest signal source.</div>
+<div class="body-text">But the solution isn&#x27;t a /debug command.
+
+It&#x27;s recognizing that FORGE already captures debugging signals
+as a natural byproduct of how it works.</div>
+
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>2 / 10</span>
+</div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>The reframe: you&#x27;re already debugging</h2>
+    <div class="kicker">Debugging isn&#x27;t a separate phase — it&#x27;s the implementation phase doing its job.</div>
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="flow-row"><div class="flow-box">
+  <div class="flow-label">/implement</div>
+  <div class="flow-desc">Operator runs the spec.
+Agent builds against ACs.</div>
+</div><div class="flow-arrow">&#8594;</div><div class="flow-box">
+  <div class="flow-label">Conversation</div>
+  <div class="flow-desc">&quot;That&#x27;s not right.&quot;
+Operator + agent iterate.</div>
+</div><div class="flow-arrow">&#8594;</div><div class="flow-box">
+  <div class="flow-label">/close</div>
+  <div class="flow-desc">Gates, retrospective,
+signals captured.</div>
+</div></div>
+    <div class="callout-box">
+      <div class="callout-q">The real question isn&#x27;t:</div>
+      <div class="callout-q2">&quot;How do we add debugging support?&quot;</div>
+      <div class="callout-a">It&#x27;s:</div>
+      <div class="callout-a2">&quot;How well are we capturing signals, and are they feeding process improvement?&quot;</div>
+    </div>
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>3 / 10</span>
+</div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>Three signal types, three scopes</h2>
+    <div class="kicker">Every debugging conversation produces structured, durable signals.</div>
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="cards-row"><div class="card">
+  <div class="card-band" style="background:var(--navy);">
+    <div class="card-abbr">EA</div>
+    <div class="card-name">Error Autopsies</div>
+  </div>
+  <div class="card-content">
+    <div class="card-count" style="color:var(--navy);">55</div>
+    <div class="card-count-label">captured to date</div>
+    <div class="card-scope">What went wrong
+and why.</div>
+    <div class="card-desc">Root cause + prevention for each bug, failure, or correction.</div>
+  </div>
+</div><div class="card">
+  <div class="card-band" style="background:var(--accent);">
+    <div class="card-abbr">CI</div>
+    <div class="card-name">Chat Insights</div>
+  </div>
+  <div class="card-content">
+    <div class="card-count" style="color:var(--accent);">142</div>
+    <div class="card-count-label">captured to date</div>
+    <div class="card-scope">What did this
+conversation teach us.</div>
+    <div class="card-desc">Corrections AND confirmations — validated approaches too.</div>
+  </div>
+</div><div class="card">
+  <div class="card-band" style="background:var(--grey);">
+    <div class="card-abbr">SIG</div>
+    <div class="card-name">Unified Signals</div>
+  </div>
+  <div class="card-content">
+    <div class="card-count" style="color:var(--grey);">240+</div>
+    <div class="card-count-label">captured to date</div>
+    <div class="card-scope">What did closing
+this spec teach us.</div>
+    <div class="card-desc">Inline retrospective across content, process, architecture.</div>
+  </div>
+</div></div>
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>4 / 10</span>
+</div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>What actually triggers a signal</h2>
+    <div class="kicker">Different root causes need different prevention strategies.</div>
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="rows-list"><div class="row-item">
+  <div class="row-num">1</div>
+  <div class="row-text">
+    <div class="row-title">Spec-expectation gap</div>
+    <div class="row-what">The spec and operator expectations diverged.</div>
+    <div class="row-fix">Prevention: Tighter ACs, assumption verification, Devil&#x27;s Advocate gate.</div>
+    <div class="row-example">EA-050: DA caught missing --fix flag before code was written.</div>
+  </div>
+</div><div class="row-item">
+  <div class="row-num">2</div>
+  <div class="row-text">
+    <div class="row-title">Model knowledge gap</div>
+    <div class="row-what">The agent didn&#x27;t understand the tool or environment.</div>
+    <div class="row-fix">Prevention: Document as institutional pattern (CI entry) applied to future sessions.</div>
+    <div class="row-example">EA-004-007: WSL / PowerShell / Jinja2 cross-platform cluster.</div>
+  </div>
+</div><div class="row-item">
+  <div class="row-num">3</div>
+  <div class="row-text">
+    <div class="row-title">Implementation error</div>
+    <div class="row-what">The model simply made a mistake — typo, hallucination, bad arithmetic.</div>
+    <div class="row-fix">Prevention: Mechanical validation: syntax checks, formula checks, linting.</div>
+    <div class="row-example">EA-049: 11 specs with wrong priority scores in one batch.</div>
+  </div>
+</div></div>
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>5 / 10</span>
+</div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>Compounding signals drive escalating enforcement</h2>
+    <div class="kicker">Unauthorized /close — four incidents, four escalations, one final fix.</div>
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="stages-list"><div class="stage-row">
+  <div class="stage-sig">EA-025</div>
+  <div class="stage-date">Mar 28</div>
+  <div class="stage-level">Prose instruction</div>
+  <div class="stage-fix">&quot;Do NOT run /close&quot; in implementer role</div>
+</div><div class="stage-row">
+  <div class="stage-sig">EA-026</div>
+  <div class="stage-date">Mar 30</div>
+  <div class="stage-level">Mechanism removal</div>
+  <div class="stage-fix">Spec 142 — remove Chain-Next entirely</div>
+</div><div class="stage-row">
+  <div class="stage-sig">EA-027</div>
+  <div class="stage-date">Apr 07</div>
+  <div class="stage-level">Behavioral guard</div>
+  <div class="stage-fix">Spec 172 — AGENTS.md authorization list</div>
+</div><div class="stage-row highlight">
+  <div class="stage-sig">EA-051</div>
+  <div class="stage-date">Apr 13</div>
+  <div class="stage-level">Mechanical hook</div>
+  <div class="stage-fix">Spec 257 — PreToolUse hook, non-bypassable</div>
+</div></div>
+    <div class="stages-takeaway">The pattern is only visible because signals accumulated.<br>Each prior fix was correct — and insufficient — for the next failure mode.</div>
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>6 / 10</span>
+</div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>By the numbers</h2>
+    <div class="kicker">35 days of active development — March 13 to April 16, 2026.</div>
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="metrics-grid"><div class="metric-box navy">
+  <div class="metric-num">55</div>
+  <div class="metric-label">Error Autopsies</div>
+</div><div class="metric-box accent">
+  <div class="metric-num">142</div>
+  <div class="metric-label">Chat Insights</div>
+</div><div class="metric-box navy">
+  <div class="metric-num">240+</div>
+  <div class="metric-label">Unified Signals</div>
+</div><div class="metric-box accent">
+  <div class="metric-num">7</div>
+  <div class="metric-label">Pattern Analyses</div>
+</div><div class="metric-box navy">
+  <div class="metric-num">15+</div>
+  <div class="metric-label">Specs from Signals</div>
+</div><div class="metric-box accent">
+  <div class="metric-num">240</div>
+  <div class="metric-label">Closed Specs</div>
+</div><div class="metric-box navy">
+  <div class="metric-num">61</div>
+  <div class="metric-label">Session Logs</div>
+</div><div class="metric-box accent">
+  <div class="metric-num">35</div>
+  <div class="metric-label">Days Active</div>
+</div></div>
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>7 / 10</span>
+</div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>Pattern analysis: from isolated signals to systemic fixes</h2>
+    <div class="kicker">When 3+ signals cluster around the same root cause, FORGE recommends a spec.</div>
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="two-col-body">
+      <div class="col-left">
+        <div class="col-heading">Detected pattern clusters</div>
+        <div class="pattern-row">
+  <div class="pattern-name">Parallel execution permission issues</div>
+  <div class="pattern-count">7x</div>
+  <div class="pattern-sev sev-high">high</div>
+</div><div class="pattern-row">
+  <div class="pattern-name">Documentation sync drift</div>
+  <div class="pattern-count">6x</div>
+  <div class="pattern-sev sev-high">high</div>
+</div><div class="pattern-row">
+  <div class="pattern-name">Pre-release validation gaps</div>
+  <div class="pattern-count">6x</div>
+  <div class="pattern-sev sev-high">high</div>
+</div><div class="pattern-row">
+  <div class="pattern-name">AC clarity &amp; file enumeration gaps</div>
+  <div class="pattern-count">8x</div>
+  <div class="pattern-sev sev-med">med</div>
+</div><div class="pattern-row">
+  <div class="pattern-name">Command integration islands</div>
+  <div class="pattern-count">5x</div>
+  <div class="pattern-sev sev-med">med</div>
+</div>
+      </div>
+      <div class="col-right">
+        <div class="col-heading">/evolve runs when ANY threshold fires</div>
+        <div class="trigger-item">
+  <div class="trigger-dot"></div>
+  <span>15+ unreviewed signals</span>
+</div><div class="trigger-item">
+  <div class="trigger-dot"></div>
+  <span>3+ open scratchpad notes</span>
+</div><div class="trigger-item">
+  <div class="trigger-dot"></div>
+  <span>3+ error autopsies since last review</span>
+</div><div class="trigger-item">
+  <div class="trigger-dot"></div>
+  <span>5+ specs closed since last review</span>
+</div>
+        <div class="col-footer1">Signal-based — not calendar-based.</div>
+        <div class="col-footer2">AI-assisted development moves too fast<br>for time-based review cadences.</div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>8 / 10</span>
+</div>
+</div>
+<div class="slide slide-dark">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>What this means for debugging</h2>
+    
+  </div>
+</div>
+  <div class="slide-body">
+    <div class="dark-lines"><div class="dark-line">FORGE doesn&#x27;t add a debugging phase.</div><div class="dark-line">It recognizes debugging is already embedded — and focuses on</div><div class="dark-line">what traditional debugging leaves on the table:</div><div class="dark-line highlight">the signals.</div></div>
+    <div class="dark-bullets"><div class="dark-bullet">Persistent:  the why outlives the commit.</div><div class="dark-bullet">Cumulative:  isolated bugs become visible patterns.</div><div class="dark-bullet">Actionable:  repeated pain becomes structural fixes.</div><div class="dark-bullet">Frictionless:  no extra ceremony — just the work you&#x27;re already doing.</div></div>
+  </div>
+  <div class="slide-footer">
+  <span>FORGE Doesn&#x27;t Have a Debug Command</span><span>9 / 10</span>
+</div>
+</div>
+<div class="slide">
+  <div class="slide-header">
+  <div class="header-bar"></div>
+  <div class="header-text">
+    <h2>The bottom line</h2>
+    
+  </div>
+</div>
+  <div class="closing-body">
+    <div class="closing-para">The developer was right:</div>
+<div class="closing-para emphasis">debugging sessions are the richest feedback source.</div>
+<div class="closing-para">FORGE&#x27;s contribution is making that feedback</div>
+<div class="closing-para accent">mechanical, cumulative, and self-improving —</div>
+<div class="closing-para">without asking anyone to do anything extra.</div>
+
+  </div>
+  <div class="closing-bottom">
+    <span class="closing-label">Read the full article:</span>
+    <a href="debugging-in-forge.md">debugging-in-forge.md</a>
+  </div>
+</div>
+</div>
+<div id="nav">
+  <button id="btn-prev">&#8592; Prev</button>
+  <button id="btn-next">Next &#8594;</button>
+</div>
+<span id="slide-counter"></span>
+<script>
+
+(function() {
+    var slides = document.querySelectorAll('.slide');
+    var current = 0;
+    var total = slides.length;
+
+    function show(n) {
+        slides[current].classList.remove('active');
+        current = Math.max(0, Math.min(n, total - 1));
+        slides[current].classList.add('active');
+        document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+            show(current + 1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            show(current - 1);
+        } else if (e.key === 'Home') {
+            show(0);
+        } else if (e.key === 'End') {
+            show(total - 1);
+        }
+    });
+
+    document.getElementById('btn-prev').addEventListener('click', function() { show(current - 1); });
+    document.getElementById('btn-next').addEventListener('click', function() { show(current + 1); });
+
+    show(0);
+})();
+
+</script>
+</body>
+</html>

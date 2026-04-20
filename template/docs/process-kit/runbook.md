@@ -1,8 +1,50 @@
 # Operational Runbook
 
-Last updated: 2026-03-13
+Last updated: 2026-04-16
 
 This runbook covers operational procedures for FORGE-managed projects. For human validation of AI-delivered work, see [human-validation-runbook.md](human-validation-runbook.md).
+
+---
+
+## Process-Kit Doc Freshness Convention (Spec 278)
+
+Process-kit guides that reference **external authorities** — Anthropic docs, SDK surfaces, model lists, third-party APIs, pricing pages — carry factual claims whose truth value depends on the upstream source. Without a revalidation signal, hard-coded numbers drift silently and the project becomes a vector for outdated guidance.
+
+### The `Last verified:` marker
+
+Guides that cite external sources MUST carry a freshness marker within the **first 10 lines** of the file:
+
+```markdown
+<!-- Last verified: YYYY-MM-DD against <source-url> -->
+```
+
+- **Date**: the ISO date on which a human or agent last reconciled the guide's factual claims against the linked source.
+- **Source URL**: the single most authoritative upstream doc for the guide's claims (e.g., the Anthropic prompt-caching page).
+
+This is distinct from the `Last updated:` marker (which tracks internal edits). A guide can be updated for stylistic reasons without its `Last verified:` date changing — and vice versa (revalidation may confirm no edits are needed).
+
+### When to use
+
+Apply the `Last verified:` marker to any process-kit guide whose correctness depends on an external source. Examples:
+
+- Guides citing Anthropic API semantics (caching, thinking, batch, tool use).
+- Guides citing SDK method signatures or configuration keys.
+- Guides citing model lists, model tiers, or pricing.
+- Guides citing third-party CLI tool flags or output formats.
+
+Guides that are purely FORGE-internal (process descriptions, role definitions, methodology docs) do **not** need the marker — the framework maintains those continuously.
+
+### Revalidation procedure
+
+1. Open the source URL in a browser (or fetch it via `WebFetch` / the relevant MCP server).
+2. Walk each factual claim in the guide (numbers, TTLs, tier names, method names, configuration keys) and compare to the source.
+3. If any claim has changed, update the guide. If a claim is no longer present, decide whether to remove it or add a caveat.
+4. Update the `<!-- Last verified: -->` marker's date. If the source URL itself changed, update the URL too.
+5. Commit the change under a `small-change` lane spec (or as part of the broader spec that triggered the revalidation).
+
+### Staleness signals
+
+`/now` flags guides whose `Last verified:` date is older than the configured threshold (see `forge.process_kit.freshness_threshold_days` in AGENTS.md, default 180 days). Staleness is **advisory only** — it does not block `/close` or `/implement`. The cadence exists to surface silent drift, not to gate delivery.
 
 ---
 

@@ -98,6 +98,13 @@ Report:
 ```
 FORGE bootstrap complete.
 
+**Before continuing**: If your IDE does not recognize new slash commands
+(e.g., /onboarding), reload the editor window:
+  - VS Code: Ctrl+Shift+P → "Developer: Reload Window"
+  - JetBrains: restart the IDE
+  - Terminal CLI: no reload needed — commands are available immediately
+
 Next step: run `/onboarding` to configure this project for your team's needs.
-This will walk you through project settings, optional features, and MCP server setup.
+This takes 2 quick confirmations and applies sensible defaults. To adjust any
+setting afterward, run `/configure`.
 ```

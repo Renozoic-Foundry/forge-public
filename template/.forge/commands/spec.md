@@ -6,25 +6,20 @@ workflow_stage: planning
 ---
 # Framework: FORGE
 # Model-Tier: sonnet
-Create a new spec from the template. Optionally uses Spec Kit for guided requirements elicitation.
+Create a new spec from the template.
 
 If $ARGUMENTS is `?` or `help`:
   Print:
   ```
   /spec — Create a new spec from the template.
-  Usage: /spec [description] [--guided] [--manual] [--from-explore <topic>]
+  Usage: /spec [description] [--from-explore <topic>]
   Arguments:
     description (optional) — 1–2 sentence change description. If omitted, infer from session context or ask.
-    --guided    Force Spec Kit guided flow (requires Spec Kit MCP tools)
-    --manual              Force manual template flow (skip Spec Kit detection)
     --from-explore <topic>  Pre-populate from docs/research/explore-<topic>.md
   Behavior:
-    - If Spec Kit MCP tools are available (and --manual not set): offers guided creation via
-      speckit.specify → speckit.plan → speckit.tasks pipeline, then maps output to FORGE template.
-    - If Spec Kit unavailable or --manual set: falls back to direct FORGE template authoring.
-    - Either path produces a valid FORGE spec in draft status, scored and indexed.
+    - Produces a valid FORGE spec in draft status, scored and indexed.
   After saving: review the draft and run /implement, or request edits via /revise.
-  See: docs/specs/_template.md, docs/process-kit/scoring-rubric.md, AGENTS.md (spec_kit config)
+  See: docs/specs/_template.md, docs/process-kit/scoring-rubric.md
   ```
   Stop — do not execute any further steps.
 
@@ -38,77 +33,18 @@ If the section is absent or `status: complete`: proceed normally.
 
 ## [mechanical] Step 0b — Pre-populate from explore artifact (Spec 197)
 If `--from-explore <topic>` is in $ARGUMENTS:
-  1. Read `docs/research/explore-<topic>.md`. If the file does not exist, warn: "Explore artifact not found: docs/research/explore-<topic>.md. Proceeding with normal spec creation." and skip to Step 0.
+  1. Read `docs/research/explore-<topic>.md`. If the file does not exist, warn: "Explore artifact not found: docs/research/explore-<topic>.md. Proceeding with normal spec creation." and skip to Step 1.
   2. Pre-populate spec sections from the explore artifact:
      - **Objective**: derive from the explore artifact's Question/Hypothesis section
      - **Scope**: derive from the explore artifact's Findings section
      - Add a `## Prior Research` note in the spec: "Based on research in `docs/research/explore-<topic>.md`."
-  3. Continue to Step 0 with pre-populated content (the operator can still edit before saving).
-
-## [mechanical] Step 0 — Detect Spec Kit availability
-
-Unless `--manual` is in $ARGUMENTS:
-  1. Check `AGENTS.md` Runtime Configuration for `spec_kit.enabled: true`.
-  2. If enabled, check whether Spec Kit MCP tools are available by looking for `speckit` in the active tool list.
-  3. Determine path:
-     - If `spec_kit.enabled: true` AND MCP tools available AND `--manual` NOT set → **Guided Flow** (Steps A–F below), then skip to Step 6.
-     - If `spec_kit.enabled: true` BUT MCP tools unavailable:
-       - Check `spec_kit.fallback` (default: `manual`):
-         - `manual` → print warning: "⚠ Spec Kit enabled but MCP server unavailable. Falling back to manual flow. Add Spec Kit MCP to .mcp.json (see AGENTS.md)." → skip to Step 1.
-         - `error` → print error: "⛔ Spec Kit MCP server unavailable and fallback=error. Add server to .mcp.json or set fallback: manual." → stop.
-     - If `spec_kit.enabled: false` or absent (and `--manual` not set) → skip directly to Step 1 (Manual Flow). **Do not mention Spec Kit anywhere in the output** — this project has not configured it.
-     - If `--manual` set → skip directly to Step 1 (Manual Flow).
+  3. Continue to Step 1 with pre-populated content (the operator can still edit before saving).
 
 ---
 
-## Guided Flow (Spec Kit available)
+## [mechanical] Identity Resolution (Spec 133)
 
-### [decision] Step A — Run speckit.specify
-
-Run the `speckit.specify` tool with the change description from $ARGUMENTS (or ask for it if not provided).
-Allow Spec Kit to conduct its requirements elicitation interview.
-
-### [mechanical] Step B — Run speckit.plan
-
-Run `speckit.plan` using the output from Step A to generate a structured plan with objectives and scope.
-
-### [mechanical] Step C — Run speckit.tasks
-
-Run `speckit.tasks` using the plan output to generate a task breakdown.
-
-### [mechanical] Step D — Map to FORGE template
-
-Map Spec Kit's output to FORGE spec template sections:
-
-| Spec Kit output | FORGE spec section |
-|----------------|-------------------|
-| Requirements / user stories | `## Requirements` |
-| Plan objectives | `## Objective` |
-| Plan scope / out-of-scope | `## Scope` |
-| Acceptance tests / done criteria | `## Acceptance Criteria` |
-| Task breakdown | `## Test Plan` (adapt to test steps) |
-
-Fill any unmapped sections (Change-Lane, Trigger, Priority-Score, Evidence) using standard FORGE logic.
-
-### [mechanical] Step E — Score and write
-
-Read `docs/process-kit/scoring-rubric.md` and score the spec.
-**Input validation (Spec 148)**: Validate that each BV, E, R, SR value is an integer between 1 and 5 inclusive. If any value is outside this range, STOP and report the error: "[dimension] must be 1-5 (got [value])". Do not compute the score with invalid inputs.
-Read `docs/specs/README.md` for the next spec number.
-Write the spec file at `docs/specs/NNN-<slug>.md` with:
-- Status: `draft`
-- All sections populated from Spec Kit mapping + FORGE defaults
-- `Trigger: spec-kit-guided`
-
-### [mechanical] Step F — Index and report
-
-Continue with Steps 6–9 (index, changelog, backlog, report).
-
----
-
-## [mechanical] Identity Resolution (Spec 133) — applies to both flows
-
-Before populating frontmatter in either flow, resolve the operator identity:
+Before populating frontmatter, resolve the operator identity:
 
 1. Read `docs/sessions/context-snapshot.md` — look for `## Session identity` section. If found, use the name stored there.
 2. If not found: read `.copier-answers.yml` — look for `default_owner`. If found, use that value.
@@ -125,7 +61,18 @@ Set frontmatter fields:
 
 ---
 
-## Manual Flow (Spec Kit unavailable or --manual)
+## [mechanical] Step 0c — `--guided` flag gate (Spec 282)
+
+If $ARGUMENTS contains `--guided`: evaluate whether Spec Kit is configured for this project (AGENTS.md has `spec_kit.enabled: true` AND Spec Kit MCP tools are available in the active tool list).
+
+- If both conditions hold: proceed silently to the addendum section at the end of this file.
+- If either condition fails: print exactly this one-line notice, then continue with Step 1 below:
+
+  > `--guided` flag ignored: Spec Kit is not configured for this project. Running standard `/spec` flow. See docs/process-kit/spec-kit-setup.md to enable guided creation.
+
+If $ARGUMENTS does not contain `--guided`: continue with Step 1 below.
+
+---
 
 1. Get the change description from $ARGUMENTS, current session context, or ask if neither is available.
    Determine the trigger: error found in chat | error found in tests | user correction | agent recommendation | evolve loop review | harness failure | backlog promotion | other.
@@ -157,7 +104,7 @@ Set frontmatter fields:
 
 ## [mechanical] Step 6b — Review Router (Spec 159)
 
-After the spec draft is written (Step 6 or Step E) but before presenting to the operator for final approval, run the review router:
+After the spec draft is written but before presenting to the operator for final approval, run the review router:
 
 a. **Select perspectives** based on spec characteristics (select 2-3, cap at 3):
 
@@ -168,7 +115,7 @@ a. **Select perspectives** based on spec characteristics (select 2-3, cap at 3):
 | Scope touches commands/onboarding/UX | +CXO |
 | `BV >= 4` and `E >= 3` | +CFO (high investment), +CTO (architectural risk) |
 | `Token-Cost: $$$` | +CFO |
-| High-risk spec (R >= 4) | +CCO (compliance review recommended) |
+| Lane B project | +CCO (always — compliance is non-negotiable) |
 | Scope touches physical/real-world logic | +DA, note: "Includes physical/practical logic — flag for human validation" |
 | `Change-Lane: hotfix` | DA only — speed matters, skip additional perspectives |
 
@@ -220,11 +167,60 @@ If no vague language detected: proceed silently.
 
 ---
 
-## [mechanical] Steps 7–10 (both flows)
+## [mechanical] Steps 7–10
 
 7. Update docs/specs/README.md — add a row for the new spec (sorted by number).
 8. Update docs/specs/CHANGELOG.md — add an entry for the new spec.
 9. Update docs/backlog.md — insert at the correct rank based on score.
 10. Report: "Spec NNN saved. Review and run `/implement NNN`, or `/revise NNN <edits>`."
-   If Spec Kit was used: note "Created via Spec Kit guided flow."
-   If Spec Kit is configured (`spec_kit.enabled: true` in AGENTS.md) but was unavailable: note "Spec Kit unavailable — created via manual template." If Spec Kit is not configured: print no mention of Spec Kit.
+
+---
+
+## Addendum: Guided Flow (Spec Kit)
+
+Only execute this section if AGENTS.md contains `spec_kit.enabled: true` AND Spec Kit MCP tools are available in the active tool list AND `--manual` is NOT in $ARGUMENTS. Otherwise, do not read further.
+
+If `--guided` is in $ARGUMENTS but `spec_kit.enabled` is false or MCP tools are unavailable: print "Spec Kit is not configured for this project. Enable `spec_kit.enabled: true` in AGENTS.md and add the MCP server to .mcp.json, then retry with --guided." and stop.
+
+If `spec_kit.enabled: true` but MCP tools are unavailable: check `spec_kit.fallback` (default: `manual`). If `manual`: print "Spec Kit MCP server unavailable. Falling back to main flow. Add Spec Kit MCP to .mcp.json (see AGENTS.md)." and return to the main flow (Step 1). If `error`: print "Spec Kit MCP server unavailable and fallback=error. Add server to .mcp.json or set fallback: manual." and stop.
+
+### [decision] Step A — Run speckit.specify
+
+Run the `speckit.specify` tool with the change description from $ARGUMENTS (or ask for it if not provided).
+Allow Spec Kit to conduct its requirements elicitation interview.
+
+### [mechanical] Step B — Run speckit.plan
+
+Run `speckit.plan` using the output from Step A to generate a structured plan with objectives and scope.
+
+### [mechanical] Step C — Run speckit.tasks
+
+Run `speckit.tasks` using the plan output to generate a task breakdown.
+
+### [mechanical] Step D — Map to FORGE template
+
+Map Spec Kit's output to FORGE spec template sections:
+
+| Spec Kit output | FORGE spec section |
+|----------------|-------------------|
+| Requirements / user stories | `## Requirements` |
+| Plan objectives | `## Objective` |
+| Plan scope / out-of-scope | `## Scope` |
+| Acceptance tests / done criteria | `## Acceptance Criteria` |
+| Task breakdown | `## Test Plan` (adapt to test steps) |
+
+Fill any unmapped sections (Change-Lane, Trigger, Priority-Score, Evidence) using standard FORGE logic.
+
+### [mechanical] Step E — Score and write
+
+Read `docs/process-kit/scoring-rubric.md` and score the spec.
+**Input validation (Spec 148)**: Validate that each BV, E, R, SR value is an integer between 1 and 5 inclusive. If any value is outside this range, STOP and report the error: "[dimension] must be 1-5 (got [value])". Do not compute the score with invalid inputs.
+Read `docs/specs/README.md` for the next spec number.
+Write the spec file at `docs/specs/NNN-<slug>.md` with:
+- Status: `draft`
+- All sections populated from Spec Kit mapping + FORGE defaults
+- `Trigger: spec-kit-guided`
+
+### [mechanical] Step F — Finalize via main flow
+
+After Step E, return to the main flow at Step 6b (Review Router) and continue through Steps 7-10 (index, changelog, backlog, report). When reporting completion in Step 10, append: "Created via Spec Kit guided flow."

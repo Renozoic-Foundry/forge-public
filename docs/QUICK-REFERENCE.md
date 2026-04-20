@@ -66,7 +66,8 @@
 | `/forge stoke` | Pull upstream FORGE updates and integrate safely | sonnet |
 | `/forge status` | Quick project status overview | sonnet |
 | `/forge help` | List all available FORGE commands | sonnet |
-| `/onboarding` | First-session interactive project configuration | sonnet |
+| `/onboarding` | First-session interactive project configuration (2-interaction fast-path) | sonnet |
+| `/configure` | Adjust any defaulted onboarding setting (stack, agents, autonomy, methodology, features, MCP servers) | sonnet |
 | `/config-change` | Propose a configuration change with impact analysis | sonnet |
 
 ### Process & Review

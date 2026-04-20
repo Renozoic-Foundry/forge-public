@@ -27,7 +27,7 @@ project_description:
 author:
   type: str
   help: "Author name"
-  default: "Your Name"
+  default: ""
 
 default_owner:
   type: str
@@ -51,8 +51,8 @@ use_wsl2:
 
 harness_command:
   type: str
-  help: "Optional harness command (integration/end-to-end test runner)"
-  default: "# No harness configured — customize in CLAUDE.md"
+  help: "Optional harness command (integration/end-to-end test runner; leave blank if none)"
+  default: ""
 
 # compliance_profile removed (Spec 205 — Lane B deferred from public release)
 # Hardcoded to "none" in all template conditionals until Lane B is ready.
@@ -70,4 +70,9 @@ include_advanced_autonomy:
 include_two_stage_review:
   type: bool
   help: "Include two-stage review protocol in AGENTS.md"
+  default: false
+
+agent_sdk:
+  type: bool
+  help: "Include prompt caching guidance for direct Anthropic SDK / API integrations (Python or TypeScript)"
   default: false

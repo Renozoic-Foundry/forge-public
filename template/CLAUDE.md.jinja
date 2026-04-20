@@ -112,6 +112,19 @@ To reduce redundant reads and conserve context window space:
 3. **Session context snapshot**: `/now` writes `docs/sessions/context-snapshot.md` with structured state. Commands needing display-only data (validation queue, next spec, scratchpad count, registry status) should read the snapshot if it exists and is from today, instead of re-reading multiple source files.
 4. **Within-command dedup**: If a command reads a file in an early step and references it again later, use the content from the earlier read.
 
+## Command execution discipline
+
+> **Spec 265** — applies to every FORGE command. Governs output, not behavior.
+
+When a command file contains routing or feature-gated logic, execute it silently. The operator sees the result of the chosen path, never the act of choosing.
+
+1. **No routing narration.** Do not announce condition checks, branch selection, or which path was taken. The operator never needs to hear "Spec Kit is disabled — using manual flow," "feature X not configured — falling back," or "skipping guided flow."
+2. **`[mechanical]` steps are silent by default.** A `[mechanical]` step produces no user-visible output unless it contains an explicit `print`, `report`, `display`, or `emit` instruction. Bookkeeping steps (reading files, computing hashes, updating registries) are not announced.
+3. **Unconfigured features do not exist.** When a feature, integration, or optional module is not configured for this project (not present in `AGENTS.md`, MCP server unavailable, module disabled in `.forge/modules/`), do not acknowledge its existence in user-facing output. Do not name it, do not explain its absence, do not offer to enable it unless the operator asks.
+4. **Addenda are read conditionally.** When a command file contains an `## Addendum: <name>` section gated by "Only execute this section if … Otherwise, do not read further," treat the gate as binding. If the gate condition is false, stop reading at that point — do not load or reason about content past the gate.
+
+These rules apply across every command, not only `/spec`. See [docs/process-kit/command-authoring-guide.md](docs/process-kit/command-authoring-guide.md) for the authoring principles that produce command files compatible with this discipline.
+
 ## Model tiering
 
 Route commands to the appropriate model tier to reduce cost without quality loss. Claude Code selects models based on these hints when multi-model support is available.
@@ -152,10 +165,99 @@ FORGE's static content qualifies for Anthropic prompt caching — cache hits cos
 
 **Do not cache**: session logs, spec files actively being edited, any file written during the current session.
 
-For direct API integrations: add `cache_control: {type: "ephemeral"}` to the content block for each cache-eligible file. Requires claude-3-5-sonnet-20241022 or newer. Mark the boundary at the last static content block — everything after that boundary is dynamic and should not be cached.
+For direct API integrations: add `cache_control: {type: "ephemeral"}` to the content block for each cache-eligible file. Requires a current Sonnet or Opus model — see the [Anthropic model documentation](https://docs.anthropic.com/en/docs/about-claude/models) for the authoritative list of caching-capable models at time of deployment. Mark the boundary at the last static content block — everything after that boundary is dynamic and should not be cached.
 
 See [docs/process-kit/read-audit.md](docs/process-kit/read-audit.md) for the full read pattern audit.
+{% if agent_sdk %}
+## Prompt caching for direct API integrations
 
+If your project calls the Anthropic API directly (Python `anthropic` SDK or TypeScript `@anthropic-ai/sdk`), you can reduce token costs by up to 90% on repeated static content using prompt caching.
+
+**How it works**: add `cache_control: {"type": "ephemeral"}` to any content block you want cached. The cache lives for 5 minutes after the last write. Re-use the same content within that window → pay ~10% of normal input token rates.
+
+**When to cache**: content that is static (>1024 tokens), reused across turns within the same session, and does not change between requests — e.g., a long system prompt, a static knowledge document, or a loaded spec file.
+
+**When NOT to cache**: per-turn user messages, session state that changes each request, or any content under ~1024 tokens (the minimum cacheable block size).
+
+**Model requirement**: prompt caching requires a latest Sonnet or Opus model. Check the [Anthropic model documentation](https://docs.anthropic.com/en/docs/about-claude/models) for the definitive list of supported models at time of deployment.
+
+### Python example
+
+```python
+import os
+import anthropic
+
+client = anthropic.Anthropic()
+
+# TODO: set ANTHROPIC_MODEL env var to a current Sonnet or Opus model ID.
+# See https://docs.anthropic.com/en/docs/about-claude/models for the
+# authoritative list of caching-capable models.
+model_id = os.environ["ANTHROPIC_MODEL"]
+
+# System prompt is static — cache it
+system_content = [
+    {
+        "type": "text",
+        "text": "<your long static system prompt here>",
+        "cache_control": {"type": "ephemeral"},  # cache this block
+    }
+]
+
+response = client.messages.create(
+    model=model_id,
+    max_tokens=1024,
+    system=system_content,
+    messages=[
+        {"role": "user", "content": "Hello!"}  # per-turn — not cached
+    ],
+)
+
+# Monitor cache efficiency
+usage = response.usage
+print(f"Cache write tokens: {usage.cache_creation_input_tokens}")
+print(f"Cache read tokens:  {usage.cache_read_input_tokens}")
+print(f"Uncached tokens:    {usage.input_tokens}")
+```
+
+### TypeScript example
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+
+// TODO: set ANTHROPIC_MODEL env var to a current Sonnet or Opus model ID.
+// See https://docs.anthropic.com/en/docs/about-claude/models for the
+// authoritative list of caching-capable models.
+const modelId = process.env.ANTHROPIC_MODEL!;
+
+// System prompt is static — cache it
+const systemContent = [
+  {
+    type: "text" as const,
+    text: "<your long static system prompt here>",
+    cache_control: { type: "ephemeral" as const }, // cache this block
+  },
+];
+
+const response = await client.messages.create({
+  model: modelId,
+  max_tokens: 1024,
+  system: systemContent,
+  messages: [
+    { role: "user", content: "Hello!" }, // per-turn — not cached
+  ],
+});
+
+// Monitor cache efficiency
+const { usage } = response;
+console.log(`Cache write tokens: ${usage.cache_creation_input_tokens}`);
+console.log(`Cache read tokens:  ${usage.cache_read_input_tokens}`);
+console.log(`Uncached tokens:    ${usage.input_tokens}`);
+```
+
+See [docs/process-kit/prompt-caching-consumer-guide.md](docs/process-kit/prompt-caching-consumer-guide.md) for the full "when to cache" heuristic, multi-turn patterns, and monitoring guidance.
+{% endif %}
 ## Key commands
 
 <!-- customize: replace with your project's actual commands -->
@@ -196,6 +298,10 @@ All `.forge/` bash scripts use `set -euo pipefail`. These patterns silently brea
 **Rule**: Never use `[[ ]] && action` or `(( ))` as standalone statements in `set -e` scripts. Always wrap in `if/then/fi` or append `|| true`.
 
 **Path resolution rule**: Scripts run from temp directories (e.g., via `copier`, CI, or piped input) may resolve `BASH_SOURCE[0]` or `$0` relative to the caller's working directory, not the script's directory. Always resolve paths relative to `$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)`. Test scripts from a temp dir before shipping. Verify all declared functions are actually called in the execution path — unreachable functions hide bugs.
+
+## FORGE Mission
+
+FORGE's mission is to make each individual developer the CEO of a continuously-optimizing development company. FORGE provides strategic advisors, executive staff, and auditable process at every step — but the developer decides exactly what happens, when, and why.
 
 ## Architectural Principles
 

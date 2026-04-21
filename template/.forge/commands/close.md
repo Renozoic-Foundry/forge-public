@@ -358,6 +358,47 @@ Before generating the Review Brief, actively verify bidirectional sync:
   - If `intentional`: append to the spec's Revision Log: `YYYY-MM-DD: Template/own-copy dual-check: drift noted as intentional for <files> — <reason>.` Proceed.
   - If `block`: report "Close blocked — resolve template/own-copy drift and re-run /close." Stop.
 
+### [mechanical] Step 2d+++ — Consumer-Propagation Check (Spec 303)
+
+After the template/FORGE dual-check passes, verify that any documentation referenced from template command files will actually reach consumer projects. This catches the Spec 299 defect class: a new `docs/<path>.md` is created and linked from a `template/.../command.md`, but the doc itself is neither mirrored into `template/docs/` (so Copier does not ship it) nor listed in `scripts/sync-to-public.sh`'s `PUBLIC_DOC_FILES` whitelist (so forge-public does not receive it) — leaving every consumer with a broken pointer.
+
+**Scope**: runs only when the closing spec's Implementation Summary `Changed files` list contains at least one path matching `template/.claude/commands/*.md` or `template/.forge/commands/*.md`. If no such files: mark `[x] Consumer-propagation check — no template command files in scope`. Emit `GATE [consumer-propagation]: PASS — no template command files changed.` Proceed silently.
+
+**Detection logic**: For each changed file matching `template/(.claude|.forge)/commands/*.md`:
+1. Extract all markdown link targets pointing under `docs/` using pattern `\[[^\]]+\]\((docs/[^)#\s]+\.md)(?:#[^)]*)?\)`. Strip any `#anchor` suffix before comparison.
+2. Deduplicate targets across all scanned template command files.
+3. For each target `docs/<path>`:
+   a. Check whether `template/docs/<path>` exists in the working tree.
+   b. If not, check whether the literal string `docs/<path>` appears in the `PUBLIC_DOC_FILES=( ... )` array in `scripts/sync-to-public.sh` (use `grep -F "docs/<path>" scripts/sync-to-public.sh` scoped to the array block).
+   c. If neither mirror nor whitelist entry is present: record as a violation, noting the referencing template command file(s).
+
+**Evaluation**:
+- If **no violations found**: mark `[x] Consumer-propagation check — all doc links propagate`. Emit `GATE [consumer-propagation]: PASS — <N> doc link(s) verified across <M> template command file(s).` Proceed silently.
+- If **violations found**:
+
+  Present:
+  ```
+  CONSUMER-PROPAGATION DRIFT — The following docs are referenced from template command files but will not reach consumer projects:
+  <list: "docs/<path>" referenced by "template/<command>.md" — missing template mirror AND sync whitelist entry>
+
+  Consumer projects bootstrap from the template and/or receive the sync-to-public stream. A referenced doc must be reachable via at least one path or the pointer will be broken on their side.
+  ```
+  > **Choose per violation** — type a number or keyword:
+  > | # | Action | What happens |
+  > |---|--------|--------------|
+  > | **1** | `sync` | Create `template/docs/<path>` by copying the source `docs/<path>` |
+  > | **2** | `whitelist` | Append `docs/<path>` to `scripts/sync-to-public.sh`'s `PUBLIC_DOC_FILES` array |
+  > | **3** | `skip` | Record intentional drift in the spec's Revision Log (reason required) |
+
+  - If `sync`: `mkdir -p template/docs/<dirname>` then `cp docs/<path> template/docs/<path>`. Re-verify the target — check passes for this violation.
+  - If `whitelist`: edit `scripts/sync-to-public.sh` to add `"docs/<path>"` inside the `PUBLIC_DOC_FILES=( ... )` array block. Re-verify — check passes for this violation.
+  - If `skip`: prompt for a one-line reason and append to the spec's Revision Log: `YYYY-MM-DD: Consumer-propagation check: skipped for docs/<path> — <reason>.`
+
+  After iterating all violations:
+  - All resolved via `sync` or `whitelist`: emit `GATE [consumer-propagation]: PASS — <N> violation(s) resolved (<sync count> synced, <whitelist count> whitelisted).` Proceed.
+  - Any resolved via `skip`: emit `GATE [consumer-propagation]: CONDITIONAL_PASS — <N> violation(s) skipped with documented reason.` Proceed.
+  - Any unresolved (operator abandoned choice): emit `GATE [consumer-propagation]: FAIL — <N> unresolved violation(s). Remediation: mirror the doc under template/docs/, add docs/<path> to PUBLIC_DOC_FILES, or explicitly skip with reason.` Stop close.
+
 ## [mechanical] Step 2e — Generate Review Brief (Spec 160)
 
 After all Step 2 gates complete, generate the Review Brief. This is the primary output for human review.

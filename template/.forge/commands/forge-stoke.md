@@ -27,7 +27,99 @@ Before any update operations, check for uncommitted changes:
      - **proceed** — continue anyway (not recommended)
      - **abort** — stop stoke
    - If the user selects **abort**, stop. Otherwise, proceed to Step 0b.
-3. If working tree is clean: proceed silently to Step 0b.
+3. If working tree is clean: proceed silently to Step 0a+.
+
+### [decision] Step 0a+ — Template version drift and yank check (Spec 291)
+
+After the dirty-tree check and before the expensive template render in Step 0b, detect whether this project is behind the latest `forge-public` tag. A MAJOR-drift block aborts here so we never do render work that will be thrown away.
+
+1. **Skip conditions**:
+   - If `.copier-answers.yml` does not exist: skip (bootstrap/rescue path — drift is N/A).
+   - If `_commit` is empty or malformed: emit diagnostic "Drift check: `_commit` missing or malformed in `.copier-answers.yml` — skipping version drift detection." Proceed to Step 0b.
+
+2. **Detect `--allow-major` flag** in the `/forge stoke` invocation. Set `ALLOW_MAJOR=1` if present; otherwise `ALLOW_MAJOR=0`.
+
+3. **Resolve consumer version**. Read `_commit` from `.copier-answers.yml`:
+   - If `_commit` matches `^v[0-9]+\.[0-9]+\.[0-9]+$` (already a tag): set `CONSUMER_TAG=$_commit`.
+   - Else (SHA): attempt tag resolution:
+     ```bash
+     REPO="Renozoic-Foundry/forge-public"
+     CONSUMER_TAG=""
+     if command -v gh >/dev/null 2>&1; then
+       CONSUMER_TAG=$(gh api "repos/$REPO/git/refs/tags" --paginate --jq '.[] | .ref + " " + .object.sha' 2>/dev/null \
+         | awk -v c="$_commit" '$2 == c {sub(/refs\/tags\//,"",$1); print $1; exit}')
+     fi
+     ```
+     If resolution fails: emit warning "Drift check: could not resolve `_commit` (`$_commit`) to a tagged version — proceeding without drift classification. Consider reinstalling via `/forge-bootstrap` to pin to a tagged release." Proceed to Step 0b.
+
+4. **Resolve latest forge-public tag**:
+   ```bash
+   LATEST_TAG=""
+   if command -v gh >/dev/null 2>&1; then
+     LATEST_TAG=$(gh api "repos/$REPO/releases/latest" --jq '.tag_name' 2>/dev/null || true)
+   fi
+   if [ -z "$LATEST_TAG" ]; then
+     LATEST_TAG=$(git ls-remote --tags --refs --sort='-v:refname' "https://github.com/$REPO" 2>/dev/null \
+       | awk '{print $2}' | sed 's|refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+   fi
+   ```
+   If still empty: emit diagnostic "Drift check: unable to reach forge-public to resolve latest tag — network unreachable or repo inaccessible. Run `/forge stoke` again when network is available to verify you're on latest." Proceed to Step 0b.
+
+5. **Semver compare** `CONSUMER_TAG` vs `LATEST_TAG` (strip leading `v`; split on `.`; compare MAJOR, MINOR, PATCH as integers):
+   - Equal, or consumer ahead → report "Drift check: on latest (`$CONSUMER_TAG`)." Proceed to Step 0b.
+   - MAJOR delta == 0, consumer behind on MINOR or PATCH → emit warning and proceed:
+     ```
+     ⚠ Template drift: project is on $CONSUMER_TAG, latest is $LATEST_TAG.
+     Changes in this window are additive (MINOR/PATCH) per forge-public's versioning contract.
+     Proceeding with stoke. See forge-public CHANGELOG for release notes.
+     ```
+   - MAJOR delta ≥ 1 → if `ALLOW_MAJOR=1`, emit warning and proceed; otherwise BLOCK:
+     ```
+     ⛔ MAJOR TEMPLATE DRIFT — project ($CONSUMER_TAG) is <delta> major version(s) behind latest ($LATEST_TAG).
+
+     A MAJOR bump indicates breaking changes to at least one of:
+       • Surface 1 — copier.yml variables
+       • Surface 2 — slash-command names or arguments
+       • Surface 3 — .forge/templates/project-schema.yaml
+
+     Review the breaking changes before upgrading:
+       https://github.com/Renozoic-Foundry/forge-public/blob/main/docs/specs/CHANGELOG.md
+     (entries between $CONSUMER_TAG and $LATEST_TAG)
+
+     To proceed with the MAJOR upgrade:
+       /forge stoke --allow-major
+
+     Aborting stoke.
+     ```
+     Stop.
+
+6. **Yank check** (Spec 291 Req 1 rollback/yank policy): fetch the forge-public CHANGELOG and parse the `## Yanked Tags` section to catch consumers pinned to a yanked tag.
+   ```bash
+   FORGE_TMP_YANK="${TMPDIR:-${TEMP:-/tmp}}/forge-yank-check"
+   mkdir -p "$FORGE_TMP_YANK" && chmod 700 "$FORGE_TMP_YANK"
+   YANKED_CHANGELOG="$FORGE_TMP_YANK/remote-CHANGELOG.md"
+   rm -f "$YANKED_CHANGELOG"
+   if command -v gh >/dev/null 2>&1; then
+     gh api "repos/$REPO/contents/docs/specs/CHANGELOG.md" --jq '.content' 2>/dev/null | base64 -d > "$YANKED_CHANGELOG" 2>/dev/null \
+       || gh api "repos/$REPO/contents/CHANGELOG.md" --jq '.content' 2>/dev/null | base64 -d > "$YANKED_CHANGELOG" 2>/dev/null \
+       || rm -f "$YANKED_CHANGELOG"
+   fi
+   ```
+   - If `$YANKED_CHANGELOG` is missing (fetch failed): emit diagnostic "Yank check: could not fetch forge-public CHANGELOG — skipping yank verification." Proceed to Step 0b.
+   - If no `## Yanked Tags` heading is present: proceed silently (zero-yank is the expected case).
+   - If `## Yanked Tags` heading is present:
+     - Parse entries. Expected format (whitespace-tolerant): `- v<tag> — superseded by v<successor>: <reason>`.
+     - If the section is present but NO entries match the expected format (malformed / unparseable): emit a diagnostic — **not a silent skip** per Spec 291 `/consensus` round-5 note 1: "⚠ Yank check: `## Yanked Tags` section found in forge-public CHANGELOG but could not be parsed. Inspect manually for yank disclosures affecting `$CONSUMER_TAG`: https://github.com/Renozoic-Foundry/forge-public/blob/main/docs/specs/CHANGELOG.md#yanked-tags". Proceed to Step 0b.
+     - If an entry matches `$CONSUMER_TAG`: emit warning (not a block — the stoke itself moves the consumer off the yanked pin):
+       ```
+       ⚠ YANKED TAG — project is pinned to a yanked tag: $CONSUMER_TAG
+       Yank reason: <reason from CHANGELOG entry>
+       Superseded by: <successor from CHANGELOG entry>
+       Recommendation: stoke will update to $LATEST_TAG; that supersedes the yanked pin.
+       ```
+   - Clean up: `rm -rf "$FORGE_TMP_YANK"`.
+
+7. Proceed to Step 0b.
 
 ### [mechanical] Step 0b — Missing file restoration (Spec 068)
 

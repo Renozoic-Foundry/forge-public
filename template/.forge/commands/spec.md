@@ -111,15 +111,16 @@ a. **Select perspectives** based on spec characteristics (select 2-3, cap at 3):
 | Spec Characteristic | Perspectives Selected |
 |---------------------|----------------------|
 | Any spec draft | DA (always) |
-| Scope touches auth/security/external APIs | +CISO |
+| Scope touches auth/security/external APIs, MCP servers, `.mcp.json`, or external dependencies | +CISO |
 | Scope touches commands/onboarding/UX | +CXO |
 | `BV >= 4` and `E >= 3` | +CFO (high investment), +CTO (architectural risk) |
-| `Token-Cost: $$$` | +CFO |
+| `Token-Cost: $$` or `$$$` | +CFO |
+| Lane B OR `R >= 3` OR `E >= 3` (testability window at spec-approval, Spec 304) | +CQO |
 | Lane B project | +CCO (always — compliance is non-negotiable) |
 | Scope touches physical/real-world logic | +DA, note: "Includes physical/practical logic — flag for human validation" |
-| `Change-Lane: hotfix` | DA only — speed matters, skip additional perspectives |
+| `Change-Lane: hotfix` | DA only — speed matters, skip additional perspectives (this rule overrides all others) |
 
-   When multiple rules match, union the selected roles and cap at 3 (prioritize by rule specificity — more specific rules win).
+   When multiple rules match, union the selected roles and cap at 3 (prioritize by rule specificity — more specific rules win; the `Change-Lane: hotfix` rule always wins when it applies).
 
 b. **Display selection rationale** (one line per role):
    ```

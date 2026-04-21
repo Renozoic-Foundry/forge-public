@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Who Does What in FORGE — Executive Summary</title>
+  <style>
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+    background: #1B1B1F;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Slide deck container */
+#deck {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* Individual slides */
+.slide {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+.slide.active { display: flex; }
+
+/* ── Colour palette ─────────────── */
+:root {
+    --navy:   #0B2E4F;
+    --accent: #E87422;
+    --grey:   #555B6E;
+    --light:  #F4F4F6;
+    --white:  #FFFFFF;
+    --dark:   #1B1B1F;
+    --human:  #1F6F8B;
+    --agent:  #E87422;
+}
+
+/* ── Slide type: title ──────────── */
+.slide-title {
+    background: var(--navy);
+    padding: 0;
+    justify-content: flex-start;
+}
+.slide-title .title-eyebrow {
+    margin: 10% 6% 0;
+    font-size: 1.2em;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.slide-title h1 {
+    margin: 1% 6%;
+    font-size: 3.6em;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--white);
+}
+.slide-title .title-tagline {
+    margin: 2% 6% 0;
+    font-size: 1.35em;
+    color: var(--white);
+    opacity: 0.9;
+}
+.slide-title .title-byline {
+    position: absolute;
+    bottom: 8%;
+    left: 6%;
+    font-size: 1.05em;
+    color: var(--light);
+}
+.slide-title .title-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    height: 6px;
+    background: var(--accent);
+}
+
+/* ── Slide header ─── */
+.slide-header {
+    padding: 2% 6% 0;
+    border-bottom: 2px solid var(--light);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 13%;
+}
+.header-bar {
+    width: 8px;
+    min-width: 8px;
+    height: 48px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+.header-text h2 {
+    font-size: 1.7em;
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1.2;
+}
+.header-text .kicker {
+    font-size: 0.95em;
+    color: var(--grey);
+    margin-top: 2px;
+}
+
+/* ── Slide footer ─────────────── */
+.slide-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4% 6%;
+    font-size: 0.75em;
+    color: var(--grey);
+    border-top: 1px solid var(--light);
+    flex-shrink: 0;
+}
+
+/* ── Slide body ──────────────── */
+.slide-body {
+    flex: 1;
+    padding: 2% 6%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Quote/emphasis/body ─────────────── */
+.quote-box {
+    background: var(--light);
+    border-left: 12px solid var(--accent);
+    padding: 3% 4%;
+    font-size: 1.25em;
+    color: var(--dark);
+    line-height: 1.5;
+    flex-shrink: 0;
+}
+.quote-attrib {
+    font-size: 0.85em;
+    color: var(--grey);
+    margin-top: 8px;
+}
+.emphasis-text {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--navy);
+}
+.body-text {
+    font-size: 1.15em;
+    color: var(--dark);
+    white-space: pre-line;
+    line-height: 1.55;
+}
+
+/* ── Flow slide ────────────────── */
+.flow-row {
+    display: flex;
+    gap: 2%;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.flow-box {
+    flex: 1;
+    background: var(--navy);
+    color: var(--white);
+    border-radius: 8px;
+    padding: 4% 5%;
+    text-align: center;
+}
+.flow-box.human { background: var(--human); }
+.flow-box.agent { background: var(--accent); }
+.flow-box .flow-label {
+    font-size: 1.5em;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.flow-box .flow-desc {
+    font-size: 0.85em;
+    opacity: 0.95;
+    white-space: pre-line;
+}
+.flow-arrow {
+    align-self: center;
+    font-size: 2em;
+    color: var(--grey);
+    flex-shrink: 0;
+}
+.callout-box {
+    background: var(--light);
+    border-left: 12px solid var(--accent);
+    padding: 2.5% 4%;
+    flex: 1;
+}
+.callout-q { font-size: 0.95em; color: var(--grey); margin-bottom: 4px; }
+.callout-q2 { font-size: 1.25em; font-weight: 700; color: var(--dark); margin-bottom: 12px; }
+.callout-a { font-size: 0.95em; color: var(--grey); margin-bottom: 4px; }
+.callout-a2 { font-size: 1.25em; font-weight: 700; color: var(--navy); }
+
+/* ── Cards slide ───────────────── */
+.cards-row {
+    display: flex;
+    gap: 2%;
+    flex: 1;
+}
+.card {
+    flex: 1;
+    border: 1px solid var(--light);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.card-band {
+    padding: 4% 6%;
+    color: var(--white);
+}
+.card-band .card-abbr { font-size: 1.5em; font-weight: 700; }
+.card-band .card-name { font-size: 0.9em; }
+.card-content { padding: 4% 6%; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.card-count { font-size: 3em; font-weight: 700; }
+.card-count-label { font-size: 0.8em; color: var(--grey); margin-top: -8px; }
+.card-scope { font-size: 1em; font-weight: 700; color: var(--dark); white-space: pre-line; }
+.card-desc { font-size: 0.85em; color: var(--grey); white-space: pre-line; }
+
+/* ── Roles table slide ───────────────── */
+.roles-list { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.roles-group-header {
+    font-size: 0.82em;
+    font-weight: 700;
+    color: var(--grey);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 4px;
+    margin-bottom: 2px;
+}
+.role-row {
+    display: grid;
+    grid-template-columns: 72px 160px 1fr 180px;
+    align-items: center;
+    background: var(--light);
+    padding: 5px 10px;
+    border-radius: 3px;
+    gap: 10px;
+    font-size: 0.82em;
+}
+.role-row.exec { border-left: 4px solid var(--navy); }
+.role-row.gate { border-left: 4px solid var(--accent); }
+.role-row.adv { border-left: 4px solid var(--grey); }
+.role-badge {
+    font-weight: 700;
+    font-size: 0.8em;
+    color: var(--white);
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-align: center;
+}
+.role-badge.exec { background: var(--navy); }
+.role-badge.gate { background: var(--accent); }
+.role-badge.adv { background: var(--grey); }
+.role-name { font-weight: 700; color: var(--navy); }
+.role-purpose { color: var(--dark); }
+.role-trigger { color: var(--grey); font-size: 0.9em; font-style: italic; text-align: right; }
+
+/* ── Stages slide (lifecycle) ──────────────── */
+.stages-list { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.stage-row {
+    display: grid;
+    grid-template-columns: 100px 120px 1fr 1fr;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 4px;
+    background: var(--light);
+    gap: 12px;
+}
+.stage-row.highlight { background: var(--accent); color: var(--white); }
+.stage-sig { font-size: 1em; font-weight: 700; }
+.stage-date { font-size: 0.85em; font-weight: 700; color: var(--navy); }
+.stage-level { font-size: 0.92em; color: var(--dark); }
+.stage-fix { font-size: 0.9em; }
+.stage-row.highlight .stage-date,
+.stage-row.highlight .stage-level,
+.stage-row.highlight .stage-fix { color: var(--white); }
+.stage-row:not(.highlight) .stage-fix { color: var(--grey); }
+.stages-takeaway {
+    font-size: 1.05em; font-weight: 700; color: var(--navy);
+    white-space: pre-line;
+    flex-shrink: 0;
+}
+
+/* ── Rows slide (numbered) ─────────────── */
+.rows-list { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.row-item { display: flex; align-items: flex-start; gap: 16px; }
+.row-num {
+    width: 36px; height: 36px; min-width: 36px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3em; font-weight: 700; color: var(--white);
+    flex-shrink: 0; margin-top: 2px;
+}
+.row-text { flex: 1; }
+.row-title { font-size: 1.1em; font-weight: 700; color: var(--navy); }
+.row-what { font-size: 0.9em; color: var(--dark); }
+.row-fix { font-size: 0.82em; color: var(--grey); }
+
+/* ── Two-col slide ─────────────── */
+.two-col-body { display: flex; gap: 3%; flex: 1; }
+.col-left, .col-right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.col-heading { font-size: 1em; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.col-heading.accent { color: var(--accent); }
+.col-heading.human-color { color: var(--human); }
+.bullet-item { display: flex; align-items: baseline; gap: 8px; font-size: 0.95em; color: var(--dark); }
+.bullet-dot {
+    width: 8px; height: 8px; min-width: 8px;
+    border-radius: 50%;
+    margin-top: 2px;
+}
+.bullet-dot.accent { background: var(--accent); }
+.bullet-dot.human { background: var(--human); }
+.col-footer1 { font-size: 0.9em; font-weight: 700; color: var(--grey); margin-top: 8px; }
+.col-footer2 { font-size: 0.82em; color: var(--grey); white-space: pre-line; }
+
+/* ── Dark slide ─────────────────── */
+.slide-dark { background: var(--navy); }
+.slide-dark .slide-header { border-bottom-color: rgba(255,255,255,0.15); }
+.slide-dark .header-text h2 { color: var(--white); }
+.slide-dark .slide-footer { border-top-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.5); }
+.dark-lines { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.dark-line { font-size: 1.35em; color: var(--light); line-height: 1.4; }
+.dark-line.highlight { font-size: 2.2em; font-weight: 700; color: var(--accent); margin: 8px 0; }
+.dark-bullets { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.dark-bullet { font-size: 1em; color: var(--white); display: flex; gap: 10px; }
+.dark-bullet::before { content: '•'; color: var(--accent); font-size: 1.1em; flex-shrink: 0; }
+
+/* ── Closing slide ──────────────── */
+.closing-body { flex: 1; padding: 2% 6%; display: flex; flex-direction: column; gap: 8px; }
+.closing-para { font-size: 1.2em; line-height: 1.5; }
+.closing-para.emphasis { font-weight: 700; color: var(--navy); }
+.closing-para.accent { font-weight: 700; color: var(--accent); }
+.closing-bottom {
+    background: var(--navy);
+    padding: 1.5% 6%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+.closing-bottom a {
+    color: var(--light);
+    font-size: 0.95em;
+    text-decoration: none;
+}
+.closing-bottom a:hover { text-decoration: underline; color: var(--accent); }
+.closing-label { color: var(--grey); font-size: 0.9em; }
+
+/* ── Navigation ─────────── */
+#nav {
+    position: fixed;
+    bottom: 16px;
+    right: 20px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+}
+#nav button {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--white);
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+#nav button:hover { background: rgba(255,255,255,0.25); }
+#slide-counter {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8em;
+    color: rgba(255,255,255,0.4);
+    z-index: 100;
+}
+
+  </style>
+</head>
+<body>
+<div id="deck">
+
+<!-- ── Slide 1: Title ─────────────────────────── -->
+<div class="slide slide-title">
+  <div class="title-eyebrow">EXECUTIVE SUMMARY</div>
+  <h1>Who Does What in FORGE</h1>
+  <div class="title-tagline">The logic behind 16 agentic roles,<br>and how the human-versus-AI split is a dial you control.</div>
+  <div class="title-byline">Brian Carty   |   April 2026</div>
+  <div class="title-strip"></div>
+</div>
+
+<!-- ── Slide 2: The question ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>The question operators keep asking</h2>
+      <div class="kicker">When you open FORGE, who does what isn't obvious — and the answer is deliberately configurable.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="quote-box">
+      <div class="quote-text">"FORGE has a spec author, a devil's advocate, a CISO, a CFO, a CTO...<br>am I supposed to use those? Or do I just think through those things myself?"</div>
+      <div class="quote-attrib">— Common operator question, first week with FORGE</div>
+    </div>
+    <div class="emphasis-text">Both answers are valid. Neither is a mistake.</div>
+    <div class="body-text">The split between you and the agents isn't a fixed line.
+It's a dial, and FORGE exposes the dial explicitly.
+
+This deck shows how the dial works — and what each setting costs you.</div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>2 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 3: CEO metaphor ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>The organizing metaphor: you're the CEO</h2>
+      <div class="kicker">FORGE's mission statement fixes the authority structure before anything else.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="quote-box">
+      <div class="quote-text">"FORGE's mission is to make each individual developer the CEO of a continuously-optimizing development company.<br>FORGE provides strategic advisors, executive staff, and auditable process at every step —<br>but the developer decides exactly what happens, when, and why."</div>
+      <div class="quote-attrib">— docs/design-philosophy.md:7</div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box human">
+        <div class="flow-label">Human</div>
+        <div class="flow-desc">Sets direction.
+Approves at gates.
+Owns judgment.</div>
+      </div>
+      <div class="flow-arrow">&#8594;</div>
+      <div class="flow-box agent">
+        <div class="flow-label">Agents</div>
+        <div class="flow-desc">Draft artifacts.
+Produce evidence.
+Challenge assumptions.</div>
+      </div>
+      <div class="flow-arrow">&#8594;</div>
+      <div class="flow-box human">
+        <div class="flow-label">Human</div>
+        <div class="flow-desc">Reviews output.
+Decides: accept,
+revise, or reject.</div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>3 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 4: The three categories of agents ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>Sixteen agentic roles, three categories</h2>
+      <div class="kicker">Each category has a different job, a different trigger, and different tool permissions.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="cards-row">
+      <div class="card">
+        <div class="card-band" style="background:var(--navy);">
+          <div class="card-abbr">EXECUTION</div>
+          <div class="card-name">The ones that produce artifacts</div>
+        </div>
+        <div class="card-content">
+          <div class="card-count" style="color:var(--navy);">3</div>
+          <div class="card-count-label">roles</div>
+          <div class="card-scope">Spec Author
+Implementer
+Validator</div>
+          <div class="card-desc">Write specs, change code, verify ACs.
+Full file-editing authority (scoped).
+Always invoked by lifecycle commands.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-band" style="background:var(--accent);">
+          <div class="card-abbr">REVIEW</div>
+          <div class="card-name">The ones that gate decisions</div>
+        </div>
+        <div class="card-content">
+          <div class="card-count" style="color:var(--accent);">2</div>
+          <div class="card-count-label">roles</div>
+          <div class="card-scope">Devil's Advocate
+Maverick Thinker</div>
+          <div class="card-desc">Adversarial + creative pressure.
+Read-only; return a structured verdict.
+DA is the default gate before /implement.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-band" style="background:var(--grey);">
+          <div class="card-abbr">ADVISORY</div>
+          <div class="card-name">The C-suite specialists</div>
+        </div>
+        <div class="card-content">
+          <div class="card-count" style="color:var(--grey);">11</div>
+          <div class="card-count-label">roles</div>
+          <div class="card-scope">CTO · CFO · COO · CMO
+CISO · CRO · CResO · CQO
+CCO · CEfO · CXO</div>
+          <div class="card-desc">Dispatched only when spec characteristics
+match their domain. Read-only reviews.
+Think: specialist consultants, on-call.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>4 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 5: Role inventory ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>Every role at a glance</h2>
+      <div class="kicker">Name · one-line objective · typical trigger.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="roles-list">
+
+      <div class="roles-group-header">Execution — scoped write authority</div>
+      <div class="role-row exec">
+        <div class="role-badge exec">EXEC</div>
+        <div class="role-name">Spec Author</div>
+        <div class="role-purpose">Draft a complete, reviewable spec from the template.</div>
+        <div class="role-trigger">/spec</div>
+      </div>
+      <div class="role-row exec">
+        <div class="role-badge exec">EXEC</div>
+        <div class="role-name">Implementer</div>
+        <div class="role-purpose">Satisfy every AC in the spec — code, tests, docs.</div>
+        <div class="role-trigger">/implement</div>
+      </div>
+      <div class="role-row exec">
+        <div class="role-badge exec">EXEC</div>
+        <div class="role-name">Validator</div>
+        <div class="role-purpose">Independently verify ACs in isolation. Read-only, no implementation context.</div>
+        <div class="role-trigger">/close Step 2d</div>
+      </div>
+
+      <div class="roles-group-header">Review — default gates</div>
+      <div class="role-row gate">
+        <div class="role-badge gate">GATE</div>
+        <div class="role-name">Devil's Advocate</div>
+        <div class="role-purpose">Adversarial review across 6 domains: logic, security, scope, cost, tests, blast radius.</div>
+        <div class="role-trigger">before /implement</div>
+      </div>
+      <div class="role-row gate">
+        <div class="role-badge gate">GATE</div>
+        <div class="role-name">Maverick Thinker</div>
+        <div class="role-purpose">Surface radically simpler or more ambitious alternatives to the proposed approach.</div>
+        <div class="role-trigger">optional · /spec · /evolve</div>
+      </div>
+
+      <div class="roles-group-header">Advisory — C-suite, dispatched by match</div>
+      <div class="role-row adv"><div class="role-badge adv">CTO</div><div class="role-name">Chief Tech Officer</div><div class="role-purpose">Architecture, scalability, tech-debt, integration patterns.</div><div class="role-trigger">spec.E ≥ 3</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CFO</div><div class="role-name">Chief Financial Officer</div><div class="role-purpose">Cost, token spend, ROI, build-vs-buy.</div><div class="role-trigger">BV ≥ 4 · Token-Cost $$$</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CISO</div><div class="role-name">Chief Info Security</div><div class="role-purpose">Attack surface, credentials, supply chain, data exposure.</div><div class="role-trigger">auth · data · external I/O</div></div>
+      <div class="role-row adv"><div class="role-badge adv">COO</div><div class="role-name">Chief Operating Officer</div><div class="role-purpose">Process throughput, bottlenecks, operational scalability.</div><div class="role-trigger">critical-path specs</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CMO</div><div class="role-name">Chief Marketing Officer</div><div class="role-purpose">Messaging, audience fit, document quality, brand.</div><div class="role-trigger">external-facing content</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CRO</div><div class="role-name">Chief Risk Officer</div><div class="role-purpose">Liability, business risk, technical risk, reward trade-offs.</div><div class="role-trigger">high-blast-radius</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CQO</div><div class="role-name">Chief Quality Officer</div><div class="role-purpose">Defect prevention, test adequacy, AC rigor, trust calibration.</div><div class="role-trigger">/evolve Step 8c</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CCO</div><div class="role-name">Chief Compliance Officer</div><div class="role-purpose">Regulatory alignment, audit-trail sufficiency. Mandatory on Lane B.</div><div class="role-trigger">Lane B · regulated data</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CEfO</div><div class="role-name">Chief Efficiency Officer</div><div class="role-purpose">Token cost, cycle time, lean process — eliminates redundancy.</div><div class="role-trigger">/evolve Step 6c</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CXO</div><div class="role-name">Chief Experience Officer</div><div class="role-purpose">Operator cognitive load, learnability, interaction quality.</div><div class="role-trigger">UX · commands · onboarding</div></div>
+      <div class="role-row adv"><div class="role-badge adv">CResO</div><div class="role-name">Chief Research Officer</div><div class="role-purpose">Tech landscape, vendor updates, competitive positioning.</div><div class="role-trigger">/evolve · /brainstorm</div></div>
+
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>5 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 6: Lifecycle — when roles fire ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>The logic: when each role fires</h2>
+      <div class="kicker">FORGE's Review Router picks 2–3 roles per spec based on its characteristics — never all of them.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="stages-list">
+      <div class="stage-row">
+        <div class="stage-sig">/spec</div>
+        <div class="stage-date">PLANNING</div>
+        <div class="stage-level">Spec Author drafts · Devil's Advocate always reviews</div>
+        <div class="stage-fix">+ CISO if auth/data · + CXO if UX · + CFO/CTO if complex · + CCO if Lane B</div>
+      </div>
+      <div class="stage-row">
+        <div class="stage-sig">/implement</div>
+        <div class="stage-date">EXECUTION</div>
+        <div class="stage-level">Implementer executes within scoped file list</div>
+        <div class="stage-fix">Human owns scope enforcement; DA gate must PASS first</div>
+      </div>
+      <div class="stage-row">
+        <div class="stage-sig">/close</div>
+        <div class="stage-date">VALIDATION</div>
+        <div class="stage-level">Validator verifies ACs independently in isolated worktree</div>
+        <div class="stage-fix">+ any roles registered in forge.role_registry with contexts: [close]</div>
+      </div>
+      <div class="stage-row">
+        <div class="stage-sig">/consensus</div>
+        <div class="stage-date">ON-DEMAND</div>
+        <div class="stage-level">Multi-role vote: approve · concern · reject</div>
+        <div class="stage-fix">All registered roles dispatched in parallel, structured ballot returned</div>
+      </div>
+      <div class="stage-row highlight">
+        <div class="stage-sig">/evolve</div>
+        <div class="stage-date">IMPROVEMENT</div>
+        <div class="stage-level">Signal-based, not calendar-based — fires when thresholds hit</div>
+        <div class="stage-fix">CEfO · CQO · DA · COO vet proposals before operator sees them</div>
+      </div>
+    </div>
+    <div class="stages-takeaway">Role dispatch is selective, not exhaustive.<br>The Review Router matches roles to spec characteristics — you don't run all 16 every time.</div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>6 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 7: What stays human, always ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>What is always human, no matter the autonomy level</h2>
+      <div class="kicker">These categories cannot be delegated. The gate framework calls them out explicitly.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="rows-list">
+      <div class="row-item">
+        <div class="row-num">1</div>
+        <div class="row-text">
+          <div class="row-title">Physical / practical logic</div>
+          <div class="row-what">"Will this actually work in the real world?" — always human-judgment-required.</div>
+          <div class="row-fix">gate-categories.md:40 — "cannot be delegated regardless of autonomy level"</div>
+        </div>
+      </div>
+      <div class="row-item">
+        <div class="row-num">2</div>
+        <div class="row-text">
+          <div class="row-title">Aesthetic, tone, and UX judgment</div>
+          <div class="row-what">Voice, readability, feel. Agents can propose, but humans decide.</div>
+          <div class="row-fix">Also: ethical / legal judgment, novel-situation assessment.</div>
+        </div>
+      </div>
+      <div class="row-item">
+        <div class="row-num">3</div>
+        <div class="row-text">
+          <div class="row-title">Irreversible external actions</div>
+          <div class="row-what">git push, /close, destructive git ops, external API side-effects.</div>
+          <div class="row-fix">Must never execute based on inference — requires an explicit operator message.</div>
+        </div>
+      </div>
+      <div class="row-item">
+        <div class="row-num">4</div>
+        <div class="row-text">
+          <div class="row-title">Every gate approval</div>
+          <div class="row-what">No command auto-chains past a gate that hasn't received explicit human approval.</div>
+          <div class="row-fix">Live (L1/L2) or async via messaging (L3/L4) — either way, human-signed.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>7 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 8: Autonomy spectrum ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>The autonomy dial: five settings</h2>
+      <div class="kicker">Same roles, same gates — you choose how much the agents are trusted to chain without pausing.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="stages-list">
+      <div class="stage-row">
+        <div class="stage-sig">L0</div>
+        <div class="stage-date">MANUAL</div>
+        <div class="stage-level">Human performs all work; agents advise only</div>
+        <div class="stage-fix">FORGE as a process framework — no AI runtime dependency</div>
+      </div>
+      <div class="stage-row highlight">
+        <div class="stage-sig">L1</div>
+        <div class="stage-date">HUMAN-GATED</div>
+        <div class="stage-level">Default. Human approves every gate transition</div>
+        <div class="stage-fix">Agents produce, operator reviews at each checkpoint</div>
+      </div>
+      <div class="stage-row">
+        <div class="stage-sig">L2</div>
+        <div class="stage-date">SUPERVISED</div>
+        <div class="stage-level">Agent auto-chains mechanical steps; human approves decision points</div>
+        <div class="stage-fix">Faster throughput on routine specs; judgment gates still human</div>
+      </div>
+      <div class="stage-row">
+        <div class="stage-sig">L3</div>
+        <div class="stage-date">TRUSTED</div>
+        <div class="stage-level">Full spec cycles run through without pausing; human reviews async</div>
+        <div class="stage-fix">Requires NanoClaw or equivalent async-messaging integration</div>
+      </div>
+      <div class="stage-row">
+        <div class="stage-sig">L4</div>
+        <div class="stage-date">FULL</div>
+        <div class="stage-level">Agent self-directed within budget ceilings; human intervenes on exception</div>
+        <div class="stage-fix">Still gated on human-judgment categories above — always</div>
+      </div>
+    </div>
+    <div class="stages-takeaway">The dial is per-project and per-spec-lane.<br>You can run L4 on docs and L1 on anything touching auth.</div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>8 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 9: The "operator plays every role" model ─────────────────────────── -->
+<div class="slide">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>One valid model: the operator plays every non-AI role</h2>
+      <div class="kicker">No Devil's Advocate dispatch. No CTO review. You think those thoughts yourself.</div>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="two-col-body">
+      <div class="col-left">
+        <div class="col-heading human-color">What you gain</div>
+        <div class="bullet-item"><div class="bullet-dot human"></div><span><b>Zero dispatch tokens.</b> Each advisory review costs 2k–5k tokens; skipping them is cheap.</span></div>
+        <div class="bullet-item"><div class="bullet-dot human"></div><span><b>Lower latency.</b> No waiting for parallel sub-agents to return a verdict.</span></div>
+        <div class="bullet-item"><div class="bullet-dot human"></div><span><b>Tighter mental model.</b> You stay in the weeds of the spec instead of delegating the critique.</span></div>
+        <div class="bullet-item"><div class="bullet-dot human"></div><span><b>Perfect for solo operators</b> who already hold deep context across all domains.</span></div>
+      </div>
+      <div class="col-right">
+        <div class="col-heading accent">What you trade away</div>
+        <div class="bullet-item"><div class="bullet-dot accent"></div><span><b>Adversarial rigor.</b> DA's 6-domain checklist is easy to forget when you're the author <i>and</i> the critic.</span></div>
+        <div class="bullet-item"><div class="bullet-dot accent"></div><span><b>Structured evidence.</b> Agent reviews leave a paper trail — role blocks, JSON verdicts, signals. Your mental review doesn't.</span></div>
+        <div class="bullet-item"><div class="bullet-dot accent"></div><span><b>Fresh perspective.</b> A sub-agent hasn't seen your spec draft — it can't rubber-stamp what you already decided.</span></div>
+        <div class="bullet-item"><div class="bullet-dot accent"></div><span><b>Scale.</b> When a team or additional operators show up, your in-head process doesn't transfer.</span></div>
+      </div>
+    </div>
+    <div class="stages-takeaway">If you're solo and context-rich today, operator-does-everything is a reasonable default.<br>When stakes rise — auth changes, external APIs, compliance — start dispatching the specialists.</div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>9 / 10</span>
+  </div>
+</div>
+
+<!-- ── Slide 10: Closing ─────────────────────────── -->
+<div class="slide slide-dark">
+  <div class="slide-header">
+    <div class="header-bar"></div>
+    <div class="header-text">
+      <h2>The bottom line</h2>
+    </div>
+  </div>
+  <div class="slide-body">
+    <div class="dark-lines">
+      <div class="dark-line">FORGE doesn't prescribe who does what.</div>
+      <div class="dark-line">It names every role, scopes every tool,</div>
+      <div class="dark-line">and hands you the dial.</div>
+      <div class="dark-line highlight">You decide which roles are human, which are agent.</div>
+    </div>
+    <div class="dark-bullets">
+      <div class="dark-bullet"><b>16 roles named</b> — you can dispatch them, play them, or skip them.</div>
+      <div class="dark-bullet"><b>5 autonomy levels</b> — L0 manual all the way to L4 exception-only.</div>
+      <div class="dark-bullet"><b>One inviolable rule</b> — judgment, irreversible actions, and gate approvals stay human.</div>
+      <div class="dark-bullet"><b>Everything else is a configuration choice</b>, not a framework prescription.</div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span>Who Does What in FORGE</span><span>10 / 10</span>
+  </div>
+</div>
+
+</div>
+<div id="nav">
+  <button id="btn-prev">&#8592; Prev</button>
+  <button id="btn-next">Next &#8594;</button>
+</div>
+<span id="slide-counter"></span>
+<script>
+
+(function() {
+    var slides = document.querySelectorAll('.slide');
+    var current = 0;
+    var total = slides.length;
+
+    function show(n) {
+        slides[current].classList.remove('active');
+        current = Math.max(0, Math.min(n, total - 1));
+        slides[current].classList.add('active');
+        document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+            show(current + 1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            show(current - 1);
+        } else if (e.key === 'Home') {
+            show(0);
+        } else if (e.key === 'End') {
+            show(total - 1);
+        }
+    });
+
+    document.getElementById('btn-prev').addEventListener('click', function() { show(current - 1); });
+    document.getElementById('btn-next').addEventListener('click', function() { show(current + 1); });
+
+    show(0);
+})();
+
+</script>
+</body>
+</html>

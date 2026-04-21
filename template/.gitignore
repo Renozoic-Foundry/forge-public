@@ -46,6 +46,7 @@ docs/sessions/context-snapshot.md
 .forge/state/artifact-links.json
 .forge/state/implementing.json
 .forge/state/active-close
+.forge/state/gate-comparison/
 !.forge/handoffs/.gitkeep
 !.forge/audit/.gitkeep
 !.forge/security/.gitkeep

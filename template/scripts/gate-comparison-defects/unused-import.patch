@@ -1,0 +1,19 @@
+# Spec 277 seed defect — unused / incorrect import
+#
+# This patch represents the "unused import" category: a shallow but
+# commonly-flagged style issue. Low severity but high baseline
+# detection rate — useful as a "does the gate find the easy stuff"
+# calibrator.
+
+--- a/example.py
++++ b/example.py
+@@ -1,5 +1,7 @@
+ import json
+-from typing import Optional
++# Defect: replaced the used import (Optional) with an unused one
++# (Sequence), and dropped the real dependency. Type hint on line
++# below now references undefined Optional.
++from typing import Sequence
+
+ def parse(payload: Optional[str]) -> dict:
+     return json.loads(payload or "{}")

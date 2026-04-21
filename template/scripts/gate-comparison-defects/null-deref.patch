@@ -1,0 +1,21 @@
+# Spec 277 seed defect — null / undefined dereference
+#
+# This patch represents the "null dereference" defect category: code
+# that uses a reference/pointer/optional value without first checking
+# whether it exists. The gate-comparison-corpus.sh runner applies this
+# patch to a historical spec diff and records whether each of the three
+# review gates (/ultrareview, Validator Stage 2, DA role-registry)
+# detects the defect.
+#
+# Example defect (language-agnostic pseudo-diff):
+
+--- a/example.py
++++ b/example.py
+@@ -1,5 +1,7 @@
+ def get_user_email(user_id):
+     user = lookup_user(user_id)
+-    if user is None:
+-        return None
++    # Defect: removed the None check — user.email will raise
++    # AttributeError when lookup_user returns None for unknown IDs.
+     return user.email

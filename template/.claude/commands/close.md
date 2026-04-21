@@ -324,6 +324,44 @@ After the validator gate (Step 2d), before generating the Review Brief (Step 2e)
 
 Note: The Validator role's formal AC verification gate is handled by Step 2d. The role registry review supplements it with additional deliberation perspectives (e.g., Devil's Advocate, CTO).
 
+### [mechanical] Step 2g — Shadow-Mode Gate Comparison (Spec 277, Phase 1)
+
+See `docs/process-kit/gate-comparison-methodology.md` for the shadow-run rationale and the decision criteria consumed by Phase 2. This step silently captures timing, token, and raw-findings data from three review gates — `/ultrareview`, Validator Stage 2 (Code Quality), and the DA role-registry review — for later offline comparison. **Zero user-visible behavior change**: findings are never surfaced in the Review Brief, never logged to stdout as gate output, and never block `/close`.
+
+**Shared instrumentation wrapper** (used in Steps 2d, 2f, and this step): when invoking `/ultrareview`, Validator Stage 2, or the DA role-registry review, wrap the sub-agent call to capture `{duration_s, tokens, severity_counts, raw_output}`. The wrapper is observationally transparent — it records metadata only, never alters return values or downstream flow.
+
+1. **Trigger evaluation** — read spec front-matter. Proceed with shadow invocation only if ALL of the following hold:
+   - At least one of: `Consensus-Review: true`; OR `BV >= 4` AND spec scope mentions external interface / API / CLI contract; OR `R >= 4`.
+   - `Change-Lane:` is NOT `hotfix` and NOT `process-only`.
+   - `--skip-ultrareview` flag is NOT present in $ARGUMENTS.
+   - Spec has a committed diff since it went `in-progress`.
+
+   If any check fails, record the skip reason (`hotfix`, `process-only`, `operator-skip`, `not-triggered`, `no-diff`) and proceed to step 4 (persistence-only).
+
+2. **Persistence setup** — create `.forge/state/gate-comparison/<spec-id>/` if it does not exist. The parent `.forge/state/gate-comparison/` is gitignored.
+
+3. **Silent `/ultrareview` invocation** (only if triggered and not skipped):
+   - Invoke Claude Code's built-in `/ultrareview` against the spec's committed diff.
+   - Wrap with the shared instrumentation wrapper above.
+   - **Capture only — do not display.** The wrapped output must never appear in operator-visible channels: no `GATE [...]` line, no Review Brief section, no stdout findings.
+   - On `/ultrareview` sub-agent error: record `{skipped: true, skip_reason: "ultrareview-error: <short error>"}` and proceed. Errors must not cascade into `/close`.
+
+4. **Write per-gate persistence files** under `.forge/state/gate-comparison/<spec-id>/`:
+   - `ultrareview.json`: `{gate: "ultrareview-shadow", spec_id, timestamp, duration_s, tokens, severity_counts, raw_output}` — or `{gate: "ultrareview-shadow", spec_id, timestamp, skipped: true, skip_reason}` if skipped.
+   - `validator-stage2.json`: same schema with `gate: "validator-stage2"`, populated from the Step 2d Validator Stage 2 wrapper capture.
+   - `da.json`: same schema with `gate: "da"`, populated from the Step 2f DA role-registry review wrapper capture (or `{skipped: true, skip_reason: "role-registry-absent"}` if Step 2f was a silent skip).
+
+5. **Silent one-line debug note** (debug logs only — not operator output): `shadow-gate-comparison: spec=<NNN> triggered=<true|false> skip_reason=<reason or "">`. Must not appear in `/close` stdout.
+
+6. **Session sidecar logging** — append to the session JSON sidecar's `gate_outcomes` array a `{gate: "ultrareview-shadow", result: "PASS", duration_s, severity_counts, skipped, skip_reason, comparison_dir: ".forge/state/gate-comparison/NNN/"}` entry. Also extend the existing Validator Stage 2 and DA gate entries in-place with `duration_s` and `tokens` fields from the wrapper capture. Schema: see `.forge/templates/session-handoff-schema.json`.
+
+7. **No gate outcome emitted to operator**. The shadow step is silent by design — emit no `GATE [...]` line and add no Review Brief content. AC #3 (Review Brief diff-identical to a non-shadow close) guards this behavior.
+
+**Constraints reminder**:
+- MUST NOT surface `/ultrareview` findings in any operator-visible channel in Phase 1.
+- MUST NOT block `/close` under any circumstance in Phase 1.
+- MUST NOT add or read `Ultrareview:` / `Ultrareview-Blocking:` spec front-matter fields (no such fields exist in Phase 1).
+
 ### [mechanical] Step 2d++ — Template/Own-Copy Dual-Check (Spec 188, upgraded by Spec 180)
 
 Before generating the Review Brief, actively verify bidirectional sync:

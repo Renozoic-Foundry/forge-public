@@ -18,6 +18,7 @@ AI verifies these autonomously. No human attention required. These checks have d
 | Code quality mechanics | Lint, type check, import verification | /implement (Step 7) |
 | Template render verification | Copier copy succeeds, no Jinja artifacts in output | /close, /implement |
 | Spec integrity hash | SHA-256 of Scope + ACs matches Approved-SHA | /close (Step 2) |
+| Consumer-propagation check | New docs linked from template command files must be mirrored under `template/docs/` OR listed in `sync-to-public.sh`'s `PUBLIC_DOC_FILES` | /close (Step 2d+++) |
 
 ## Human-Judgment-Required
 

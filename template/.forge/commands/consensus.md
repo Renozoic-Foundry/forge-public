@@ -88,18 +88,35 @@ Run all role assessments in **parallel** where possible.
 
 1. **Vote tally**: Count approve, concern, reject, and error votes.
 
-2. **Divergence signal**: Flag significant disagreement:
-   - **Aligned**: All votes are the same category (all approve, all concern, all reject)
-   - **Mild divergence**: Mix of approve and concern (no rejects)
-   - **Strong divergence**: At least 1 reject alongside 2+ approves — roles fundamentally disagree
-   - **Blocked**: Majority reject
+2. **Divergence signal**: Flag significant disagreement. "Aligned" splits into three sub-signals (Spec 301):
+   - **Aligned-approve**: All votes are approve.
+   - **Aligned-concern**: All votes are concern — no approve, no reject. This is a canonical **Revise** signal (distinct from mild divergence): every role sees systemic issues from its own lens, so the proposal has cross-cutting problems even though no single role rejects it outright.
+   - **Aligned-reject**: All votes are reject.
+   - **Mild divergence**: Mix of approve and concern (no rejects).
+   - **Strong divergence**: At least 1 reject alongside 2+ approves — roles fundamentally disagree.
+   - **Blocked**: Majority reject.
 
 3. **Recommended action** based on tally:
-   - All approve → "Proceed"
-   - Majority approve, some concern → "Proceed with noted concerns"
+   - All approve (aligned-approve) → "Proceed"
+   - **All concern (aligned-concern) → "Revise — defer or rework before proceeding"** (each role sees systemic issues from its own lens; treat as a stronger signal than mild divergence)
+   - Majority approve, some concern (mild divergence) → "Proceed with noted concerns"
    - Strong divergence → "Discuss — roles fundamentally disagree"
    - Majority concern → "Revise — address concerns before proceeding"
-   - Majority reject → "Do not proceed — significant opposition"
+   - Majority reject / aligned-reject → "Do not proceed — significant opposition"
+
+## [policy] Step 4b — Round cap and stop rule (Spec 301)
+
+Consensus rounds show diminishing returns after round 3. Round 4+ tends to surface spec-bloat divergence rather than new root-cause analysis (see pattern-analysis signals CI-173, CI-175). Round ordering matters — architectural reframes surface best in round 1 (CI-174).
+
+**Stop rule**: After round 3 without convergence, escalate to the operator for an explicit decision rather than auto-running round 4+.
+
+Operator options at the 3-round cap:
+- **Accept current state** — remaining divergence is implementation-notes, not spec changes. Proceed.
+- **Revise out of scope** — reviewed content needs a `/revise` cycle. Stop consensus; revise; re-enter.
+- **Defer to follow-up spec** — reviewer concern is valid but orthogonal to this spec's scope. Record it as a follow-up spec candidate; proceed with the current spec.
+- **Continue to round 4** — operator authority override. Record the rationale in the session log.
+
+This is a policy guideline, not a mechanical gate — round 4+ remains supported via operator choice. Cross-session invocations of `/consensus` on the same topic count toward the round cap (the policy is topic-level, not session-level).
 
 ## [mechanical] Step 5 — Present consensus summary
 

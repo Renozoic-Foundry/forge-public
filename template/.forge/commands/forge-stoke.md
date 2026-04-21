@@ -35,10 +35,17 @@ Before checking for updates, detect and restore files that exist in the FORGE te
 
 1. Read `.copier-answers.yml` to get `_src_path` (the template path). If `.copier-answers.yml` does not exist, skip Step 0b (Step 1 will handle detection).
 
-2. Render the current template to a temp directory:
+2. Render the current template to a temp directory. The path is deterministic so later Step 0b sub-steps (3 walk, 5 restore, 8 cleanup) can reconstruct it across separate Bash invocations. `chmod 700` applies owner-only access regardless of umask, closing the multi-user disclosure window on systems where `$TMPDIR` maps to a shared location. Then copy the project's `.copier-answers.yml` into `$FORGE_TMP` before invoking Copier so that module-gated files (NanoClaw, publications, Lane B, etc.) render according to the project's actual module selections — not template defaults. Without pre-seeding, Copier falls back to defaults for every gated module and the missing-file scan below produces false positives (Spec 296):
    ```bash
    FORGE_TMP="${TMPDIR:-${TEMP:-/tmp}}/forge-manifest-check"
-   python -m copier copy "$_src_path" "$FORGE_TMP" --defaults --overwrite --vcs-ref=HEAD
+   mkdir -p "$FORGE_TMP" && chmod 700 "$FORGE_TMP"
+   if [ -f .copier-answers.yml ]; then
+     cp .copier-answers.yml "$FORGE_TMP/.copier-answers.yml"
+     python -m copier copy "$_src_path" "$FORGE_TMP" --overwrite --vcs-ref=HEAD
+   else
+     # Fallback: no project answers file — render with template defaults.
+     python -m copier copy "$_src_path" "$FORGE_TMP" --defaults --overwrite --vcs-ref=HEAD
+   fi
    ```
 
 3. Walk the temp directory and compare against the local project. For each file in the template output, check if it exists locally. Build a list of missing files, classified by path pattern:
@@ -106,6 +113,8 @@ Before checking for updates, detect and restore files that exist in the FORGE te
 8. Clean up the temp directory.
 
 9. Proceed to Step 1.
+
+**Notes for operators — shared tenancy**: Step 0b's `$FORGE_TMP` lives under `${TMPDIR:-${TEMP:-/tmp}}`. On shared-tenancy systems (CI runners with shared `/tmp`, multi-user dev boxes), export `TMPDIR` to a per-user path before running `/forge stoke`. See [docs/process-kit/shared-tenancy-guidance.md](../../docs/process-kit/shared-tenancy-guidance.md) for concrete examples (GitHub Actions, generic Unix multi-user, CI container). Single-operator workstations (most operators) need no action.
 
 ### [mechanical] Step 1 — Detect sync mechanism
 

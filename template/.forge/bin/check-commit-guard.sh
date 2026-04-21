@@ -31,8 +31,25 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Only intercept git commit commands (not git status, git diff, etc.)
-if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
+# Only intercept git commit commands at command position (Spec 300).
+# Preprocess:
+#   1. Normalize newlines to spaces so the `^` anchor cannot match inside
+#      heredoc bodies whose lines literally start with `git commit` (docs,
+#      tutorials, session logs that quote a commit command).
+#   2. Strip quoted substrings (both "…" and '…') so shell separators that
+#      appear INSIDE quoted arguments (e.g. `echo "use ; git commit"`) do
+#      not fake a command-position anchor. Non-greedy, single-level (nested
+#      or escaped quotes are a known limit — see docs/process-kit/commit-
+#      guard-rationale.md).
+# Match anchors (command-position forms of `git commit`):
+#   - start of (normalized) string, or after a shell separator `;`, `&`, `|`, `(`, `)`, `{`, `}`, backtick
+#   - after a command-wrapping keyword: xargs, sudo, env, time, nohup, exec, then, else, do
+#   - after one or more env-var assignments (e.g. `GIT_AUTHOR_DATE=… git commit`)
+# Trailing anchor: whitespace or end-of-string (so `git commit-tree` doesn't match).
+NORMALIZED=$(echo "$COMMAND" | tr '\n' ' ')
+STRIPPED=$(echo "$NORMALIZED" | sed -E 's/"[^"]*"//g; s/'"'"'[^'"'"']*'"'"'//g')
+GUARD_RE='(^|[;|&()\{\}`]|(^|[[:space:]])(xargs|sudo|env|time|nohup|exec|then|else|do)[[:space:]])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*git[[:space:]]+commit([[:space:];|&()\{\}]|$)'
+if ! echo "$STRIPPED" | grep -qE "$GUARD_RE"; then
   exit 0
 fi
 

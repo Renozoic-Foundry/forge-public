@@ -1,0 +1,17 @@
+# Spec 277 seed defect — off-by-one boundary error
+#
+# This patch represents the "off-by-one" category: a loop or slice
+# index that reads one past the valid range, or skips the last valid
+# entry. Classic boundary bug; detection rate is a useful signal for
+# how deeply a review gate reasons about control flow.
+
+--- a/example.py
++++ b/example.py
+@@ -1,6 +1,6 @@
+ def last_n_events(events, n):
+     # Return the most recent n events in chronological order.
+-    # Correct: events[-n:] when len(events) >= n, else events.
+-    return events[-n:] if len(events) >= n else list(events)
++    # Defect: -n-1 skips the oldest of the n-window, and len(events) > n
++    # (strict) excludes the exact-match case, returning a truncated list.
++    return events[-n-1:] if len(events) > n else list(events)

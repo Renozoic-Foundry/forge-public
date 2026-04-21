@@ -35,6 +35,8 @@ Violation of either rule is a process defect — log it as a signal and trigger 
 
 **Edit-gate rule:** Implementation files (code, command `.md` files in `.claude/commands/`, config) may only be edited during an active `/implement` execution. Conversational discussion — including "agree", "yes", or numbered selections — is never implicit permission to edit implementation files. Outside of `/implement`, you may only edit spec documents (`docs/specs/`), tracking files (`docs/specs/README.md`, `docs/specs/CHANGELOG.md`, `docs/backlog.md`), and session files (`docs/sessions/`). All other files require `/implement`.
 
+**Team / regulated deployments:** if this project needs a permission baseline that developers cannot weaken locally (Lane B, compliance-regulated, shared-lab), distribute policy via Claude Code's managed-settings layer. See [docs/process-kit/permissions-team-policy.md](docs/process-kit/permissions-team-policy.md) for drop-in directory locations, a minimal example fragment, and the precedence model. Project-level sandbox keys are scaffolded as commented examples in [.claude/settings.json.template](.claude/settings.json.template).
+
 ## Change lanes
 
 | Lane | Use when | Minimum controls |

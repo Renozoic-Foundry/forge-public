@@ -1,4 +1,29 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "//": [
+    "Sandbox configuration — commented reference block (Spec 275).",
+    "Uncomment and promote the 'sandbox' block below from this comment array into the top-level object to enable.",
+    "Key names verified against Claude Code documentation on 2026-04-21.",
+    "For team-wide / regulated deployments, see docs/process-kit/permissions-team-policy.md.",
+    "",
+    "Example sandbox block:",
+    "  \"sandbox\": {",
+    "    // sandbox.enabled — master switch. When true, bash subprocesses run in an OS sandbox (macOS seatbelt / Linux namespaces). Flip to true for CI and Lane B regulated deployments.",
+    "    \"enabled\": true,",
+    "    // sandbox.autoAllowBashIfSandboxed — auto-approve bash tool calls once the sandbox is active. Cuts prompt fatigue in CI; keep false for human-in-the-loop dev.",
+    "    \"autoAllowBashIfSandboxed\": true,",
+    "    // sandbox.excludedCommands — commands that bypass sandboxing because they need host privileges (docker, kubectl). Each entry is a sandbox hole; keep minimal.",
+    "    \"excludedCommands\": [\"docker *\"],",
+    "    // sandbox.allowUnsandboxedCommands — when true, the model may request running specific commands outside the sandbox with user consent. Set false in CI / regulated deployments to make the sandbox a hard boundary.",
+    "    \"allowUnsandboxedCommands\": false,",
+    "    // sandbox.filesystem — per-path read/write allowlists and denylists applied inside the sandbox. denyRead wins over allowWrite on overlap. Populate before enabling if secrets live on disk.",
+    "    \"filesystem\": { \"allowWrite\": [\"/tmp/build\"], \"denyRead\": [\"~/.aws/credentials\", \"./.env\", \"./.env.*\"] },",
+    "    // sandbox.network — domain allow/deny lists and local-port binding control. Only applies when sandbox.enabled is true. Use deniedDomains for known exfiltration-risk hosts.",
+    "    \"network\": { \"allowedDomains\": [\"github.com\", \"*.npmjs.org\"], \"deniedDomains\": [], \"allowLocalBinding\": true }",
+    "  }"
+  ],
+
   "hooks": {
     "PreToolUse": [
       {

@@ -1,0 +1,21 @@
+# Spec 277 seed defect — missing error / exception handling
+#
+# This patch represents the "missing error handling" category: an I/O,
+# network, or system call is made without any wrapping try/except/error
+# propagation. Failures cascade silently or crash the caller.
+
+--- a/example.py
++++ b/example.py
+@@ -1,8 +1,6 @@
+ def load_config(path):
+-    try:
+-        with open(path, "r", encoding="utf-8") as fh:
+-            return json.load(fh)
+-    except (OSError, json.JSONDecodeError) as exc:
+-        logger.error("config load failed: %s", exc)
+-        return {}
++    # Defect: removed the try/except wrapper — OSError (file missing /
++    # permission denied) and json.JSONDecodeError (malformed config)
++    # both now crash the caller with no recovery path.
++    with open(path, "r", encoding="utf-8") as fh:
++        return json.load(fh)

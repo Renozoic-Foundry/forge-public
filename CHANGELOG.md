@@ -9,6 +9,40 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 
 ---
 
+## v2.1.0 — 2026-04-21
+
+MINOR bump. Two new operator-facing Surface-2 choice blocks; zero breaking changes; no migration required.
+
+**Audit**: `docs/decisions/ADR-NNN-v2.0.0-to-v2.1.0-audit.md` in the private forge repo. Consensus: 2 approve / 1 concern resolved via DA-grounded reclassification (Spec 303 PATCH→MINOR).
+
+### New operator-facing surfaces (MINOR drivers)
+
+| Spec | Surface | Change |
+|------|---------|--------|
+| 303 | Surface 2 | `/close` Step 2d+++ — consumer-propagation gate. When a closing spec links a doc from a template command file but the doc is not mirrored under `template/docs/` or whitelisted in `sync-to-public.sh`, `/close` renders a new choice block (`sync`/`whitelist`/`skip`) so the operator fixes the propagation gap before close. Violation-conditional rendering — normal `/close` runs see no UI change. |
+| 291 (Phase 4) | Surface 2 | `/forge-bootstrap` — new Step 3b version disclosure. Resolves latest `forge-public` tag + main-HEAD commits-ahead before Copier runs; presents a 3-option choice block (`latest` tag / `main` branch / specific `tag <name>`) threaded through `copier copy --vcs-ref`. Default (install latest tag) is unchanged from v2.0.0. |
+| 291 (Phase 4) | Surface 2 | `/forge stoke` — new Step 0a+ template drift + yank check. Semver-compares consumer `_commit` against latest `forge-public` tag: PATCH/MINOR drift → warn + proceed; MAJOR drift → **BLOCK** with surface-change pointer unless `--allow-major` flag passed. Also parses `CHANGELOG.md` `## Yanked Tags` section and warns consumers pinned to yanked tags. Graceful degradation when `gh` CLI is absent or network is unreachable. Introduces new optional `--allow-major` argument. |
+
+### Notable PATCH changes
+
+- **Spec 296** — `/forge stoke` Step 0b honors `.copier-answers.yml` module selections instead of `--defaults`. Eliminates false-positive "missing file" prompts for module-gated content.
+- **Spec 300** — Specless-commit-guard regex refined (command-position-anchored; supports env-var prefix + wrapper keywords). Internal hook — no operator-visible change.
+- **Spec 301** — `/consensus` documents a 3-round cap + aligned-concern → canonical Revise convention. Prompt-instruction policy; no argument contract change.
+
+### Updating from v2.0.0
+
+```bash
+/forge stoke
+```
+
+PATCH/MINOR drift (v2.0.0 → v2.1.0) — warns and proceeds. No `--allow-major` needed.
+
+### Scope note
+
+Spec 291 Phases 2 (release policy + `cut-release.sh` tooling) and 3 (release-eligible signal wiring in `/close`, `/now`, `/evolve`) remain unimplemented. **v2.1.0 ships Phase 4 only (pilot-facing surface)**. The full Spec 291 deliverable is still pending; v2.1.0 was hand-cut from the Phase 1 consensus-approved audit.
+
+---
+
 ## v2.0.0 — 2026-04-20
 
 First post-v1.0.0 release. Four breaking changes across Surfaces 1 and 2 triggered a MAJOR bump per the FORGE versioning contract.

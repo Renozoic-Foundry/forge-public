@@ -1,8 +1,8 @@
-<!-- Last updated: 2026-04-06 -->
+<!-- Last updated: 2026-04-07 -->
 # Framework: FORGE
 # Prioritization Scoring Rubric
 
-Last updated: 2026-04-06
+Last updated: 2026-04-07
 
 Claude uses this rubric to assign priority scores to proposed specs. Scores are recorded in the spec frontmatter (`Priority-Score:`) and aggregated in [docs/backlog.md](../backlog.md).
 
@@ -33,6 +33,28 @@ How much does this spec move the product toward its core goal?
 | 3 | Useful capability; meaningful but not on the critical path |
 | 2 | Nice-to-have; small incremental improvement |
 | 1 | Primarily internal/technical; no direct user-facing impact |
+
+**Process integrity anchor (Spec 151)**: If a spec fixes a documented FORGE process defect, assign **BV=5** regardless of other factors.
+
+A **process defect** is a flaw in FORGE's own methodology that produces wrong outputs when the process is followed correctly — not a feature gap, improvement request, or bug in a consumer project.
+
+*Qualifying test*: "If a competent agent follows this command as written, will it produce incorrect results or silently skip a required gate?" → Yes = process defect → BV=5.
+
+**Examples**:
+- ✓ Qualifying — Spec 142: auto-chain in `/implement` bypassed the human-validation gate, allowing the lifecycle to advance to `closed` without human confirmation. Following the command as written triggered the defect.
+- ✗ Non-qualifying — Spec 150: spec template missing a `TC` field. This is a feature gap (the field didn't exist yet), not a defect in existing process logic.
+
+#### BV worked examples — operator-friction calibration (Spec 345)
+
+The BV anchors above describe abstract degrees of value. The following worked examples make the abstract concrete, illustrating how to score representative spec kinds along the operator-time-saving / capability-distance heuristic.
+
+**Worked example 1 — friction-reducer (BV=5)**: **Spec 270** (Generalized Cross-Level Sync) removed a recurring papercut that fired multiple times per session — operators previously had to manually maintain `template/` mirrors after every change to a canonical process-kit doc. Each session, that meant 1–N manual sync invocations, each one an opportunity to forget. Sync drift bugs cost real debugging time. The fix removes the papercut entirely. → BV=5 because the spec **directly enables a workflow that was previously friction-blocked at >1×/session**, even though the workflow already "worked" via the manual path.
+
+**Worked example 2 — niche capability-add (BV=3)**: **Spec 271** (Prompt Caching Guidance for Consumer API Integrations) adds documentation that helps operators integrating Claude API calls in consumer projects calibrate cache strategy. Useful, well-scoped, but most operators won't reach for it daily — it sits in the `/spec → /implement → /close` loop only when the consumer happens to be building a Claude-API-driven app. → BV=3 because the capability is **useful but not on the critical path of the core workflow**. Compare to Spec 270 above — both are doc-only, but 270 hits the daily flow and 271 hits a niche.
+
+**Worked example 3 — process-defect (BV=5 cross-link)**: **Spec 142** (Remove Auto-Chain from `/implement` to `/close`) closed a documented FORGE process defect — the auto-chain bypassed the human-validation gate. Per the Spec 151 process-defect anchor above, this scores BV=5 unconditionally regardless of effort or scope. The override is a **kind-discriminator the rubric already uses**: process-defects bypass the abstract BV anchors entirely because the cost of an unfixed defect is "the methodology produces wrong outputs when followed correctly" — that is always BV=5.
+
+**Calibration-aid note**: These worked examples are **calibration aids, not new rules**. Existing scored specs are not re-scored. Future specs may deviate from the examples with rationale recorded in the spec's `Priority-Score:` HTML comment (e.g., `<!-- BV=4 — friction-reducer but only 1×/week, not 1×/session -->`). The kind-distinctions (friction-reducer vs niche capability vs process-defect) are heuristic, not taxonomic — a spec that crosses kinds keeps the higher BV anchor that fits.
 
 ### E — Effort / Complexity (weight 2, inverted)
 
@@ -80,7 +102,7 @@ Estimated token cost for implementation. Set at spec creation time by /spec.
 | `$$` | 5-15 files or integration test verification or SR = 3 |
 | `$$$` | 15+ files or manual/browser/E2E verification or SR ≤ 2 |
 
-TC is the highest applicable indicator (e.g., 3 files but manual verification → `$$`). Stored in spec frontmatter as `Token-Cost: $|$$|$$$`. When historical cost data exists in `.forge/metrics/command-costs.yaml`, use it to calibrate estimates for similar specs.
+TC is the highest applicable indicator (e.g., 3 files but manual verification → `$$`). Stored in spec frontmatter as `Token-Cost: $|$$|$$$`. TC is operator-judgment input — FORGE does not collect per-invocation cost data (Spec 316 removed the metrics framework that was documented but never wired). Calibrate against operator memory of similar past specs.
 
 TC does not affect the priority score. It is displayed in /matrix output for sprint planning visibility and flagged when `$$$` to prompt cost review.
 
@@ -92,8 +114,8 @@ Quarterly (or after 3+ specs reach `implemented`): compare each completed spec's
 
 ### E/TC calibration (Spec 158)
 
-During /evolve F4 (score calibration), compare predicted E and TC against actual implementation metrics:
-- If token cost data exists in `.forge/metrics/`: compare TC estimate vs actual tokens consumed.
+During /evolve F4 (score calibration), compare predicted E and TC against actual implementation experience:
+- Operator-recall calibration: was TC estimate accurate vs the cost-feel of the implementation? (FORGE does not collect per-invocation cost data — see Spec 316; calibration is qualitative.)
 - If session data exists: compare expected session count vs actual.
 - Flag systematic E over-prediction (AI handles it easier than estimated) or under-prediction (iteration loops not anticipated).
 - Update E anchor guidance when 3+ specs show consistent bias in the same direction.

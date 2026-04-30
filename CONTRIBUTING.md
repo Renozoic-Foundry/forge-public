@@ -39,7 +39,7 @@ Windows users: use Git Bash for all shell operations. PowerShell wrappers are in
    test -f "$FORGE_TEST_DIR/.copier-answers.yml" && echo "PASS" || echo "FAIL"
    ```
 4. Run bash validation: `bash scripts/validate-bash.sh`
-5. Verify command sync: `bash scripts/validate-command-sync.sh`
+5. Verify cross-level sync: `bash .forge/bin/forge-sync-cross-level.sh --check`
 
 See `CLAUDE.md` (in your bootstrapped project) for the full testing sequence.
 
@@ -63,8 +63,8 @@ After any template change:
 # Validate bash scripts
 bash scripts/validate-bash.sh
 
-# Validate .claude/commands mirror .forge/commands
-bash scripts/validate-command-sync.sh
+# Validate cross-level parity (repo-root canonical ↔ template/ mirrors)
+bash .forge/bin/forge-sync-cross-level.sh --check
 
 # Bootstrap a clean project and verify no errors
 bash scripts/smoke-test-runtime.sh

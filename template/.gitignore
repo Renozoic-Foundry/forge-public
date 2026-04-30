@@ -11,6 +11,9 @@ __pycache__/
 .env
 .env.*
 
+# Spec 294 — answers-file backup snapshots (created by _migrations: heal on pre-294 → post-294 update)
+.copier-answers.yml*.bak
+
 # Node / UI
 node_modules/
 dist/
@@ -40,18 +43,19 @@ docs/sessions/context-snapshot.md
 .forge/security/
 .forge/gates/
 .forge/logs/
-.forge/metrics/
 .forge/checkpoint/
 .forge/state/active-role.json
 .forge/state/artifact-links.json
 .forge/state/implementing.json
 .forge/state/active-close
+.forge/state/active-tab-*.json
 .forge/state/gate-comparison/
+.forge/state/score-audit.jsonl
 !.forge/handoffs/.gitkeep
 !.forge/audit/.gitkeep
 !.forge/security/.gitkeep
 !.forge/gates/.gitkeep
-!.forge/metrics/.gitkeep
+!.forge/state/.gitkeep
 
 # IDE / OS
 .idea/

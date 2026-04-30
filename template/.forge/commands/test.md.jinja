@@ -1,7 +1,6 @@
 ---
 name: test
 description: "Run the test suite and report results"
-model_tier: sonnet
 workflow_stage: implementation
 ---
 # Framework: FORGE
@@ -26,15 +25,11 @@ If $ARGUMENTS is `?` or `help`:
 Usage: /test [optional: path/to/test_file.py]
 
 <!-- customize: adjust the test command below to match your project's test runner -->
-{% if use_wsl2 %}
-1. If a path argument is provided, run only that test file: `{{ test_command }} <path> --tb=short`
-2. If no argument, run the full test suite: `{{ test_command }} --tb=short`
-3. Run the command using the WSL2 venv: `wsl -e bash -c "cd $(wslpath -u "$(pwd)") && .venv/bin/python -m pytest <args> 2>&1"`
-{% else %}
-1. If a path argument is provided, run only that test file: `{{ test_command }} <path> --tb=short`
-2. If no argument, run the full test suite: `{{ test_command }} --tb=short`
+
+1. If a path argument is provided, run only that test file: `pytest -q <path> --tb=short`
+2. If no argument, run the full test suite: `pytest -q --tb=short`
 3. Run the command directly in the project root.
-{% endif %}
+
 4. Report:
    - Pass/fail count
    - Any failures with the short traceback

@@ -1,7 +1,6 @@
 ---
 name: note
 description: "Add a scratchpad note for the next process checkpoint"
-model_tier: haiku
 workflow_stage: session
 ---
 # Framework: FORGE

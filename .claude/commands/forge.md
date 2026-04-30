@@ -1,7 +1,6 @@
 ---
 name: forge
 description: "Unified FORGE project lifecycle command"
-model_tier: sonnet
 workflow_stage: lifecycle
 ---
 # Framework: FORGE
@@ -42,3 +41,17 @@ Dispatch on the first word of $ARGUMENTS:
 - `status`     → Run a condensed version of `/now`: read docs/specs/README.md for validation queue, docs/backlog.md for top-3 ranked specs, and the latest session log for active work summary. Present in a compact format without the full session brief or choice block. This is the "current forge overview" for quick status checks.
 - `help`       → Print the full command listing from `docs/QUICK-REFERENCE.md` (Command Reference section): all FORGE commands grouped by workflow stage with descriptions. Include the typical workflow paths and quick start guidance.
 - anything else → print the help block above and stop
+
+
+## [mechanical] Tab-lane awareness directive (Spec 351)
+
+Before emitting any next-action choice block in this command, consult the active-tab marker (Spec 353 primitive):
+
+1. Read `.forge/state/active-tab-*.json` (primary). If present, extract `lane`. If `last_command_at` > 30 minutes ago, treat marker as **stale**.
+2. If no marker, fall back to `docs/sessions/registry.md` rows with `Status = active` for the current session. Use the row's `Lane` column.
+3. If neither yields an active lane: emit the choice block as today. No preamble, no filtering, no annotation. **Skip the rest of this directive.**
+4. If an active lane is detected: emit the one-line preamble (`Tab lane: <lane>. Options below filtered to lane scope.` / `... Cross-lane options annotated.` / `... (stale ~Nm)...`) and apply the filter/annotate decision rules from `docs/process-kit/tab-lane-awareness-guide.md` § Per-lane decision rules.
+5. Filtered rows are struck through with rank `—` (not silently dropped) so the operator can override by typing the keyword directly.
+
+The guide is the single source of truth for which rows filter vs annotate per lane. This directive is intentionally short — the central guide encodes the rules so every emitter stays consistent.
+

@@ -4,8 +4,34 @@
 #        copier update  (from within a consumer project to pull upstream changes)
 
 _subdirectory: "template"
-_min_copier_version: "9.0.0"
+_min_copier_version: "9.3.0"  # Spec 294 — _migrations: flat format + _stage Jinja variable require 9.3.0+
 _templates_suffix: ".jinja"  # only files ending in .jinja are Jinja-processed; others copied verbatim
+
+# Spec 294 — Copier-native placeholder scrub (runs on every copy AND update).
+# The helper applies a guarded scrub: only blanks a field when the field's current
+# value matches a legacy placeholder AND copier.yml's default for that field is the
+# same placeholder — i.e., the value is provably inherited from a legacy default,
+# not operator-typed. See scripts/copier-hooks/scrub_answers.py for logic.
+_tasks:
+  - command:
+      - "{{ _copier_python }}"
+      - "{{ _copier_conf.src_path }}/scripts/copier-hooks/scrub_answers.py"
+      - "scrub"
+      - "{{ _copier_conf.src_path }}"
+
+# Spec 294 — one-shot heal for pre-294 consumers. Copier only runs migrations
+# when crossing the pinned version upward during `copier update`. The `before`
+# stage scrubs legacy placeholders from .copier-answers.yml (creating a
+# .copier-answers.yml.pre-294.bak backup on first run); Copier then reloads
+# answers so subsequent render uses healed values.
+_migrations:
+  - version: v2.2.0
+    command:
+      - "{{ _copier_python }}"
+      - "{{ _copier_conf.src_path }}/scripts/copier-hooks/scrub_answers.py"
+      - "migrate"
+      - "{{ _copier_conf.src_path }}"
+    when: "{{ _stage == 'before' }}"
 
 # ---
 

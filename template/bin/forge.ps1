@@ -124,7 +124,12 @@ function Show-CommandList {
 
 function Show-CommandHelp {
     param([string]$CmdName)
+    # Spec 317: accept both spaced ("forge stoke") and hyphenated ("forge-stoke") forms.
     $file = Find-CommandFile $CmdName
+    if (-not $file -and $CmdName -match ' ') {
+        $hyphenated = $CmdName -replace ' ', '-'
+        $file = Find-CommandFile $hyphenated
+    }
     if (-not $file) {
         Write-Error "Unknown command '$CmdName'. Run 'forge list' to see available commands."
         exit 1
@@ -177,6 +182,9 @@ function Invoke-AgentDispatch {
                 $Prompt | claude -p -
             }
             catch {
+                # Surface the underlying exception so operators see the real cause
+                # (auth, missing binary, quota). Spec 312 — symmetric with bin/forge.
+                [Console]::Error.WriteLine($_.Exception.Message)
                 Write-Error 'Claude Code dispatch failed.'
                 exit 3
             }
@@ -186,6 +194,7 @@ function Invoke-AgentDispatch {
                 $Prompt | aider --message-file -
             }
             catch {
+                [Console]::Error.WriteLine($_.Exception.Message)
                 Write-Error 'Aider dispatch failed.'
                 exit 3
             }
@@ -219,6 +228,26 @@ if ($Arguments) {
     }
 }
 
+# Multi-word subcommand resolution (Spec 317)
+# If the next remaining positional token is a lowercase word, try resolving
+# "<Command>-<token>.md" before falling back to "<Command>.md".
+# Example: `forge.ps1 forge stoke` -> forge-stoke.md.
+if ($Command -and $RemainingArgs.Count -gt 0) {
+    $nextToken = $RemainingArgs[0]
+    if ($nextToken -match '^[a-z][a-z0-9-]*$') {
+        $candidate = "$Command-$nextToken"
+        if (Find-CommandFile $candidate) {
+            $Command = $candidate
+            if ($RemainingArgs.Count -gt 1) {
+                $RemainingArgs = $RemainingArgs[1..($RemainingArgs.Count - 1)]
+            }
+            else {
+                $RemainingArgs = @()
+            }
+        }
+    }
+}
+
 # --- Main ---
 
 # No command — show usage
@@ -246,7 +275,16 @@ switch ($Command) {
     }
     'help' {
         if ($RemainingArgs.Count -gt 0) {
-            Show-CommandHelp $RemainingArgs[0]
+            # Spec 317: support `forge.ps1 help forge stoke` (unquoted multi-word).
+            if ($RemainingArgs.Count -ge 2 `
+                -and $RemainingArgs[0] -match '^[a-z][a-z0-9-]*$' `
+                -and $RemainingArgs[1] -match '^[a-z][a-z0-9-]*$' `
+                -and (Find-CommandFile "$($RemainingArgs[0])-$($RemainingArgs[1])")) {
+                Show-CommandHelp "$($RemainingArgs[0])-$($RemainingArgs[1])"
+            }
+            else {
+                Show-CommandHelp $RemainingArgs[0]
+            }
         }
         elseif ($SpecNumber) {
             Write-Error "'forge help' expects a command name, not a number. Usage: forge help <command>"

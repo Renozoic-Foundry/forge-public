@@ -81,6 +81,23 @@ Each entry has:
 - `path` — relative path to the role instruction file (e.g., `.claude/agents/spec-author.md`)
 - `contexts` — list of command names where the role is invoked (e.g., `[spec]`, `[implement, close]`)
 
+#### Competitor role (Spec 274 — opt-in)
+
+The **Competitor** role role-plays a fictional rival organization's reaction to the proposal, framed as "leaked competitive intelligence." It provides an **outside-in adversarial perspective** (how would a competitor counter this?) to complement the existing inside-out adversarial roles (Devil's Advocate for risk, Maverick Thinker for convention).
+
+| Field | Value |
+|-------|-------|
+| Path | `.claude/agents/competitor.md` |
+| Contexts | `[brainstorm, spec]` |
+| Default state | **OFF** — registry entry is commented out in `template/AGENTS.md.jinja`. Uncomment to enable. |
+| Output | Structured JSON: `competitor_posture`, `likely_counter_moves`, `exploitable_weaknesses`, `defensive_recommendations`, `summary` (in the rival's voice). |
+| When to invoke | Direction-setting time (proposal commits to pricing, distribution, positioning, or a publicly visible surface). Skip for internal process / refactor specs. |
+| Constraints | Stay fictional (no real company names); no fabricated market data; speak *from* the rival, not *about* the rival. |
+
+**Rhetorical framing example.** For a proposal "we're adding a free tier," the Competitor role does NOT write *"the competitor would respond by..."* — it writes *"Team — the threat is strategic. Our pricing-power advantage erodes if we don't act inside the next two quarters. Counter-move: ship our own free tier with a 10× usage cap..."* — speaking from inside the rival's war room.
+
+**Note on dispatch**: as of Spec 274 ship, only `/consensus` iterates `forge.role_registry` to dispatch roles. `/brainstorm` and `/spec` (this role's listed contexts) do not yet read the registry. Wiring those commands is tracked as a deferred-scope follow-up; until that lands, this role can only be invoked manually via Claude Code's agent invocation syntax.
+
 ### Runtime and agent adapters
 
 These fields appear in the `runtime:`, `agent:`, and `isolation:` YAML blocks.

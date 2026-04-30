@@ -1,20 +1,33 @@
 ---
 name: parallel
 description: "Run multiple specs in parallel using git worktrees"
-model_tier: sonnet
 workflow_stage: implementation
 ---
 # Framework: FORGE
+<!-- multi-block mode: serialized — choice blocks fire at distinct mechanical steps (merge confirmation, conflict resolution, post-merge action). Each block waits for operator response before the next is presented. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
 Run multiple specs in parallel using git worktrees and isolated Claude Code agents.
 
 If $ARGUMENTS is `?` or `help`:
   Print:
   ```
   /parallel — Execute 2+ independent specs in parallel via git worktrees.
-  Usage: /parallel <spec-number> <spec-number> [spec-number ...] [--dry-run]
+  Usage:
+    /parallel <spec-number> <spec-number> [spec-number ...] [--dry-run]
+    /parallel --batch '<bundle1>' '<bundle2>' [...] [--dry-run]
   Arguments:
     spec-numbers (required, 2+) — e.g. /parallel 005 007 012
+    --batch (optional) — execute multiple bundles sequentially. Each bundle is a
+      single-quoted string of space-separated spec IDs. Example:
+      /parallel --batch '005 007' '012 014'
+      Bundles run in argument order; per-bundle conflict pre-flight, swarm budget,
+      and Step 13 close-all all fire per bundle. Spec 362 introduced this mode.
     --dry-run (optional) — show planned worktrees and conflict scan without executing
+  Cross-platform quoting (`--batch` mode):
+    bash / Git Bash: use single-quoted strings as shown.
+    PowerShell: also use single-quoted strings, OR pass the stop-parsing token
+      `--%` before the bundle args to bypass PowerShell's argument transformation.
+    /parallel does NOT silently rewrite quoting — operators are responsible for
+      using shell-compatible quoting.
   Behavior:
     - Validates all specs are draft or approved status
     - Scans spec scopes for file overlap and warns if detected
@@ -32,12 +45,75 @@ If $ARGUMENTS is `?` or `help`:
 
 ---
 
+## When NOT to use /parallel
+
+`/parallel` has a fixed ceremony floor — worktree creation, branch management, agent spawn, mini-session-log per agent, sequential merge-back, and shared-file consolidation. That floor only pays back when the implementation work itself is substantial enough to justify isolation. For trivial-edit specs the ceremony cost exceeds the work, and inline execution in the main session is faster and cheaper.
+
+Run inline (skip `/parallel`) if ANY of the following is true:
+- Total LOC delta across the candidate specs is ≤ ~50 lines (rough operator estimate, not a hard count).
+- Any candidate spec is doc-only (no source-code changes at all).
+- Candidate specs share a file or adjacent sections (merge surface > divergence surface).
+- Operator estimates implementation time < 30 minutes per spec.
+
+Concrete evidence: `docs/sessions/signals.md` SIG-CLOSE-01 (2026-04-24) documents a `/parallel 310 311` invocation on two small-change specs where the worktree + agent + merge ceremony substantially exceeded the implementation cost; bailing out to inline saved an estimated ~30% of tool calls and a full round of merge/consolidation.
+
+If in doubt, run inline first — /parallel can always be invoked later.
+
+## [mechanical] Step 0z — Lane-mismatch warning (Spec 353)
+
+If `.forge/state/active-tab-*.json` marker exists for this session, read its `lane` field.
+
+This command's natural lane (per `docs/process-kit/multi-tab-quickstart.md` § Lane choice):
+
+| Command | Lane |
+|---------|------|
+| /parallel | feature |
+| /spec | feature OR process-only (depending on spec subject) |
+| /scheduler | feature |
+| /forge stoke | process-only |
+
+If `marker.lane` does not match this command's natural lane, emit a one-line warning: `⚠ Action targets <expected> lane; active tab is '<marker.lane>'. Continue?` Soft-gate only — do not refuse. Operator decides whether the mismatch matters.
+
+Skip silently if no marker exists.
+
 ## [mechanical] Step 1 — Parse arguments
 
-Parse $ARGUMENTS to extract spec numbers and flags.
+Parse $ARGUMENTS to extract spec numbers, batch bundles, and flags.
+
+**Single-bundle mode (default, backward compatible)**:
 - Extract all numeric tokens as spec IDs (zero-pad to 3 digits).
 - Detect `--dry-run` flag if present.
 - If fewer than 2 spec numbers provided: stop and report: "At least 2 spec numbers are required. Usage: /parallel 005 007 [012 ...]"
+- Set `BUNDLES = [<single bundle of all parsed spec IDs>]`.
+
+**Multi-bundle batch mode (Spec 362, `--batch` flag detected)**:
+- Detect the `--batch` flag. All subsequent single-quoted arguments are bundle strings.
+- Each bundle string is a space-separated list of spec IDs (numeric tokens, zero-padded to 3 digits).
+- A bundle MAY contain a single spec ID (single-spec bundle is acceptable in `--batch` mode — execution is the same as `/parallel A B` minus the 2-spec floor; the floor is a single-bundle-mode constraint, not a multi-bundle constraint).
+- Set `BUNDLES = [<bundle 1>, <bundle 2>, ...]` in argument order.
+- If `BUNDLES` is empty after parsing (operator typed `/parallel --batch` with no bundle args): stop and report: "No bundles specified. Usage: /parallel --batch 'NNN NNN' 'MMM MMM'"
+- Cross-platform quoting per the help text — `/parallel` does not silently transform input.
+
+**Bundle execution semantics (both modes)**:
+- The remainder of this command (Steps 2–13) operates on a single bundle. In single-bundle mode the loop iterates exactly once. In `--batch` mode the loop iterates over `BUNDLES` in argument order, running Steps 2–13 per bundle.
+- Step 0z (lane-mismatch warning) fires ONCE at invocation, BEFORE the bundle loop — not per bundle (per Spec 362 AC 13). The lane is defined at command invocation, not per-bundle.
+- Step 13 close-all choice block fires ONCE PER BUNDLE inside the loop — operators in an N-bundle batch see N close-all prompts, preserving per-bundle authorization granularity (Spec 362 AC 10).
+- Mid-batch halt conditions: swarm budget exhaust, conflict-halt under `conflict_resolution: halt`, operator interrupt, OR context compaction between bundles. On halt, report which bundles completed, which is in-progress (if any), which are queued — and exit without further bundle execution. Operators must re-enter `/matrix` to re-issue an `execute-all` choice; there is no `--resume` flag (Spec 362 Constraint).
+
+## [mechanical] Step 1b — Ceremony-floor pre-flight (Spec 362)
+
+Before each bundle's agent dispatch, evaluate every spec in the bundle against the "When NOT to use /parallel" rule (see top of this file). Filter specs matching ANY of:
+- LOC ≤ ~50 — sum the approximate LOC across files listed in the spec's `## Implementation Summary` `Changed files` list (rough heuristic, not a hard count).
+- Doc-only paths — every listed path matches `docs/`, `*.md`, or `README*` (no source-code paths).
+- `Token-Cost: $` in frontmatter AND no other heavyweight indicator (e.g., `Consensus-Review: true`, `R >= 3`, `E >= 3`).
+
+For each filtered spec, report: `inline-cheaper — <spec-id> skipped from this batch (<reason>); run inline.` Then proceed with the unfiltered specs.
+
+**Placeholder fallback (Spec 362 Req 4)**: If a draft spec's `## Implementation Summary` `Changed files` list contains the literal `<path>` placeholder OR the section is missing entirely, `/parallel` does NOT filter that spec — placeholder content cannot be evaluated, and operator-included specs are trusted by default.
+
+**Empty bundle**: If a bundle becomes empty after filtering (every spec was filtered as inline-cheaper), `/parallel` skips that bundle entirely and proceeds to the next. Report: `Bundle <N> empty after ceremony-floor filter — skipping.`
+
+This filter lives in `/parallel`, not in `/matrix` — `/matrix` does not need to learn LOC heuristics.
 
 ## [mechanical] Step 2 — Validate specs
 
@@ -200,11 +276,11 @@ Failed specs will be skipped.
 ```
 
 > **Choose** — type a number or keyword:
-> | # | Action | What happens |
-> |---|--------|--------------|
-> | **1** | `merge` | Begin sequential merge (NNN → MMM) |
-> | **2** | `inspect` | List changed files per worktree before deciding |
-> | **3** | `abort` | Abort — worktrees preserved for manual handling |
+> | # | Rank | Action | Rationale | What happens |
+> |---|------|--------|-----------|--------------|
+> | **1** | 1 | `merge` | Default after agents complete; sequential is safe | Begin sequential merge (NNN → MMM) |
+> | **2** | 2 | `inspect` | Review diff before committing to merge | List changed files per worktree before deciding |
+> | **3** | — | `abort` | Use only if agents went off-track | Abort — worktrees preserved for manual handling |
 
 If `inspect`: for each completed worktree, run `git diff --stat spec-NNN..main` (or equivalent) and display the changed files. Then re-present the choice block (without the inspect option).
 
@@ -218,10 +294,10 @@ For each completed spec (in spec-number order):
    - Report the conflicting files.
    - Present:
      > **Merge conflict in Spec NNN** — type a number:
-     > | # | Action | What happens |
-     > |---|--------|--------------|
-     > | **1** | `resolve` | Pause for manual conflict resolution, then continue |
-     > | **2** | `skip` | Skip this spec — preserve worktree, continue to next |
+     > | # | Rank | Action | Rationale | What happens |
+     > |---|------|--------|-----------|--------------|
+     > | **1** | 1 | `resolve` | Direct path; conflict is real and needs operator | Pause for manual conflict resolution, then continue |
+     > | **2** | — | `skip` | Defer this spec; keep batch moving | Skip this spec — preserve worktree, continue to next |
    - If `skip`: skip this spec, preserve worktree, continue to next.
    - If `resolve`: pause for human resolution, then continue.
 3. If merge succeeds and a test command is configured:
@@ -274,13 +350,15 @@ Preserved worktrees: .worktrees/spec-PPP (if any)
 
 For each successfully merged spec, read the spec file and extract the first sentence of the `## Objective` section.
 
+<!-- safety-rule: session-data — if today's session log has unsynthesized spec activity AND ## Summary is unpopulated, /session ranks 1 and stop is downgraded to —. See docs/process-kit/implementation-patterns.md § Session-data safety rule. -->
+
 > **Choose** — type a number or keyword:
-> | # | Action | What happens |
-> |---|--------|--------------|
-> | **1** | `close all` | Run `/close` for each merged spec sequentially |
-> | **2** | `close NNN` | Close a specific merged spec (type spec number). _<objective>_ |
-> | **3** | `implement next` | Skip close — start next implementation |
-> | **4** | `session` | Run `/session` to update the session log |
-> | **5** | `stop` | End session — review deliverables offline |
+> | # | Rank | Action | Rationale | What happens |
+> |---|------|--------|-----------|--------------|
+> | **1** | 1 | `close all` | Drains all merged specs to closed status | Run `/close` for each merged spec sequentially |
+> | **2** | 2 | `close NNN` | Selective close; finish one at a time | Close a specific merged spec (type spec number). _<objective>_ |
+> | **3** | — | `implement next` | Skip close; resumes solve loop | Skip close — start next implementation |
+> | **4** | 2 | `session` | Synthesize the parallel arc; especially if multi-spec | Run `/session` to update the session log |
+> | **5** | — | `stop` | Downgraded if today's session log has unsynthesized entries | End session — review deliverables offline |
 >
 > _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_

@@ -1,7 +1,6 @@
 ---
 name: interview
 description: "Socratic elicitation for thinking through problems"
-model_tier: sonnet
 workflow_stage: planning
 ---
 # Framework: FORGE
@@ -55,48 +54,6 @@ If `--resume` is in $ARGUMENTS:
 2. Find the first file where the `Routed to:` line is empty or missing (incomplete interview).
 3. If found: read the file, identify the last completed phase, report "Resuming interview: <topic> — picking up at Phase <N>." Then jump to the appropriate phase below.
 4. If no incomplete interview found: report "No incomplete interviews found in docs/sessions/. Start a new one with `/interview <topic>`." Stop.
-
----
-
-## [mechanical] Step 0b — Brownfield detection (Spec 202)
-
-Before establishing the topic, check whether the project has existing source code (brownfield):
-
-1. Scan the project root for common source file patterns:
-   `*.java`, `*.py`, `*.ts`, `*.js`, `*.go`, `*.rs`, `*.cs`, `*.kt`,
-   `package.json`, `pom.xml`, `build.gradle`, `requirements.txt`, `Cargo.toml`, `go.mod`,
-   `pyproject.toml`, `composer.json`, `Gemfile`
-
-2. If source files are found, this is a **brownfield** project. Before starting Socratic elicitation, perform a **codebase scan** to build a draft PRD section:
-
-   a. **Detected features**: Scan source files for major modules, entry points, API endpoints (e.g., route definitions, controller classes, handler functions), and CLI commands.
-   b. **APIs**: Identify REST endpoints, GraphQL schemas, gRPC service definitions, or message queue consumers from route files, OpenAPI specs, or annotation patterns.
-   c. **Data models**: Find entity/model classes, database schemas (migration files, ORM models), and data transfer objects.
-   d. **Tech stack**: Identify languages, frameworks, build tools, and runtime dependencies from config files and imports.
-   e. **Integrations**: Detect external service connections (database URLs, API client configs, SDK imports, environment variables referencing external services).
-
-3. Present the draft PRD section to the user before starting elicitation:
-
-   ```
-   ## Codebase Analysis (brownfield detection)
-
-   I scanned your existing codebase. Here is what I found:
-
-   **Tech Stack**: <detected languages, frameworks, build tools>
-   **Detected Features**:
-   - <feature 1 -- brief description>
-   - <feature 2 -- brief description>
-   - ...
-
-   **APIs**: <detected endpoints or "none detected">
-   **Data Models**: <detected models or "none detected">
-   **Integrations**: <detected external services or "none detected">
-
-   This draft is based on code structure only -- I will ask questions to fill
-   gaps and capture your future requirements.
-   ```
-
-4. If no source files found (greenfield): skip this step silently and proceed to Step 1 normally.
 
 ---
 

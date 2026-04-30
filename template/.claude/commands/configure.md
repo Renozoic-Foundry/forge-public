@@ -1,7 +1,6 @@
 ---
 name: configure
 description: "Adjust any defaulted onboarding setting (stack, agents, autonomy, methodology, features, MCP servers)"
-model_tier: sonnet
 workflow_stage: lifecycle
 ---
 # Framework: FORGE

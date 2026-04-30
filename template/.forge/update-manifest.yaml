@@ -36,6 +36,7 @@ framework:
     - ".claude/commands/skills.md"
     - ".claude/commands/spec-gate.md"
     - ".claude/commands/spec.md"
+    - ".claude/commands/synthesize.md"  # Spec 328 — classification added during /synthesize mode-recommendation + --all flag work
     - ".claude/commands/tab.md"
     - ".claude/commands/test.md"
     - ".claude/commands/trace.md"
@@ -48,6 +49,15 @@ framework:
     - ".devcontainer/"
     - ".claude/settings.json.template"
     - "docker-compose.nanoclaw.yml"
+    - "scripts/validate-authorization-rules.sh"  # Spec 327 — FORGE-shipped framework linter
+    - "scripts/validate-authorization-rules.ps1"  # Spec 327 — PS parity
+    - "scripts/auth-rules-whitelist.yaml"  # Spec 327 — operator-curated; framework-shipped stub
+    - "scripts/validate-agents-md-drift.sh"  # Spec 330 — FORGE-shipped prose↔YAML drift detector
+    - "scripts/validate-agents-md-drift.ps1"  # Spec 330 — PS parity
+    - "scripts/agents-md-action-aliases.yaml"  # Spec 330 — operator-curated alias map; framework-shipped stub
+    - "scripts/tests/test-close-commit-ordering.sh"  # Spec 348 — FORGE-shipped /close commit-ordering regression test
+    - "scripts/tests/test-close-commit-ordering.ps1"  # Spec 348 — PS parity
+    - "scripts/tests/test-bodies-equal-crlf.sh"  # Spec 350 — bodies_equal CRLF normalization regression test
 
 project:
   description: "Project-owned files — never touch during upgrade"

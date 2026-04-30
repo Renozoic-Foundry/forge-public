@@ -1,7 +1,6 @@
 ---
 name: nanoclaw
 description: "Manage the NanoClaw container — start, stop, status, logs"
-model_tier: sonnet
 workflow_stage: configuration
 ---
 # Framework: FORGE

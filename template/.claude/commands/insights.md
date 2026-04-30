@@ -1,7 +1,6 @@
 ---
 name: insights
 description: "Mine FORGE process data for cross-session insights"
-model_tier: haiku
 workflow_stage: session
 ---
 # Framework: FORGE

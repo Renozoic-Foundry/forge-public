@@ -11,7 +11,7 @@ If you are maintaining a private fork of FORGE, these scripts are your QA toolki
 | Script | Purpose | When to run |
 |--------|---------|-------------|
 | `validate-bash.sh` | Strip Jinja2 tags, then run shellcheck on all template bash scripts | After modifying any `.sh` file in `template/` |
-| `validate-command-sync.sh` | Verify `.claude/commands/` and `.forge/commands/` file parity and content sync | After adding, removing, or renaming a command file |
+| `../.forge/bin/forge-sync-cross-level.sh` | Propagate canonical repo-root sources to `template/` mirrors (supersedes `validate-command-sync.sh` — Spec 270) | After editing `.forge/commands/`, `.claude/agents/`, or `docs/process-kit/`; `--check` in CI/pre-commit |
 | `smoke-test-template.sh` | Run `copier copy --defaults`, verify output renders cleanly (no Jinja2 artifacts, key files present, `.copier-answers.yml` generated) | After any template change |
 | `smoke-test-runtime.sh` | Bootstrap a project, then exercise the agent runtime pipeline in `--dry-run` mode | After modifying runtime scripts in `template/.forge/bin/` or `template/.forge/adapters/` |
 
@@ -30,7 +30,6 @@ If you are maintaining a private fork of FORGE, these scripts are your QA toolki
 | `validate-spec-index.sh` | Validate `docs/specs/README.md` consistency |
 | `validate-readme-stats.sh` | Validate README stats against spec count |
 | `validate-public-docs.sh` | Validate public-facing docs (links, deprecated refs) |
-| `build-smileyforge.py` | Build SmileyFORGE distribution from forge-public (relocated from tmp/ by Spec 259) |
 
 ## Usage
 
@@ -43,8 +42,8 @@ bash scripts/validate-bash.sh
 # Validate with verbose output
 bash scripts/validate-bash.sh --verbose
 
-# Check command file parity (Phase 1) + content sync (Phase 2)
-bash scripts/validate-command-sync.sh --all
+# Check cross-level parity (repo-root canonical ↔ template/ mirrors)
+bash .forge/bin/forge-sync-cross-level.sh --check
 
 # Full template smoke test
 bash scripts/smoke-test-template.sh
@@ -66,7 +65,7 @@ If you are maintaining a private fork of this repository:
 1. **After modifying template files**, run the validation suite:
    ```bash
    bash scripts/validate-bash.sh
-   bash scripts/validate-command-sync.sh --all
+   bash .forge/bin/forge-sync-cross-level.sh --check
    bash scripts/smoke-test-template.sh
    ```
 
@@ -78,7 +77,7 @@ If you are maintaining a private fork of this repository:
 3. **CI integration**: These scripts exit non-zero on failure, making them suitable for CI pipelines. A minimal GitHub Actions workflow:
    ```yaml
    - run: bash scripts/validate-bash.sh
-   - run: bash scripts/validate-command-sync.sh --all
+   - run: bash .forge/bin/forge-sync-cross-level.sh --check
    - run: bash scripts/smoke-test-template.sh
    ```
 

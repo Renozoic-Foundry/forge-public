@@ -139,15 +139,26 @@ list_commands() {
 }
 
 # Print help for a specific command
+# Spec 317: accepts both spaced ("forge stoke") and hyphenated ("forge-stoke") forms.
 help_command() {
     local cmd_name="$1"
     local cmd_file
-    if ! cmd_file=$(find_command_file "${cmd_name}"); then
-        echo "Error: Unknown command '${cmd_name}'." >&2
-        echo "Run 'forge list' to see available commands." >&2
-        exit 1
+    # First try as-is (handles "forge-stoke", "implement", etc.)
+    if cmd_file=$(find_command_file "${cmd_name}"); then
+        cat "${cmd_file}"
+        return 0
     fi
-    cat "${cmd_file}"
+    # Then try replacing spaces with hyphens (handles "forge stoke" -> "forge-stoke")
+    local cmd_name_hyphen="${cmd_name// /-}"
+    if [[ "${cmd_name_hyphen}" != "${cmd_name}" ]]; then
+        if cmd_file=$(find_command_file "${cmd_name_hyphen}"); then
+            cat "${cmd_file}"
+            return 0
+        fi
+    fi
+    echo "Error: Unknown command '${cmd_name}'." >&2
+    echo "Run 'forge list' to see available commands." >&2
+    exit 1
 }
 
 # Detect the active AI agent runtime
@@ -220,14 +231,16 @@ dispatch_to_agent() {
 
     case "${agent}" in
         claude-code)
-            # Use claude -p to send the prompt
-            if ! echo "${prompt}" | claude -p - 2>/dev/null; then
+            # Use claude -p to send the prompt. Stderr is intentionally NOT
+            # redirected — operators need to see the underlying failure
+            # (auth, missing binary, quota) when dispatch fails (Spec 312).
+            if ! echo "${prompt}" | claude -p -; then
                 echo "Error: Claude Code dispatch failed." >&2
                 exit 3
             fi
             ;;
         aider)
-            if ! echo "${prompt}" | aider --message-file - 2>/dev/null; then
+            if ! echo "${prompt}" | aider --message-file -; then
                 echo "Error: Aider dispatch failed." >&2
                 exit 3
             fi
@@ -306,6 +319,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Multi-word subcommand resolution (Spec 317)
+# If COMMAND is a known prefix and the first remaining positional token is a
+# lowercase word, try resolving "<COMMAND>-<token>.md" before falling back to
+# "<COMMAND>.md". Example: `forge forge stoke` -> forge-stoke.md.
+if [[ -n "${COMMAND}" ]] && [[ ${#REMAINING_ARGS[@]} -gt 0 ]]; then
+    _next_token="${REMAINING_ARGS[0]}"
+    if [[ "${_next_token}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+        if find_command_file "${COMMAND}-${_next_token}" >/dev/null 2>&1; then
+            COMMAND="${COMMAND}-${_next_token}"
+            REMAINING_ARGS=("${REMAINING_ARGS[@]:1}")
+        fi
+    fi
+fi
+
 # Handle built-in commands
 case "${COMMAND}" in
     list)
@@ -315,7 +342,15 @@ case "${COMMAND}" in
     help)
         if [[ -z "${SPEC_NUMBER}" ]] && [[ ${#REMAINING_ARGS[@]} -gt 0 ]]; then
             # forge help implement — SPEC_NUMBER won't be set, but first remaining arg is the command name
-            help_command "${REMAINING_ARGS[0]}"
+            # Spec 317: also support `forge help forge stoke` (unquoted multi-word).
+            if [[ ${#REMAINING_ARGS[@]} -ge 2 ]] \
+                && [[ "${REMAINING_ARGS[0]}" =~ ^[a-z][a-z0-9-]*$ ]] \
+                && [[ "${REMAINING_ARGS[1]}" =~ ^[a-z][a-z0-9-]*$ ]] \
+                && find_command_file "${REMAINING_ARGS[0]}-${REMAINING_ARGS[1]}" >/dev/null 2>&1; then
+                help_command "${REMAINING_ARGS[0]}-${REMAINING_ARGS[1]}"
+            else
+                help_command "${REMAINING_ARGS[0]}"
+            fi
         elif [[ -n "${SPEC_NUMBER}" ]]; then
             # forge help 42 — spec number parsed where command name expected; unlikely but handle
             echo "Error: 'forge help' expects a command name, not a number." >&2

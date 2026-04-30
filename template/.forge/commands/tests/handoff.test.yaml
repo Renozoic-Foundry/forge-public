@@ -28,16 +28,12 @@ template_vars:
   must_not_contain_raw:
     - "cookiecutter."
 
-model_tier:
-  expected: "sonnet"
 
 frontmatter:
   required_fields:
     - "name"
     - "description"
-    - "model_tier"
     - "workflow_stage"
   expected_values:
     name: "handoff"
-    model_tier: "sonnet"
     workflow_stage: "review"

@@ -32,6 +32,15 @@ features:
 # MCP servers — from template .mcp.json, human activates per project
 mcp_servers: {}              # populated from .mcp.json during onboarding
 
+# Agent toggles (Spec 359) — parallel structure to features and mcp_servers.
+# /configure writes per-agent enablement here. null = not yet asked.
+agents: {}                   # populated during onboarding / by /configure
+
+# Spec settings (Spec 363) — draft-spec lifecycle config.
+# null means use the AGENTS.md default (`forge.spec.draft_validity_days`, default 90).
+spec:
+  draft_validity_days: null  # override default 90-day validity window for drafts
+
 # Credentials & environment — placeholders needing human input
 setup_tasks: []              # populated by scanning .env.example, config files
 
@@ -42,3 +51,6 @@ project:
   primary_stack: null
   test_command: null
   lint_command: null
+  methodology: null          # Spec 359 — scrum | safe | kanban | devops | safety-critical | none. Set by /configure.
+  autonomy_level: null       # Spec 359 — L0 | L1 | L2 | L3 | L4. Set by /configure.
+  permission_mode: null      # Spec 359 — Claude Code permission mode mapped from autonomy_level. Set by /configure.

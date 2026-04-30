@@ -38,20 +38,14 @@ All files from `.claude/commands/` are copied to the target project:
 
 | File | Command |
 |---|---|
-| `bug.md` | `/bug` |
 | `close.md` | `/close` |
-| `handoff.md` | `/handoff` |
-| `harvest.md` | `/harvest` |
 | `implement.md` | `/implement` |
 | `matrix.md` | `/matrix` |
 | `note.md` | `/note` |
 | `now.md` | `/now` |
 | `evolve.md` | `/evolve` |
-| `retro.md` | `/retro` |
 | `revise.md` | `/revise` |
 | `session.md` | `/session` |
-| `skills.md` | `/skills` |
-| `spec-gate.md` | `/spec-gate` |
 | `spec.md` | `/spec` |
 | `tab.md` | `/tab` |
 | `test.md` | `/test` |

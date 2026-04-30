@@ -1,11 +1,13 @@
 ---
 name: matrix
 description: "Update and present the prioritization matrix"
-model_tier: haiku
 workflow_stage: planning
 ---
 
 # Framework: FORGE
+
+**Output verbosity (Spec 225)**: At the start of execution, read `forge.output.verbosity` from `AGENTS.md` (default: `lean`). In **lean** mode, suppress non-actionable diagnostic output (passing-gate confirmations, KPI tables, calibration deltas, MCP pin status, deprecation scans, signal-by-signal pattern dumps, root-cause groupings, deferred-scope aging when none aged, score-rubric details when unchanged) — write the full content to its file artifact (session log, `pattern-analysis.md`, etc.) and emit a one-line pointer in chat (or omit entirely if purely informational). In **verbose** mode, emit full detail as before. **Never suppressed in either mode**: choice blocks, FAILed gates, push-confirmation prompts, Review Brief "Needs Your Review" items, operator-input prompts, error/abort messages. See `docs/process-kit/output-verbosity-guide.md` for the full rules and worked examples.
+
 Update and present the prioritization matrix.
 
 If $ARGUMENTS is `?` or `help`:
@@ -19,6 +21,9 @@ If $ARGUMENTS is `?` or `help`:
     re-scores promoted specs, evaluates strategic fit (Spec 110), checks review
     velocity for cognitive debt (Spec 128), recommends sprint bundles, presents
     ranked tables, writes corrections on confirmation.
+    When ≥2 dependency-clean parallel-safe lanes exist, Step 11 emits an
+    execute-all choice block constructing a `/parallel --batch` command
+    spanning all dependency-clean lanes forward (Spec 362).
   See: docs/backlog.md, docs/process-kit/scoring-rubric.md
   ```
   Stop — do not execute any further steps.
@@ -61,15 +66,17 @@ If $ARGUMENTS is `?` or `help`:
    ```
    If no specs have dependencies defined, skip this section silently.
 
-8. **Strategic fit evaluation** (Spec 110):
+8. **Strategic fit evaluation** (Spec 110, extended by Spec 363):
    a. Read the project's CLAUDE.md — extract the project description and mission statement (the first paragraph or "## What this project is" section).
    b. Read AGENTS.md — check for `forge.strategic_scope` config under `## Project Context`. If present, use it as the strategic scope definition. If absent, infer scope from CLAUDE.md's project description.
+   b2. **Aging-draft pre-pass (Spec 363)**: Before classifying, scan every `Status: draft` spec for `valid-until: YYYY-MM-DD` in frontmatter. Specs whose `valid-until:` is **populated AND past today** are pre-flagged as expired and added to the strategic-fit table (step e) regardless of their on-mission classification — explicit operator engagement (renewal via /revise or direct edit, OR deprecation via this flow) is the renewal mechanism. Drafts lacking `valid-until:` (pre-backfill state) are NOT pre-flagged — they pass through normal on-mission classification only. Mixed states are handled per-spec.
    c. **The strategic fit test**: For each draft spec, ask: "Does this spec's objective directly improve the project's core workflow loop as described in CLAUDE.md / `forge.strategic_scope`?" If the spec builds runtime infrastructure, a separate product, or features that belong in another tool <!-- module:nanoclaw -->(e.g., NanoClaw, an MCP server, an IDE extension)<!-- /module:nanoclaw -->, it fails the test.
    d. Classify each draft spec:
       - `on-mission` — directly improves the core workflow (spec lifecycle, gates, evidence, process enforcement)
       - `borderline` — useful but expands scope beyond the core loop (may be worth keeping with scope adjustment)
       - `scope-creep` — building a different product or feature that belongs elsewhere
-   e. Present a Strategic Fit table:
+      - `expired` — `valid-until:` past today (Spec 363); operator decision needed: renew via /revise, deprecate, or reclassify. May coincide with any of the above; expired status takes precedence in the table.
+   e. Present a Strategic Fit table (per Spec 363, expired drafts surface here as a row alongside scope-creep candidates — same dispositions, no new column):
       ```
       ## Strategic Fit Review
       | Spec | Title | Classification | Rationale |
@@ -78,13 +85,15 @@ If $ARGUMENTS is `?` or `help`:
 <!-- module:nanoclaw -->
       | NNN  | ...   | scope-creep    | Builds runtime scheduler — belongs in NanoClaw |
 <!-- /module:nanoclaw -->
+      | NNN  | ...   | expired        | valid-until: YYYY-MM-DD past today; renew via /revise or deprecate |
       ```
-   f. For each `scope-creep` spec, recommend a disposition:
-      - `deprecate` — not worth doing in any project (rare)
+   f. For each `scope-creep` OR `expired` spec, recommend a disposition:
+      - `deprecate` — not worth doing in any project (rare for scope-creep; common for expired drafts whose moment has passed)
 <!-- module:nanoclaw -->
       - `defer-to-<project>` — belongs in a specific other project (e.g., `defer-to-nanoclaw`, `defer-to-mcp-server`)
 <!-- /module:nanoclaw -->
       - `reclassify` — scope can be narrowed to fit (explain how)
+      - `renew` (Spec 363, expired-only) — operator wants to keep working it: run `/revise NNN` to refresh `valid-until:` (default today + 90), or edit the field directly. The renewal signal IS the explicit /revise invocation or operator edit.
    g. **Human confirmation gate**: Present dispositions and ask for confirmation before applying. The operator can:
       - Confirm all dispositions
       - Override individual classifications (e.g., "keep 094 as draft — I want it here")
@@ -114,9 +123,6 @@ If $ARGUMENTS is `?` or `help`:
       ## Review Velocity
       Review velocity OK — N of M recently closed specs have human review evidence.
       ```
-   g. **Token cost overrun check** (Spec 158): For each closed spec with a `Token-Cost:` estimate in frontmatter, check if actual token cost data exists in `.forge/metrics/command-costs.yaml`. If actual significantly exceeds estimate (e.g., `$` estimate but actual tokens > $$ threshold), flag: "Spec NNN: TC estimate was $ but actual cost was $$$ — consider whether ACs were insufficiently precise (SR too low) or scope was underestimated."
-   h. This check is **advisory only** — it MUST NOT block any `/close` or `/implement` operations.
-
 10. Present the full ranked backlog in two tables (process improvement + application/infrastructure), sorted by score descending within each table. Include a `Depends` column showing dependency spec IDs (or "—") for non-closed specs. Include a `TC` column showing the Token-Cost indicator (`$`, `$$`, `$$$`, or `?` if not set) for non-closed specs. Exclude deprecated specs from the ranked tables (show them in a separate "Deprecated" section below).
 
 11. **Sprint lane planning** (Spec 156, replaces effort-tier bundles):
@@ -165,6 +171,28 @@ If $ARGUMENTS is `?` or `help`:
 
    i. The operator can select a sprint to begin. Report: "Selected Sprint N. Starting with Spec NNN — run `/implement NNN` or `/parallel NNN NNN` for parallel lanes."
 
+   j. **Execute-all choice block (Spec 362)**: After the sprint plan table, count "dependency-clean parallel-safe lanes" — lanes whose specs are all `draft`/`approved` (not blocked by un-closed dependencies) AND have no file overlap with any other lane's specs across the entire plan (not just within their own sprint). If this count is **≥ 2**, emit a choice block; if **< 2**, skip silently (the existing single-lane suggestion in the Notes column is sufficient — Req 7).
+
+      ```
+      Execute multiple lanes? Spec 362 added a /parallel --batch path that
+      sequences all dependency-clean lanes forward in dependency-respecting order.
+      ```
+
+      <!-- safety-rule: session-data — /matrix is a planning command and does not synthesize session data; the safety rule does not fire here in practice. The token is present to satisfy the Spec 320 Req 4 lint and document that the rule was considered. -->
+
+      > **Choose** — type a number or keyword:
+      > | # | Rank | Action | Rationale | What happens |
+      > |---|------|--------|-----------|--------------|
+      > | **1** | 1 | `execute-all` | Multiple ready lanes; batch save N close-all loops | Construct `/parallel --batch '<lane1>' '<lane2>' ...` spanning all dependency-clean lanes forward (Sprint 1 first, then Sprint 2 lanes after their deps clear, etc.). Display the constructed command. Operator confirms by typing the command (no native invoke primitive — operator-mediated handoff per Req 6). |
+      > | **2** | 2 | `manual` | Existing flow; pick one lane | Operator picks one lane from the table (existing behavior) |
+      > | **3** | — | `stop` | Defer execution decision | End /matrix without proposing a specific run |
+
+      **Construction rules** (Req 6):
+      - Lanes appear as bundles in the constructed command IN DEPENDENCY-RESPECTING ORDER. Sprint 1 dependency-clean lanes go first, then Sprint 2 lanes whose dependencies are scheduled in Sprint 1 (so they'll close before Sprint 2 dispatches), then Sprint 3, etc.
+      - Each lane becomes one single-quoted bundle string: `'NNN MMM'` (space-separated spec IDs).
+      - Lanes whose dependencies are NOT yet closed AND NOT scheduled earlier in the constructed batch are EXCLUDED from the command.
+      - The operator's selection of `execute-all` is the operator's confirmation to run the displayed command verbatim — `/matrix` does not auto-execute.
+
 ### Step 11b — Review Router (Spec 159)
 
 After generating the sprint plan (Step 11) but before presenting highlights (Step 12), run the review router on the sprint plan:
@@ -180,6 +208,41 @@ e. BLOCK is advisory — the operator decides whether to adjust the plan.
    - Any spec that moved rank since the last update
    - Any `proposed` spec that is now blocked or unblocked by a recently completed spec
    - **Blocked specs** that cannot be implemented until their dependencies close
+12a. **Pre-flight recommendation (Spec 321)**: For the top-ranked draft spec from Step 12, read its frontmatter `Consensus-Review:` and parse the `Priority-Score:` HTML comment for E and R values (format: `<!-- BV=N E=N R=N SR=N → ... -->`). If `Consensus-Review: true` AND (`R >= 3` OR `E >= 3`), emit one inline advisory alongside the top-rank presentation:
+
+    > **Pre-flight recommendation**: Spec NNN is flagged `Consensus-Review: true` with R=<N> / E=<N>. Run `/consensus NNN` before `/implement` — CI-210 documents concrete rework avoidance on similar specs (Spec 294 saved ~45 files of rework). _(Advisory only — operator can skip.)_
+
+   Skip silently if (a) the `Priority-Score:` comment is missing or unparseable, (b) `Consensus-Review:` is absent or any value other than literal `true`, or (c) both R < 3 AND E < 3. The advisory is non-blocking and prompt-level — it does not gate `/implement`.
+
+12b. **Hygiene Pass** (Spec 370):
+
+# >>> spec-370 hygiene-pass
+HYGIENE PASS — Two scans for backlog hygiene. Run after rank/score refresh and Step 12a pre-flight, before Step 13 exit-gate. Skip silently if neither scan surfaces candidates.
+
+1. **Deprecation candidates scan**: For each `Status: draft` spec, qualify as a deprecation candidate when **both** signals hold:
+   - `valid-until:` in frontmatter is populated AND past today (Spec 363 detector).
+   - Backlog row rank has been ≥ 30 for ≥ 30 days (bottom-of-backlog dwell).
+   Both signals required to avoid false positives on actively-revised drafts.
+
+2. **Deferral candidates scan**: For each `Status: draft` spec, read `Dependencies:` field. If any named dependency spec's `Status:` is `deferred` or `deprecated` (verified by reading the dependency spec file directly), qualify as a deferral candidate. Inferred re-activation trigger: `<dependency-spec-id> closes` (operator can override).
+
+3. **Idempotency filter**: Exclude:
+   - Specs already `Status: deprecated` (deprecation scan).
+   - Specs whose Revision Log contains `Deferred via /matrix hygiene pass` within last 30 days (deferral scan).
+
+4. **Overflow handling**: If combined candidate count > 10, emit a summary count line first ("Hygiene Pass: N deprecation, M deferral candidates — review which?") so operator picks a category (or `both`, or `skip`) before facing the full inventory.
+
+5. **Choice Block**: Emit candidates with one row per candidate (max 10 per category, paginated). Operator chooses: `apply all` / `pick <indices>` / `skip` / `view detail <index>`. `skip` is rank 1 by default — operators running /matrix purely for rank refresh continue to the exit-gate.
+
+6. **Disposition (deprecate)**: update spec frontmatter `Status: deprecated` + `Closed: <today>`, append Revision Log "YYYY-MM-DD: Deprecated via /matrix hygiene pass — <reason>." Update README.md status row, backlog.md row marker → ✅ deprecated, append CHANGELOG entry.
+
+7. **Disposition (defer)**: prompt for re-activation trigger; **skip-on-empty default** — if operator provides empty input or declines, that candidate's deferral is skipped (other candidates still apply). On non-empty trigger: append Revision Log "YYYY-MM-DD: Deferred via /matrix hygiene pass — <reason>. Re-activation trigger: <trigger>." Update backlog row note. Status stays `draft`.
+
+8. **Engagement signal**: `/close` captures apply-rate vs skip-rate per category to `docs/sessions/signals.md` for next /evolve cycle.
+
+See: docs/process-kit/backlog-hygiene-guide.md — canonical source.
+# <<< spec-370 hygiene-pass
+
 13. Ask for confirmation, then:
    - Write status corrections and manual-override resolutions to docs/backlog.md (arithmetic score errors were already auto-corrected in step 3 — manual overrides require human decision here)
    - Write strategic fit dispositions (if confirmed in step 8g)

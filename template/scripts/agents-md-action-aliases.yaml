@@ -1,0 +1,70 @@
+# scripts/agents-md-action-aliases.yaml
+# Alias and ignore configuration for the AGENTS.md prose↔YAML drift detector
+# (Spec 330; consumed by scripts/validate-agents-md-drift.sh + .ps1).
+# Triage guide for drift findings: docs/process-kit/agents-md-authorization-model.md (Spec 334).
+#
+# Purpose
+# -------
+# AGENTS.md's "### Authorization-required commands" section is operator-readable PROSE.
+# The sentinel-delimited YAML block (Spec 327, <!-- forge:auth-rules:start --> ... end -->)
+# is the machine-readable view consumed by the lint gate. The two CAN drift independently.
+# The drift detector compares the two action sets and FAILs when either side has an action
+# the other doesn't.
+#
+# This file lets the detector reconcile prose phrasing with block names without forcing
+# verbatim duplication. Three sections:
+#
+#   aliases:        prose phrase  → block action name (e.g., "force push" → "git_push_force")
+#   ignore_prose:   prose phrases the lint gate doesn't track (slash commands, conceptual
+#                   destructive-op examples that aren't shell-grep-able patterns)
+#   ignore_block:   block actions intentionally not listed in prose (rare; prefer adding the
+#                   prose bullet over ignoring on the block side — silent drift escape risk)
+#
+# Hardening (Spec 330 DA Finding 2 disposition)
+# ---------------------------------------------
+# Empty/missing alias targets are REJECTED at parse time (linter exits 2 with a clear error).
+# Rationale: a permissive parser would allow an operator to silently neutralize drift detection
+# for an action by pointing it at "" — re-introducing the very defect class this spec prevents.
+# If you genuinely need a phrase to be invisible to the drift detector, put it under
+# `ignore_prose:` (which is auditable as a list) rather than aliasing it to nothing.
+#
+# Format
+# ------
+# aliases:
+#   "<prose phrase>": <block_action_name>
+# ignore_prose:
+#   - "<phrase>"
+# ignore_block:
+#   - "<block_action_name>"
+
+aliases:
+  # Each alias maps a prose phrasing to a block action name.
+  # Spec 330 AC 9b: target MUST reference an action declared in the YAML block (post-ignore_block filtering).
+  # Dangling targets (where the target name doesn't appear in the block) are rejected at parse time with exit 2.
+  "force push": git_push_force
+  "git push --force": git_push_force
+  "git push -f": git_push_force
+  "reset --hard": git_reset_hard
+  "git reset --hard": git_reset_hard
+  "git checkout --": git_checkout_dashes
+  # Removed 2026-04-26 (Spec 330 AC 9c): "branch -D" → git_branch_force_delete and
+  # "git branch -D" → git_branch_force_delete were dangling targets (no git_branch_force_delete
+  # entry exists in the AGENTS.md YAML block). They were structurally inert because "branch -D"
+  # is in ignore_prose below, so the alias never fired. /consensus 330 caught the inconsistency;
+  # /revise → AC 9 dispositioned via removal + parse-time validation.
+
+ignore_prose:
+  # Per Spec 330 AC 9a, each entry MUST have an inline comment explaining why the prose mention
+  # is intentionally untracked by the drift detector. Audit ignore_prose periodically — entries
+  # added without justification are the silent-escape-hatch defect class flagged by /consensus 330.
+  - "/close"          # slash command — operator-facing lifecycle command, not a shell-grep-able pattern; lint gate doesn't track
+  - "/forge stoke"    # slash command — same rationale as /close
+  - "revert"          # destructive op mentioned in prose for human awareness; not pattern-tracked by Spec 327 lint gate (no `git_revert` action in YAML block by design — flagged for re-evaluation in Spec 326 triage)
+  - "branch -D"       # destructive op mentioned in prose for human awareness; not pattern-tracked (no `git_branch_force_delete` action in YAML block by design — flagged for re-evaluation in Spec 326 triage)
+
+ignore_block:
+  # Per Spec 330 AC 9a, each entry MUST have an inline comment. Use sparingly — block-side
+  # ignore is a stronger silencing of drift detection than prose-side ignore (an action declared
+  # in the block but not enumerated in prose is usually a prose gap, not an intentional ignore).
+  []
+

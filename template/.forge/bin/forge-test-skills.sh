@@ -160,16 +160,6 @@ sidecar_must_not_contain_raw() {
   done < <(yaml_get_array "$2" "must_not_contain_raw")
   [[ "$fail" -eq 0 ]] && { check_pass=1; check_msg="no raw template vars"; } || { check_pass=0; check_msg="raw template vars found:${flist}"; }
 }
-sidecar_model_tier() {
-  local expected; expected=$(yaml_get_scalar "$2" "expected")
-  if [[ -z "$expected" ]]; then check_pass=1; check_msg="model tier not specified"; return; fi
-  local actual; actual=$(grep -i '# Model-Tier:' "$1" 2>/dev/null | head -1 | sed 's/.*Model-Tier:[[:space:]]*//' | tr '[:upper:]' '[:lower:]')
-  expected=$(echo "$expected" | tr '[:upper:]' '[:lower:]')
-  if [[ -z "$actual" ]]; then check_pass=0; check_msg="no Model-Tier header (expected: ${expected})"
-  elif [[ "$actual" == "$expected" ]]; then check_pass=1; check_msg="model tier matches (${expected})"
-  else check_pass=0; check_msg="tier mismatch (expected: ${expected}, got: ${actual})"; fi
-}
-
 # --- Run a single sidecar check if data present ---
 _run_sidecar() {
   local fn="$1" key="$2" cmd_file="$3" test_file="$4" is_array="${5:-1}"
@@ -219,7 +209,6 @@ test_command_file() {
     _run_sidecar sidecar_files_must_exist "files_must_exist" "$test_file" "$test_file"
     _run_sidecar sidecar_commands_must_exist "commands_must_exist" "$test_file" "$test_file"
     _run_sidecar sidecar_must_not_contain_raw "must_not_contain_raw" "$cmd_file" "$test_file"
-    _run_sidecar sidecar_model_tier "expected" "$cmd_file" "$test_file" 0
   fi
 
   TOTAL_FILES=$((TOTAL_FILES + 1))

@@ -171,13 +171,12 @@ These FORGE commands form the multi-session coordination toolkit:
 - The session log is the primary handoff artifact for the next session
 - Include a Handoff block (Section 2) when work continues in the next session
 
-### `/handoff` -- structured context transfer
+### `/now review NNN` -- structured context transfer
 
 - Use at session end or when transferring work to another person or agent
-- Prints full validation checklists (not abbreviated like `/close`)
+- Generates spec-specific validation checklists from ACs/test plan/changed files
 - Reviews scratchpad for unresolved items
-- Produces a Handoff Summary block with next recommended spec
-- Preferred over `/session` alone when the next session will be run by a different operator
+- Produces a validation summary with next recommended spec
 
 ### `/now` -- session start orientation
 
@@ -231,7 +230,7 @@ Session 4:  /now --> /implement 205 --> /close 204,205 --> /session
 **Prevention:**
 - Run `/session` at end of every session (this is a FORGE hard rule)
 - Include a Handoff block when work spans sessions (Section 2)
-- Use `/handoff` instead of just `/session` when transferring to a different operator
+- Use `/now review NNN` when transferring to a different operator
 
 ### Batch dependency violations
 

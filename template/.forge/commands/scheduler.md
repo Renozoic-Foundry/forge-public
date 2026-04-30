@@ -1,7 +1,6 @@
 ---
 name: scheduler
 description: "Run multi-agent scheduler for dependency-aware parallel execution"
-model_tier: sonnet
 workflow_stage: lifecycle
 ---
 # Framework: FORGE
@@ -30,6 +29,23 @@ If $ARGUMENTS is `?` or `help`:
   Stop — do not execute any further steps.
 
 ---
+
+## [mechanical] Step 0z — Lane-mismatch warning (Spec 353)
+
+If `.forge/state/active-tab-*.json` marker exists for this session, read its `lane` field.
+
+This command's natural lane (per `docs/process-kit/multi-tab-quickstart.md` § Lane choice):
+
+| Command | Lane |
+|---------|------|
+| /parallel | feature |
+| /spec | feature OR process-only (depending on spec subject) |
+| /scheduler | feature |
+| /forge stoke | process-only |
+
+If `marker.lane` does not match this command's natural lane, emit a one-line warning: `⚠ Action targets <expected> lane; active tab is '<marker.lane>'. Continue?` Soft-gate only — do not refuse. Operator decides whether the mismatch matters.
+
+Skip silently if no marker exists.
 
 ## [mechanical] Step 1 — Load scheduler config
 

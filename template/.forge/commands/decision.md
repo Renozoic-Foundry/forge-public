@@ -1,7 +1,6 @@
 ---
 name: decision
 description: "Create a new Architecture Decision Record (ADR)"
-model_tier: sonnet
 workflow_stage: planning
 ---
 # Framework: FORGE

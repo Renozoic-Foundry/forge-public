@@ -124,3 +124,57 @@ forge_config_get_budget() {
   echo "cost_ceiling=${cost_ceilings[$lane]:-5.00}"
   echo "time_limit=${time_limits[$lane]:-3600}"
 }
+
+# ---- Onboarding seed readers (Spec 359) ----
+# Read keys from .forge/onboarding.yaml. Read-only; the writer for these keys
+# is governed by ADR-359 (Python+stdlib). Each function returns the value or
+# empty string on null/absent — never errors.
+
+# Internal: extract "  <field>: <value>" line from a named top-level YAML section.
+# Args: $1 = section name (e.g., project), $2 = field name, $3 = file path
+_forge_onboarding_section_field() {
+  local section="$1" field="$2" file="$3"
+  [[ -f "$file" ]] || { echo ""; return 0; }
+  awk -v section="$section" -v field="$field" '
+    BEGIN { in_section = 0 }
+    # Empty inline map (e.g., "agents: {}") closes the section immediately.
+    $0 ~ "^"section":[[:space:]]*\\{[[:space:]]*\\}" { exit }
+    # Section header on its own line opens the block.
+    $0 ~ "^"section":[[:space:]]*$" { in_section = 1; next }
+    # Any other top-level key closes the block.
+    /^[A-Za-z_]/ { in_section = 0 }
+    in_section && $0 ~ "^  "field":[[:space:]]" {
+      sub("^  "field":[[:space:]]*", "")
+      sub("[[:space:]]*#.*$", "")
+      sub("[[:space:]]+$", "")
+      if ($0 == "null" || $0 == "~") $0 = ""
+      gsub(/^"|"$/, "")
+      print
+      exit
+    }
+  ' "$file"
+}
+
+# Resolve onboarding.yaml path: optional override arg, then PROJECT_DIR, then cwd.
+_forge_onboarding_path() {
+  if [[ -n "${1:-}" ]]; then echo "$1"; return 0; fi
+  if [[ -n "${PROJECT_DIR:-}" ]]; then echo "${PROJECT_DIR}/.forge/onboarding.yaml"; return 0; fi
+  echo ".forge/onboarding.yaml"
+}
+
+forge_onboarding_get_methodology() {
+  _forge_onboarding_section_field "project" "methodology" "$(_forge_onboarding_path "${1:-}")"
+}
+
+forge_onboarding_get_autonomy_level() {
+  _forge_onboarding_section_field "project" "autonomy_level" "$(_forge_onboarding_path "${1:-}")"
+}
+
+forge_onboarding_get_permission_mode() {
+  _forge_onboarding_section_field "project" "permission_mode" "$(_forge_onboarding_path "${1:-}")"
+}
+
+forge_onboarding_get_agent_enabled() {
+  local agent="$1"
+  _forge_onboarding_section_field "agents" "$agent" "$(_forge_onboarding_path "${2:-}")"
+}

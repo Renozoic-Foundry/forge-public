@@ -1,5 +1,9 @@
+---
+name: note
+description: "Add a scratchpad note for the next process checkpoint"
+workflow_stage: session
+---
 # Framework: FORGE
-# Model-Tier: haiku
 Add a scratchpad note to be reviewed at the next appropriate process checkpoint.
 
 If $ARGUMENTS is `?` or `help`:

@@ -1,7 +1,6 @@
 ---
 name: interview
 description: "Socratic elicitation for thinking through problems"
-model_tier: sonnet
 workflow_stage: planning
 ---
 # Framework: FORGE

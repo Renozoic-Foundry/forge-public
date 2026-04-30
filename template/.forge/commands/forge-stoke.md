@@ -15,6 +15,23 @@
 > ```
 > Then run `/forge stoke` to restore all remaining files.
 
+## [mechanical] Step 0z — Lane-mismatch warning (Spec 353)
+
+If `.forge/state/active-tab-*.json` marker exists for this session, read its `lane` field.
+
+This command's natural lane (per `docs/process-kit/multi-tab-quickstart.md` § Lane choice):
+
+| Command | Lane |
+|---------|------|
+| /parallel | feature |
+| /spec | feature OR process-only (depending on spec subject) |
+| /scheduler | feature |
+| /forge stoke | process-only |
+
+If `marker.lane` does not match this command's natural lane, emit a one-line warning: `⚠ Action targets <expected> lane; active tab is '<marker.lane>'. Continue?` Soft-gate only — do not refuse. Operator decides whether the mismatch matters.
+
+Skip silently if no marker exists.
+
 ### [mechanical] Step 0a — Dirty working tree check (Spec 166)
 
 Before any update operations, check for uncommitted changes:
@@ -121,26 +138,116 @@ After the dirty-tree check and before the expensive template render in Step 0b, 
 
 7. Proceed to Step 0b.
 
-### [mechanical] Step 0b — Missing file restoration (Spec 068)
+### [mechanical] Step 0b — Missing file restoration (Spec 068, reframed by Spec 297)
 
 Before checking for updates, detect and restore files that exist in the FORGE template but are missing from this project. `copier update` only applies diffs — it will NOT restore locally-missing files.
 
-1. Read `.copier-answers.yml` to get `_src_path` (the template path). If `.copier-answers.yml` does not exist, skip Step 0b (Step 1 will handle detection).
+**Mechanism (Spec 297 reframe)**: enumerate the upstream template's tracked files at `_commit` via `git ls-tree`, filter by the project's `.copier-answers.yml` `include_*` flags using each module's `module.yaml` `files:` list, and diff the resulting manifest against `git ls-files` in the local project. No Copier render. No prompt_toolkit. No render-tree temp directory. For remote `_src_path` forms, a shallow bare clone is the only temp surface and is cleaned on exit.
 
-2. Render the current template to a temp directory. The path is deterministic so later Step 0b sub-steps (3 walk, 5 restore, 8 cleanup) can reconstruct it across separate Bash invocations. `chmod 700` applies owner-only access regardless of umask, closing the multi-user disclosure window on systems where `$TMPDIR` maps to a shared location. Then copy the project's `.copier-answers.yml` into `$FORGE_TMP` before invoking Copier so that module-gated files (NanoClaw, publications, Lane B, etc.) render according to the project's actual module selections — not template defaults. Without pre-seeding, Copier falls back to defaults for every gated module and the missing-file scan below produces false positives (Spec 296):
+1. Read `.copier-answers.yml` to get `_src_path` (the template source) and `_commit` (the pinned ref). If `.copier-answers.yml` does not exist, skip Step 0b (Step 1 will handle detection). If `_src_path` or `_commit` is missing/empty, emit "Step 0b: `.copier-answers.yml` lacks `_src_path` or `_commit` — skipping manifest-diff." and proceed to Step 1.
+
+2. Resolve `_src_path` to a local git repository for `git ls-tree` enumeration. Classify by form:
+
+   - **Local path** (absolute Unix path, Windows drive path like `c:/`, or WSL `/mnt/<letter>/...`): use the path directly as the source repo. Normalize WSL paths to host form if running outside WSL. No clone.
+   - **Remote shorthand or URL** (`gh:org/repo`, `https://…`, `git@…:…`, `git+https://…`): perform a shallow bare clone scoped to the pinned ref. The bare clone is the only temp surface introduced by Step 0b.
+
    ```bash
-   FORGE_TMP="${TMPDIR:-${TEMP:-/tmp}}/forge-manifest-check"
-   mkdir -p "$FORGE_TMP" && chmod 700 "$FORGE_TMP"
-   if [ -f .copier-answers.yml ]; then
-     cp .copier-answers.yml "$FORGE_TMP/.copier-answers.yml"
-     python -m copier copy "$_src_path" "$FORGE_TMP" --overwrite --vcs-ref=HEAD
-   else
-     # Fallback: no project answers file — render with template defaults.
-     python -m copier copy "$_src_path" "$FORGE_TMP" --defaults --overwrite --vcs-ref=HEAD
+   FORGE_SRC_REPO=""
+   FORGE_BARE_CLONE=""  # set only for remote _src_path
+   case "$_src_path" in
+     gh:*)
+       FORGE_BARE_CLONE="${TMPDIR:-${TEMP:-/tmp}}/forge-manifest-clone-$$"
+       mkdir -p "$FORGE_BARE_CLONE" && chmod 700 "$FORGE_BARE_CLONE"
+       gh_repo="${_src_path#gh:}"
+       git clone --bare --filter=blob:none "https://github.com/$gh_repo" "$FORGE_BARE_CLONE/repo.git" >/dev/null 2>&1 || {
+         echo "Step 0b: shallow bare clone of $_src_path failed."
+         rm -rf "$FORGE_BARE_CLONE"
+         exit 1
+       }
+       FORGE_SRC_REPO="$FORGE_BARE_CLONE/repo.git"
+       ;;
+     https://*|git@*|git+*)
+       FORGE_BARE_CLONE="${TMPDIR:-${TEMP:-/tmp}}/forge-manifest-clone-$$"
+       mkdir -p "$FORGE_BARE_CLONE" && chmod 700 "$FORGE_BARE_CLONE"
+       remote_url="${_src_path#git+}"
+       git clone --bare --filter=blob:none "$remote_url" "$FORGE_BARE_CLONE/repo.git" >/dev/null 2>&1 || {
+         echo "Step 0b: shallow bare clone of $_src_path failed."
+         rm -rf "$FORGE_BARE_CLONE"
+         exit 1
+       }
+       FORGE_SRC_REPO="$FORGE_BARE_CLONE/repo.git"
+       ;;
+     *)
+       # Local path (absolute, drive-letter, or WSL-mounted). Use directly.
+       if [ ! -d "$_src_path/.git" ] && [ ! -f "$_src_path/HEAD" ]; then
+         echo "Step 0b: \`_src_path\` ($_src_path) is not a git repository — cannot enumerate manifest."
+         exit 1
+       fi
+       FORGE_SRC_REPO="$_src_path"
+       ;;
+   esac
+
+   # Verify _commit is reachable in the source repo (AC10).
+   if ! git -C "$FORGE_SRC_REPO" rev-parse --verify "$_commit^{commit}" >/dev/null 2>&1; then
+     echo "Step 0b: \`_commit\` ref ($_commit) is not reachable in source repo $_src_path."
+     [ -n "$FORGE_BARE_CLONE" ] && rm -rf "$FORGE_BARE_CLONE"
+     exit 1
    fi
    ```
 
-3. Walk the temp directory and compare against the local project. For each file in the template output, check if it exists locally. Build a list of missing files, classified by path pattern:
+3. Enumerate the upstream template manifest and filter by module-gate flags. The Copier template lives under `template/` in the source repo (`_subdirectory: template` in `copier.yml`); strip that prefix to produce consumer-project paths.
+
+   ```bash
+   # Raw upstream manifest, restricted to the template subdirectory and stripped of its prefix.
+   UPSTREAM_MANIFEST=$(git -C "$FORGE_SRC_REPO" ls-tree -r --name-only "$_commit" -- template/ \
+     | sed 's|^template/||')
+
+   # Apply module-gate filter: for each include_<module>: false in .copier-answers.yml,
+   # subtract the paths listed in template/.forge/modules/<module>/module.yaml `files:`.
+   FILTERED_MANIFEST="$UPSTREAM_MANIFEST"
+   while IFS= read -r flag_line; do
+     # Parse "include_<module>: false" — module name is between "include_" and ":".
+     case "$flag_line" in
+       include_*:\ false|include_*:\ False|include_*:\ FALSE)
+         module=$(echo "$flag_line" | sed -E 's/^include_([a-zA-Z0-9_-]+):.*/\1/')
+         module_yaml=$(git -C "$FORGE_SRC_REPO" show "$_commit:template/.forge/modules/$module/module.yaml" 2>/dev/null || echo "")
+         if [ -z "$module_yaml" ]; then
+           # Module yaml missing entirely — skip silently (module may be off in this template version).
+           continue
+         fi
+         # Extract files: list (lines starting with "  - " under a `files:` heading).
+         files_block=$(echo "$module_yaml" | awk '
+           /^files:/ { in_block=1; next }
+           in_block && /^[a-zA-Z]/ { in_block=0 }
+           in_block && /^[[:space:]]*-[[:space:]]/ {
+             sub(/^[[:space:]]*-[[:space:]]*/, "")
+             print
+           }
+         ')
+         if [ -z "$files_block" ]; then
+           echo "Step 0b: module \`$module\` is gated off (include_$module: false) but template/.forge/modules/$module/module.yaml has no \`files:\` field — cannot filter. Fail-fast per Spec 297 AC9."
+           [ -n "$FORGE_BARE_CLONE" ] && rm -rf "$FORGE_BARE_CLONE"
+           exit 1
+         fi
+         # Subtract each path (or path-prefix if entry ends with /) from the manifest.
+         while IFS= read -r excl; do
+           [ -z "$excl" ] && continue
+           if [ "${excl%/}" != "$excl" ]; then
+             # Directory entry — strip all paths under it.
+             FILTERED_MANIFEST=$(echo "$FILTERED_MANIFEST" | grep -v "^${excl}" || true)
+           else
+             FILTERED_MANIFEST=$(echo "$FILTERED_MANIFEST" | grep -vxF "$excl" || true)
+           fi
+         done <<< "$files_block"
+         ;;
+     esac
+   done < <(grep -E '^include_[a-zA-Z0-9_-]+:' .copier-answers.yml 2>/dev/null || true)
+
+   # Local-project side: tracked files via git ls-files.
+   LOCAL_FILES=$(git ls-files)
+   ```
+
+4. Diff the filtered upstream manifest against `LOCAL_FILES`. For each upstream entry not present locally, classify by path pattern (this table is the output contract consumed by Steps 3–6 — preserved byte-compatible with Spec 296):
 
    | Path pattern | Category | Action |
    |-------------|----------|--------|
@@ -158,11 +265,13 @@ Before checking for updates, detect and restore files that exist in the FORGE te
    | `docs/specs/CHANGELOG.md` | project-data | Skip (project-specific) |
    | Everything else | unknown | Prompt before restore |
 
-4. If no missing files detected: report "No missing files detected." and proceed to Step 1.
+   Sources for restoration: when an Auto-restore or Prompt action runs, fetch the file's bytes via `git -C "$FORGE_SRC_REPO" show "$_commit:template/<path>"` rather than reading from a rendered tree (no rendered tree exists). For `.jinja` template files: strip the suffix on the upstream side and write to the consumer path without it (Copier rendering of variables is not required for restoration of files that lack template variables; for files that DO contain variables, the operator can re-run `copier update` afterward to refresh — same behavior as Spec 296).
 
-5. If missing files found, execute restoration:
+5. If no missing files detected: report "No missing files detected." and proceed to Step 1.
 
-   a. **Auto-restore** (template-command, template-infra, process-kit, spec-template): Copy each file from the temp directory to the local project. Create missing parent directories. Report each:
+6. If missing files found, execute restoration (action lanes are byte-compatible with Spec 296):
+
+   a. **Auto-restore** (template-command, template-infra, process-kit, spec-template): Write each file's bytes (from `git show`) to the local project. Create missing parent directories. Report each:
    ```
    Restored: .claude/commands/forge.md (template-command)
    Restored: .forge/lib/logging.sh (template-infra)
@@ -177,7 +286,7 @@ Before checking for updates, detect and restore files that exist in the FORGE te
 
    c. **Skip** (project-data): Do not restore, do not prompt. These are project-specific files.
 
-6. **Reject file cleanup**: Scan for `.rej` files (leftover failed patches from previous `copier update` runs):
+7. **Reject file cleanup**: Scan for `.rej` files (leftover failed patches from previous `copier update` runs):
    ```bash
    find . -name "*.rej" -not -path "./node_modules/*" -not -path "./.venv/*"
    ```
@@ -190,7 +299,7 @@ Before checking for updates, detect and restore files that exist in the FORGE te
    ```
    If yes, delete them. If no, leave them.
 
-7. Print restoration summary:
+8. Print restoration summary (output format unchanged from Spec 296 — consumed by Steps 3–6):
    ```
    ## Step 0b — Missing File Restoration Summary
    Auto-restored: <count> files (template commands, .forge infra, process kit)
@@ -202,11 +311,11 @@ Before checking for updates, detect and restore files that exist in the FORGE te
    Proceeding to upstream update check...
    ```
 
-8. Clean up the temp directory.
+9. Clean up. If a shallow bare clone was created (`FORGE_BARE_CLONE` set): `rm -rf "$FORGE_BARE_CLONE"`. Local `_src_path` paths are never touched.
 
-9. Proceed to Step 1.
+10. Proceed to Step 1.
 
-**Notes for operators — shared tenancy**: Step 0b's `$FORGE_TMP` lives under `${TMPDIR:-${TEMP:-/tmp}}`. On shared-tenancy systems (CI runners with shared `/tmp`, multi-user dev boxes), export `TMPDIR` to a per-user path before running `/forge stoke`. See [docs/process-kit/shared-tenancy-guidance.md](../../docs/process-kit/shared-tenancy-guidance.md) for concrete examples (GitHub Actions, generic Unix multi-user, CI container). Single-operator workstations (most operators) need no action.
+**Notes for operators — shared tenancy**: For remote `_src_path` forms only, Step 0b creates a shallow bare clone under `${TMPDIR:-${TEMP:-/tmp}}`. The directory is created with `chmod 700` and removed at exit. On shared-tenancy systems (CI runners with shared `/tmp`, multi-user dev boxes), export `TMPDIR` to a per-user path before running `/forge stoke`. See [docs/process-kit/shared-tenancy-guidance.md](../../docs/process-kit/shared-tenancy-guidance.md) for concrete examples (GitHub Actions, generic Unix multi-user, CI container). Single-operator workstations and projects with local `_src_path` need no action — Step 0b creates no temp directory in that case.
 
 ### [mechanical] Step 1 — Detect sync mechanism
 
@@ -413,7 +522,7 @@ After file restoration (Step 0b), copier update (Step 3), conflict resolution (S
    Files changed: <count>
    ```
 
-### [mechanical] Step 3e — Regenerate agent command wrappers (Spec 076)
+### [mechanical] Step 3d — Regenerate agent command wrappers (Spec 076)
 
 After auto-commit, regenerate agent-specific command wrappers from the updated canonical
 commands in `.forge/commands/`. This ensures all configured agents stay in sync with the

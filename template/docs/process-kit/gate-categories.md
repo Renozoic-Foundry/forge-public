@@ -17,7 +17,7 @@ AI verifies these autonomously. No human attention required. These checks have d
 | Completeness checks | Required spec sections populated, all ACs addressed in evidence | /implement (Step 2) |
 | Code quality mechanics | Lint, type check, import verification | /implement (Step 7) |
 | Template render verification | Copier copy succeeds, no Jinja artifacts in output | /close, /implement |
-| Spec integrity hash | SHA-256 of Scope + ACs matches Approved-SHA | /close (Step 2) |
+| Spec integrity hash | SHA-256 of Scope + Requirements + ACs + Test Plan matches Approved-SHA | /close (Step 2) |
 | Consumer-propagation check | New docs linked from template command files must be mirrored under `template/docs/` OR listed in `sync-to-public.sh`'s `PUBLIC_DOC_FILES` | /close (Step 2d+++) |
 
 ## Human-Judgment-Required
@@ -73,15 +73,15 @@ Three enforcement modes determine how approval happens. Selection depends on aut
 |------|-----------|-------------------|-------------|
 | **Delegated** | L3/L4 autonomy AND all ACs machine-verifiable AND no human-judgment checks apply | None — agent validates and closes autonomously | Immutable evidence: spec evidence + SHA-256 hash in audit-log.jsonl + atomic git commit |
 | **Chat** | Default. Human judgment needed but no regulatory burden of proof. | Human reviews Review Brief, approves in conversation. | Session log + spec evidence section. |
-| **PAL** | High-trust workflows requiring hardware-authenticated approval. *(Coming soon — see roadmap)* | Review Brief via NanoClaw, hardware key tap, cryptographic signature. | Cryptographic proof of identity + timestamp. Non-repudiable. |
+| **PAL** | Lane B projects where regulations require proving which key holder approved. | Review Brief via NanoClaw, hardware key tap, cryptographic signature. | Cryptographic proof of identity + timestamp. Non-repudiable. |
 
 ### Enforcement Mode Selection Matrix
 
-| Autonomy Level | Delegation-eligible specs | Judgment-required specs |
-|----------------|--------------------------|------------------------|
-| L0-L1 | Chat (human gates everything) | Chat |
-| L2 | Chat (human approves decisions) | Chat |
-| L3 | **Delegated** | Chat (async review) |
+| Autonomy Level | Delegation-eligible specs | Judgment-required specs | Lane B specs |
+|----------------|--------------------------|------------------------|--------------|
+| L0-L1 | Chat (human gates everything) | Chat | PAL if configured |
+| L2 | Chat (human approves decisions) | Chat | PAL if configured |
+| L3 | **Delegated** | Chat (async review) | PAL |
 | L4 | **Delegated** | Delegated with exception reporting | PAL |
 
 ### Delegation Eligibility

@@ -1,0 +1,24 @@
+# scripts/auth-rules-whitelist.yaml — Spec 327 lint-gate whitelist
+#
+# Entries here exempt a specific (file, action) pair from the authorization-rule lint gate.
+# Each entry MUST include:
+#   - file:    Specific file path (no wildcards) — relative to repo root
+#   - action:  Action name from the AGENTS.md structured block (e.g., git_push, gh_pr_create)
+#   - reason:  Human-readable justification — required, not optional
+#
+# Entries lacking any of those three fields cause the gate to FAIL with a
+# "malformed whitelist entry" error (whitelist abuse prevention, Spec 327 R4).
+#
+# Format:
+#
+# - file: .forge/commands/example.md
+#   action: git_push
+#   reason: "Example.md is documentation; the literal `git push` appears in a fenced
+#            example block illustrating how the prompt SHOULD be gated. The agent
+#            never executes from this file. Reviewed: 2026-04-25 by operator."
+#
+# This stub is empty at first ship per Spec 327 Path B (advisory mode). Spec 326 will
+# triage the first-run findings and decide which become whitelist entries vs which
+# are real defects requiring a per-spec remediation.
+
+whitelist: []

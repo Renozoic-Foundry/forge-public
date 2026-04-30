@@ -1,7 +1,6 @@
 ---
 name: configure-nanoclaw
 description: "Configure NanoClaw hardware key enrollment and messaging"
-model_tier: sonnet
 workflow_stage: configuration
 ---
 # Framework: FORGE

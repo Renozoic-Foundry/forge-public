@@ -2,7 +2,7 @@
 
 Step-by-step checklist for executing shadow validation during spec close. Use alongside the [shadow-validation-guide.md](shadow-validation-guide.md) for strategy selection.
 
-Shadow validation is advisory (non-blocking). Specs with a declared strategy should complete this checklist for confidence, but it does not block closing.
+**Lane distinction**: Lane A specs use shadow validation as advisory (non-blocking). Lane B specs with a declared strategy MUST complete this checklist — shadow validation is a blocking gate for Lane B.
 
 ---
 
@@ -13,8 +13,8 @@ Shadow validation is advisory (non-blocking). Specs with a declared strategy sho
 - [ ] Reference implementation or baseline is identified and accessible
 - [ ] Test inputs are prepared and documented
 - [ ] Expected outputs or acceptance thresholds are defined
-- [ ] Tolerance threshold is declared if applicable
-- [ ] Reviewer is identified for sign-off (recommended)
+- [ ] **Lane B only**: Tolerance threshold is declared (default: 100% match for safety-critical)
+- [ ] **Lane B only**: Reviewer is identified for sign-off
 
 ---
 
@@ -43,7 +43,7 @@ Use when: deterministic code — parsers, transformers, formatters, build script
 **Evidence artifacts**: <path to diff output, e.g., tmp/evidence/SPEC-NNN-shadow/diff.txt>
 ```
 
-- [ ] Reviewer sign-off (recommended): `Reviewed-by: <name>, <date>`
+- [ ] **Lane B only**: Reviewer sign-off: `Reviewed-by: <name>, <date>`
 
 ---
 
@@ -72,7 +72,7 @@ Use when: services, APIs, data pipelines — real-world input variety matters.
 **Evidence artifacts**: <path to comparison summary>
 ```
 
-- [ ] Reviewer sign-off (recommended): `Reviewed-by: <name>, <date>`
+- [ ] **Lane B only**: Reviewer sign-off: `Reviewed-by: <name>, <date>`
 
 ---
 
@@ -101,7 +101,40 @@ Use when: batch processing, offline systems, or when dual-run is impractical.
 **Evidence artifacts**: <path to replay results>
 ```
 
-- [ ] Reviewer sign-off (recommended): `Reviewed-by: <name>, <date>`
+- [ ] **Lane B only**: Reviewer sign-off: `Reviewed-by: <name>, <date>`
+
+---
+
+## Lane B Requirements
+
+Lane B (safety-critical) projects enforce shadow validation as a **blocking gate** at `/close`. The following additional requirements apply:
+
+### Tolerance Thresholds
+
+| Context | Default threshold | Override |
+|---------|------------------|----------|
+| Safety-critical logic | 100% match (zero divergence) | Requires documented justification and reviewer approval |
+| Non-safety peripherals | Configurable via `docs/compliance/profile.yaml` | Set `shadow_validation.tolerance` field |
+| Performance metrics | Within documented bounds | Bounds must be declared in spec |
+
+### Evidence Retention
+
+- Shadow validation artifacts (diffs, comparison logs, replay results) MUST be preserved as files, not just summarized in the spec
+- Recommended path: `tmp/evidence/SPEC-NNN-shadow/`
+- Artifacts must remain available through the spec's audit lifecycle
+- Do not delete shadow validation evidence when closing the spec
+
+### Reviewer Sign-Off
+
+Lane B specs require explicit reviewer sign-off on shadow validation evidence:
+
+```markdown
+**Reviewer sign-off**: <reviewer name> confirmed shadow validation evidence on <date>.
+  Tolerance threshold met: yes/no
+  Artifacts reviewed: <list of files reviewed>
+```
+
+This sign-off is checked by `/close` as part of the blocking gate. Missing sign-off causes a FAIL.
 
 ---
 
@@ -109,5 +142,6 @@ Use when: batch processing, offline systems, or when dual-run is impractical.
 
 - [ ] Evidence fields in spec's `## Shadow Validation` section are filled (not "pending")
 - [ ] Evidence artifacts are saved to `tmp/evidence/SPEC-NNN-shadow/` or equivalent
-- [ ] Reviewer sign-off recorded (recommended)
+- [ ] **Lane B only**: Reviewer sign-off is recorded in the spec's Shadow Validation section
+- [ ] **Lane B only**: Tolerance threshold compliance is documented
 - [ ] Ready for `/close`

@@ -127,21 +127,19 @@ When a command file contains routing or feature-gated logic, execute it silently
 
 These rules apply across every command, not only `/spec`. See [docs/process-kit/command-authoring-guide.md](docs/process-kit/command-authoring-guide.md) for the authoring principles that produce command files compatible with this discipline.
 
-## Model tiering
+## Model tiering (advisory)
 
-Route commands to the appropriate model tier to reduce cost without quality loss. Claude Code selects models based on these hints when multi-model support is available.
+FORGE does **not** route between models — Claude Code's model picker is the only real selection mechanism. Per FORGE Spec 316, the tier-routing metadata that previously decorated command frontmatter was removed because nothing read it. This section is operator advisory.
 
-| Tier | Model | Commands |
-|------|-------|----------|
-| `haiku` | Claude Haiku (15–50× cheaper) | `/now`, `/session`, `/insights`, `/brainstorm`, `/note`, `/matrix` (display only) |
-| `sonnet` | Claude Sonnet (default) | `/implement`, `/close`, `/spec`, `/trace`, `/forge`, `/parallel`, `/synthesize` |
-| `sonnet-or-opus` | Sonnet or Opus | Architecture reviews, multi-spec planning sessions, compliance artifact generation |
+For cost-sensitive sessions, operators can manually switch to Haiku in Claude Code's model picker for these commands without measurable quality loss:
+- `/now`, `/session`, `/insights`, `/brainstorm`, `/note`, `/matrix` (display only)
 
-**Override**: operators in regulated or high-stakes environments may use Sonnet for all commands — add `# Model override: sonnet-all` to this file under Core constraints.
+These commands stay on the operator's default model:
+- `/implement`, `/close`, `/spec`, `/trace`, `/forge`, `/parallel`, `/synthesize`
 
-## Model router
+In regulated or high-stakes environments, run all commands on the operator's default high-tier model. No FORGE config encodes this — it's a habit, not a mechanism.
 
-The model router (Spec 085) is **opt-in** — when `mode: static` (default), use the tier table above. When `mode: dynamic`: read `.forge/templates/model-router.md` for complexity classification, routing rules, escalation protocol, and cost tracking.
+See `docs/decisions/ADR-316-cost-framework-scope-reduction.md` for the rationale and the three concrete triggers that would re-open real routing as a spec.
 
 ## Context-aware triggers
 
@@ -157,23 +155,23 @@ Suggestions are non-blocking (user can ignore), non-repeating (same suggestion o
 
 Skip this check if `forge.triggers.enabled: false` or `forge.triggers.mode: off`.
 
-## Prompt caching
+## Prompt caching (best-effort)
 
-FORGE's static content qualifies for Anthropic prompt caching — cache hits cost ~10% of standard input token rates, saving up to 90% on repeated content. Claude Code handles caching automatically for system prompt content across turns. No action needed for Claude Code users.
+FORGE's static content qualifies for Anthropic prompt caching when the host runtime supports it. Claude Code handles caching automatically for system prompt content across turns; consumers running Claude via direct API integrations can opt in via `cache_control: {type: "ephemeral"}`.
 
-**Cache-eligible files** (static, >1024 tokens, rarely change mid-session):
-- `CLAUDE.md` (this file)
-- `.claude/commands/implement.md`, `close.md`, `session.md`, `now.md`, `trace.md`, `spec.md`
+**Cache-eligibility** depends on edit cadence within the session, not just file size:
+- **High hit rate (>70%)**: files whose content is stable across the session — `implement.md`, `trace.md`, `spec.md` for most workflows.
+- **Low hit rate / frequent invalidation**: files edited mid-session — `close.md`, `session.md`, `now.md`, the active spec file. The 5-minute cache TTL invalidates frequently when the operator runs back-to-back commands that update these files.
 
-**Do not cache**: session logs, spec files actively being edited, any file written during the current session.
+**Practical guidance**: measure before optimizing. Don't claim "90% savings" without operator-session data backing it. The realistic win is 30–60% on long sessions where the working set stays mostly stable.
 
-For direct API integrations: add `cache_control: {type: "ephemeral"}` to the content block for each cache-eligible file. Requires a current Sonnet or Opus model — see the [Anthropic model documentation](https://docs.anthropic.com/en/docs/about-claude/models) for the authoritative list of caching-capable models at time of deployment. Mark the boundary at the last static content block — everything after that boundary is dynamic and should not be cached.
+**Do not cache**: session logs, the active spec file mid-implementation, or any file actively being edited.
 
 See [docs/process-kit/read-audit.md](docs/process-kit/read-audit.md) for the full read pattern audit.
 {% if agent_sdk %}
 ## Prompt caching for direct API integrations
 
-If your project calls the Anthropic API directly (Python `anthropic` SDK or TypeScript `@anthropic-ai/sdk`), you can reduce token costs by up to 90% on repeated static content using prompt caching.
+If your project calls the Anthropic API directly (Python `anthropic` SDK or TypeScript `@anthropic-ai/sdk`), you can reduce token costs on repeated static content using prompt caching. Realistic savings depend on edit cadence (see "Prompt caching (best-effort)" above) — typically 30–60% on long sessions, occasionally higher if the working set is genuinely stable.
 
 **How it works**: add `cache_control: {"type": "ephemeral"}` to any content block you want cached. The cache lives for 5 minutes after the last write. Re-use the same content within that window → pay ~10% of normal input token rates.
 

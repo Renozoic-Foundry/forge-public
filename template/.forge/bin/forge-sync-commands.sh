@@ -1,21 +1,26 @@
 #!/usr/bin/env bash
 # FORGE forge-sync-commands — generate agent-specific command wrappers from canonical source
-# Usage: forge-sync-commands.sh [--agents claude-code,cursor,copilot] [--scope user|project|both] [--dry-run]
+# Usage: forge-sync-commands.sh [--agents claude-code,cursor,copilot] [--scope user|project|both] [--dry-run] [--force]
 set -euo pipefail
 
 FORGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_DIR="$(cd "${FORGE_DIR}/.." && pwd)"
 
 source "${FORGE_DIR}/lib/logging.sh"
+# Spec 329: frontmatter-aware helpers (strip_frontmatter, is_forge_command, extract_frontmatter, bodies_equal)
+source "${FORGE_DIR}/lib/sync-helpers.sh"
 forge_log_init "forge-sync-commands"
 
 # --- Defaults ---
 DRY_RUN=false
 CHECK_MODE=false
+FORCE=false
 AGENTS_OVERRIDE=""
 SCOPE="project"
+TEMPLATE_SIDE=false  # Spec 281: process template/.forge/commands -> template/.claude/commands instead
 CANONICAL_DIR="${FORGE_DIR}/commands"
 TRIGGER_MAP="${FORGE_DIR}/templates/codex-trigger-map.yaml"
+BASE_DIR="${PROJECT_DIR}"  # Spec 281: base for agent target directories (overridden by --template-side)
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
@@ -32,6 +37,15 @@ while [[ $# -gt 0 ]]; do
       CHECK_MODE=true
       shift
       ;;
+    --force)
+      FORCE=true
+      shift
+      ;;
+    --template-side)
+      # Spec 281: process template/.forge/commands -> template/.claude/commands (the 4th-edge sync)
+      TEMPLATE_SIDE=true
+      shift
+      ;;
     --scope)
       SCOPE="$2"
       if [[ "$SCOPE" != "user" && "$SCOPE" != "project" && "$SCOPE" != "both" ]]; then
@@ -41,12 +55,14 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      echo "Usage: forge-sync-commands.sh [--agents claude-code,cursor,copilot,cline] [--scope user|project|both] [--dry-run]"
+      echo "Usage: forge-sync-commands.sh [--agents claude-code,cursor,copilot,cline] [--scope user|project|both] [--dry-run] [--force]"
       echo ""
       echo "Generate agent-specific command wrappers from .forge/commands/ (canonical source)."
       echo ""
       echo "Options:"
-      echo "  --check         Check if .claude/commands/ is in sync (exits non-zero if drifted)"
+      echo "  --check         Check if .claude/commands/ is in sync (body-to-body; exits non-zero if drifted)"
+      echo "  --force         Overwrite mirror files even when body diverges from canonical (Spec 329 safety)"
+      echo "  --template-side Process template/.forge/commands -> template/.claude/commands (Spec 281 4th-edge sync)"
       echo "  --agents LIST   Comma-separated agent list (default: read from onboarding.yaml)"
       echo "  --scope SCOPE   Installation scope: project (default), user, or both"
       echo "                  project: sync to project agent directories (existing behavior)"
@@ -57,6 +73,11 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Supported agents: claude-code, cursor, copilot, cline"
       echo ""
+      echo "Exit codes:"
+      echo "  0 = success (clean state, or sync completed without divergence)"
+      echo "  1 = drift detected (--check) or argument error"
+      echo "  2 = refused overwrite — mirror body diverges from canonical, re-run with --force"
+      echo ""
       echo "If no --agents flag and no onboarding.yaml, defaults to claude-code only."
       exit 0
       ;;
@@ -66,6 +87,16 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# --- Spec 281: --template-side switches both canonical source and target base ---
+if $TEMPLATE_SIDE; then
+  CANONICAL_DIR="${PROJECT_DIR}/template/.forge/commands"
+  BASE_DIR="${PROJECT_DIR}/template"
+  if [[ "$SCOPE" == "user" || "$SCOPE" == "both" ]]; then
+    forge_log_error "--template-side is incompatible with --scope user|both (template processing is project-side only)"
+    exit 1
+  fi
+fi
 
 # --- Determine which agents to generate for ---
 resolve_agents() {
@@ -120,35 +151,17 @@ if [[ ! -d "$CANONICAL_DIR" ]]; then
   exit 1
 fi
 
-# --- Strip YAML frontmatter from a file ---
-# Reads stdin, outputs content without leading ---...--- block
-strip_frontmatter() {
-  local in_frontmatter=false
-  local frontmatter_done=false
-  while IFS= read -r line; do
-    if ! $frontmatter_done; then
-      if [[ "$line" == "---" ]] && ! $in_frontmatter; then
-        in_frontmatter=true
-        continue
-      elif [[ "$line" == "---" ]] && $in_frontmatter; then
-        frontmatter_done=true
-        continue
-      elif $in_frontmatter; then
-        continue
-      fi
-    fi
-    printf '%s\n' "$line"
-  done
-}
+# Spec 329: strip_frontmatter, is_forge_command, extract_frontmatter, bodies_equal
+# are now sourced from .forge/lib/sync-helpers.sh (extracted for testability).
 
 # --- Get agent's native command directory ---
 agent_command_dir() {
   local agent="$1"
   case "$agent" in
-    claude-code) echo "${PROJECT_DIR}/.claude/commands" ;;
-    cursor)      echo "${PROJECT_DIR}/.cursor/commands" ;;
-    copilot)     echo "${PROJECT_DIR}/.github/prompts" ;;
-    cline)       echo "${PROJECT_DIR}/.cline/commands" ;;
+    claude-code) echo "${BASE_DIR}/.claude/commands" ;;
+    cursor)      echo "${BASE_DIR}/.cursor/commands" ;;
+    copilot)     echo "${BASE_DIR}/.github/prompts" ;;
+    cline)       echo "${BASE_DIR}/.cline/commands" ;;
     *)
       forge_log_warn "Unknown agent: $agent — skipping"
       echo ""
@@ -156,15 +169,7 @@ agent_command_dir() {
   esac
 }
 
-# --- Check if file is a FORGE-managed command ---
-is_forge_command() {
-  local file="$1"
-  if [[ ! -f "$file" ]]; then
-    return 1
-  fi
-  # Check first 5 lines for the FORGE header or subcommand header
-  head -5 "$file" | grep -qE "(# Framework: FORGE|## Subcommand:)" 2>/dev/null
-}
+# Note: is_forge_command moved to .forge/lib/sync-helpers.sh (Spec 329 — frontmatter-aware fix)
 
 # --- Read frontmatter field from a canonical command file ---
 read_frontmatter_field() {
@@ -372,46 +377,67 @@ install_claude_code_user() {
   forge_log_info "  Installed: $user_count commands to $user_cmd_dir"
 }
 
-# --- Check mode: verify .claude/commands/ matches what sync would generate ---
+# --- Check mode: verify .claude/commands/ bodies match canonical bodies (Spec 329 — body-to-body) ---
+# Spec 281: BASE_DIR resolves to project root by default, or template/ when --template-side is set.
+# In template-side mode, .md.jinja files are SKIPPED — Copier substitutions intentionally differ
+# between template-canonical (FORGE-internal literals) and template-agent (consumer Copier vars).
 if $CHECK_MODE; then
   DRIFT_COUNT=0
+  CHECK_TARGET_DIR="${BASE_DIR}/.claude/commands"
+  CHECK_CANONICAL_LABEL="${CANONICAL_DIR#${PROJECT_DIR}/}"
+  CHECK_TARGET_LABEL="${CHECK_TARGET_DIR#${PROJECT_DIR}/}"
   for src_file in "$CANONICAL_DIR"/*.md "$CANONICAL_DIR"/*.md.jinja; do
     [[ -f "$src_file" ]] || continue
     src_base="$(basename "$src_file")"
-    dst_file="${PROJECT_DIR}/.claude/commands/${src_base}"
+
+    # Spec 281: skip .md.jinja files in template-side check (Copier substitution drift is intentional)
+    if $TEMPLATE_SIDE && [[ "$src_base" == *.md.jinja ]]; then
+      continue
+    fi
+
+    dst_file="${CHECK_TARGET_DIR}/${src_base}"
 
     if [[ ! -f "$dst_file" ]]; then
-      echo "DRIFT: $src_base — missing from .claude/commands/"
+      echo "DRIFT: $src_base — missing from ${CHECK_TARGET_LABEL}/"
       DRIFT_COUNT=$((DRIFT_COUNT + 1))
       continue
     fi
 
-    expected="$(strip_frontmatter < "$src_file")"
-    actual="$(cat "$dst_file")"
-    if [[ "$expected" != "$actual" ]]; then
-      echo "DRIFT: $src_base — content differs"
+    # Body-to-body comparison: strip frontmatter from BOTH sides before comparing.
+    if ! bodies_equal "$src_file" "$dst_file"; then
+      echo "DRIFT: $src_base — body differs"
       DRIFT_COUNT=$((DRIFT_COUNT + 1))
     fi
   done
 
-  # Check for files in .claude/commands/ not in canonical source
-  for dst_file in "${PROJECT_DIR}/.claude/commands/"*.md "${PROJECT_DIR}/.claude/commands/"*.md.jinja; do
+  # Check for files in target dir not in canonical source
+  for dst_file in "${CHECK_TARGET_DIR}/"*.md "${CHECK_TARGET_DIR}/"*.md.jinja; do
     [[ -f "$dst_file" ]] || continue
     dst_base="$(basename "$dst_file")"
+
+    # Spec 281: same skip for orphan .md.jinja files in template-side check
+    if $TEMPLATE_SIDE && [[ "$dst_base" == *.md.jinja ]]; then
+      continue
+    fi
+
     if [[ ! -f "${CANONICAL_DIR}/${dst_base}" ]]; then
       if is_forge_command "$dst_file"; then
-        echo "DRIFT: $dst_base — exists in .claude/commands/ but not in .forge/commands/"
+        echo "DRIFT: $dst_base — exists in ${CHECK_TARGET_LABEL}/ but not in ${CHECK_CANONICAL_LABEL}/"
         DRIFT_COUNT=$((DRIFT_COUNT + 1))
       fi
     fi
   done
 
   if [[ $DRIFT_COUNT -eq 0 ]]; then
-    echo "OK: .claude/commands/ is in sync with .forge/commands/"
+    echo "OK: ${CHECK_TARGET_LABEL}/ is in sync with ${CHECK_CANONICAL_LABEL}/"
     exit 0
   else
     echo ""
-    echo "FAILED: $DRIFT_COUNT files out of sync. Run forge-sync-commands.sh to fix."
+    if $TEMPLATE_SIDE; then
+      echo "FAILED: $DRIFT_COUNT files out of sync. Run forge-sync-commands.sh --template-side to fix."
+    else
+      echo "FAILED: $DRIFT_COUNT files out of sync. Run forge-sync-commands.sh to fix."
+    fi
     exit 1
   fi
 fi
@@ -466,10 +492,62 @@ for agent in "${AGENTS[@]}"; do
       continue
     fi
 
-    # Generate the file based on agent type
+    # Generate the file based on agent type (Spec 329 — frontmatter-aware regen for claude-code)
     case "$agent" in
-      claude-code|cursor|cline)
-        # Strip frontmatter, copy command body as-is
+      claude-code)
+        # Refuse-overwrite-without-force: detect body divergence vs canonical (Spec 329 AC 4).
+        # If the existing mirror body differs from what regen would produce AND --force is
+        # not set, halt with exit 2 and a per-file diff. This protects intentional drift
+        # and audit-pending content (CISO data-loss-primitive concern).
+        if [[ -f "$dst_file" ]] && ! $FORCE; then
+          if ! bodies_equal "$src_file" "$dst_file"; then
+            echo "" >&2
+            echo "REFUSED OVERWRITE: $dst_file body diverges from canonical $src_file" >&2
+            echo "Diff (canonical body vs mirror body):" >&2
+            diff <(strip_frontmatter < "$src_file") <(strip_frontmatter < "$dst_file") >&2 || true
+            echo "" >&2
+            echo "Recovery: review the diff above. If the canonical is correct, re-run with --force to overwrite." >&2
+            echo "          If the mirror has content that should move to canonical, edit .forge/commands/<name>.md first." >&2
+            exit 2
+          fi
+        fi
+
+        # Frontmatter-aware regen for claude-code:
+        # - If mirror exists with frontmatter: preserve mirror's frontmatter, replace body from canonical.
+        # - If mirror exists without frontmatter: copy canonical's frontmatter (so Claude Code reads metadata).
+        # - If mirror does not exist: copy canonical's frontmatter + body verbatim.
+        if [[ -f "$dst_file" ]]; then
+          # Mirror exists — try to preserve its frontmatter
+          mirror_fm="$(extract_frontmatter "$dst_file")"
+          if [[ -z "$mirror_fm" ]]; then
+            # Mirror has no frontmatter — fall back to canonical's frontmatter
+            mirror_fm="$(extract_frontmatter "$src_file")"
+          fi
+          if $FORCE; then
+            # Log every overridden file to stderr for audit visibility (Spec 329 AC 4)
+            if ! bodies_equal "$src_file" "$dst_file"; then
+              echo "FORCE OVERWRITE: $dst_file body replaced from canonical" >&2
+            fi
+          fi
+          {
+            if [[ -n "$mirror_fm" ]]; then
+              printf '%s\n' "$mirror_fm"
+            fi
+            strip_frontmatter < "$src_file"
+          } > "$dst_file"
+        else
+          # New mirror — copy canonical frontmatter + body
+          src_fm="$(extract_frontmatter "$src_file")"
+          {
+            if [[ -n "$src_fm" ]]; then
+              printf '%s\n' "$src_fm"
+            fi
+            strip_frontmatter < "$src_file"
+          } > "$dst_file"
+        fi
+        ;;
+      cursor|cline)
+        # Strip frontmatter, copy command body as-is (unchanged from prior behavior)
         strip_frontmatter < "$src_file" > "$dst_file"
         ;;
       copilot)

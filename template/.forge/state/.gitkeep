@@ -1,0 +1,15 @@
+# .forge/state/
+
+This directory holds FORGE instrumentation state. Files written here are
+ephemeral runtime artifacts (active-tab markers, checkpoint files,
+audit logs) — they are NOT spec evidence and most are gitignored
+in consumer projects.
+
+Canonical files (Spec 368):
+- score-audit.jsonl — predicted/observed score calibration log.
+  Schema versioned via the `schema_version` field in each record
+  (currently `1`). Adjacent instrumentation streams (e.g. Spec 247
+  operator-effort attribution) extend this schema under additive
+  keys; they SHALL NOT introduce parallel `.jsonl` files.
+
+See: docs/process-kit/score-calibration-loop.md.

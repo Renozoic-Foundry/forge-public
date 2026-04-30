@@ -1,7 +1,6 @@
 ---
 name: brainstorm
 description: "Discover spec opportunities from signals and roadmap"
-model_tier: haiku
 workflow_stage: planning
 ---
 # Framework: FORGE
@@ -38,36 +37,6 @@ Read the following files (skip silently if any do not exist):
 - `docs/sessions/scratchpad.md`
 - `docs/backlog.md`
 - `docs/specs/README.md` (to check which specs already exist)
-
-## [mechanical] Step 1b — First-run detection (Spec 202)
-
-After gathering sources, check for **first-run state**: a project with existing code but no FORGE history.
-
-1. Check `docs/specs/README.md`: if the file does not exist, or it contains zero spec entries (only headings and template text), this is a **first-run** project.
-2. Also check: does `docs/backlog.md` have zero draft specs AND `docs/sessions/signals.md` have zero entries AND `docs/sessions/scratchpad.md` have zero open items?
-3. If **all** FORGE signals are empty (first-run detected), switch to **codebase scan mode** instead of the normal signal-mining flow:
-
-   **Codebase scan mode:**
-   a. **Inventory files by type**: List all source files in the project, grouped by extension. Report counts (e.g., "47 .java files, 12 .xml files, 3 .yaml files").
-   b. **Detect tech stack**: Identify languages, frameworks, and build tools from config files (`package.json`, `pom.xml`, `build.gradle`, `pyproject.toml`, `Cargo.toml`, `go.mod`, etc.) and file extensions.
-   c. **Review dependencies**: Read dependency manifests and flag outdated patterns, known-vulnerable libraries (by name/pattern, not CVE lookup), and unusual dependency counts.
-   d. **Identify testing gaps**: Check for test directories (`test/`, `tests/`, `__tests__/`, `*Test.java`, `*_test.go`, `*.test.ts`). Compare test file count to source file count. Flag modules with zero test coverage.
-   e. **Detect architecture patterns**: Look for common patterns (MVC, microservices, monolith, layered) based on directory structure and naming conventions.
-   f. **Generate spec candidates**: From the scan findings, produce recommendations in the same format as Step 4 (numbered list with titles, descriptions, source tags, and score estimates). Use source tag: `codebase-scan`. Common categories:
-      - Missing or insufficient tests
-      - Dependency updates or migrations
-      - Architecture improvements (e.g., extract shared utilities, add API documentation)
-      - Security hardening (e.g., input validation, auth patterns)
-      - Build/CI improvements (e.g., add linting, formatting, CI pipeline)
-      - Documentation gaps
-
-   After generating codebase-scan recommendations, skip Steps 2-3 and proceed directly to Step 4 to present them. Include this note before the recommendations:
-
-   > **First-run codebase scan** — No FORGE signals, backlog, or scratchpad entries found. Scanned the existing codebase to generate initial spec candidates. Run `/brainstorm` again after creating specs to switch to signal-based analysis.
-
-4. If FORGE signals exist (not first-run): proceed to Step 2 normally.
-
----
 
 ## [mechanical] Step 2 — Analyze gaps
 For each source that exists, identify spec opportunities:

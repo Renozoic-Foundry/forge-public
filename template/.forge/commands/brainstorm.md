@@ -1,7 +1,6 @@
 ---
 name: brainstorm
 description: "Discover spec opportunities from signals and roadmap"
-model_tier: haiku
 workflow_stage: planning
 ---
 # Framework: FORGE

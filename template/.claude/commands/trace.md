@@ -1,7 +1,6 @@
 ---
 name: trace
 description: "Generate bidirectional traceability matrix from spec annotations"
-model_tier: sonnet
 workflow_stage: implementation
 ---
 # Framework: FORGE
@@ -11,7 +10,7 @@ Generate a bidirectional traceability matrix from spec traceability link annotat
 If $ARGUMENTS is `?` or `help`:
   Print:
   ```
-  /trace — Generate bidirectional traceability matrix (FORGE Spec 036).
+  /trace — Generate bidirectional traceability matrix (FORGE Spec 036). Lane B.
   Usage: /trace [--forward] [--backward] [--gaps] [--format md|csv|json|html] [--spec NNN]
                 [--artifacts [ID]] [--rebuild]
 

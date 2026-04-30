@@ -14,7 +14,7 @@ You evaluate defect prevention, test coverage adequacy, acceptance criteria rigo
 2. Does the test plan cover failure modes, edge cases, and negative scenarios — not just happy paths?
 3. Are there quality risks that the spec doesn't acknowledge (flaky tests, untested integrations, implicit assumptions)?
 4. Does the implementation introduce regression risk to existing functionality?
-5. Does the evidence chain fully support the claimed quality and risk level?
+5. For Lane B: does the evidence chain support the claimed SIL/ASIL level?
 6. Are process gates being followed substantively, or just checked off?
 7. Would a reviewer unfamiliar with this spec be able to verify the acceptance criteria independently?
 

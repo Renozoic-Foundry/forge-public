@@ -1,7 +1,6 @@
 ---
 name: dependency-audit
 description: "Scan for dependency changes and produce a structured risk report"
-model_tier: sonnet
 workflow_stage: review
 ---
 

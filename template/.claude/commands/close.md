@@ -1,12 +1,10 @@
----
-name: close
-description: "Close a spec: confirm validation, capture signals, update priorities"
-model_tier: sonnet
-workflow_stage: review
----
 
 # Framework: FORGE
 # Model-Tier: sonnet
+<!-- multi-block mode: serialized — choice blocks fire across distinct mechanical steps; no two blocks present in the same agent message. Each block waits for operator response before the next step proceeds. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
+
+**Output verbosity (Spec 225)**: At the start of execution, read `forge.output.verbosity` from `AGENTS.md` (default: `lean`). In **lean** mode, suppress non-actionable diagnostic output (passing-gate confirmations, KPI tables, calibration deltas, MCP pin status, deprecation scans, signal-by-signal pattern dumps, root-cause groupings, deferred-scope aging when none aged, score-rubric details when unchanged) — write the full content to its file artifact (session log, `pattern-analysis.md`, etc.) and emit a one-line pointer in chat (or omit entirely if purely informational). In **verbose** mode, emit full detail as before. **Never suppressed in either mode**: choice blocks, FAILed gates, push-confirmation prompts, Review Brief "Needs Your Review" items, operator-input prompts, error/abort messages. See `docs/process-kit/output-verbosity-guide.md` for the full rules and worked examples.
+
 Close a spec: confirm human validation, capture signals, update priorities.
 
 If $ARGUMENTS is `?` or `help`:
@@ -86,7 +84,8 @@ After identifying the spec, determine the enforcement mode for this closure:
    - Change lane is not `hotfix` at L3 (hotfixes delegated only at L4)
 
 4. **Select enforcement mode**:
-   - If delegation-eligible: mode = **Delegated**
+   - If Lane B AND `forge.gate.provider` is `pal`: mode = **PAL**
+   - Else if delegation-eligible: mode = **Delegated**
    - Else: mode = **Chat** (default)
 
 5. Report: "Enforcement mode: **<mode>** — <reason>."
@@ -111,6 +110,23 @@ Confirm spec status is `implemented`:
 - If not `implemented`: emit `GATE [status-verification]: FAIL — spec is at '<status>' status. Remediation: run /implement NNN to reach 'implemented' status first.` Stop.
 
 ### [mechanical] Step 2 addendum — Spec integrity verification (Spec 089)
+
+# >>> spec-344 lane-gate
+LANE-GATE: Spec 089 Approved-SHA mechanism is Lane B only. Read these conditions in order:
+
+1. **Read `Change-Lane:` from the spec's frontmatter.** Possible values: `hotfix`, `small-change`, `standard-feature`, `process-only`, `Lane-B`, missing, or unrecognized.
+
+2. **Read `docs/compliance/profile.yaml`.** If the file is absent: this is a Lane A FORGE-internal project — skip Spec 089's behavior for this Step entirely. No SHA computed, no `Approved-SHA:` written or verified or cleared, no `GATE [spec-integrity]` line, no override prompt. Proceed silently to the next Step.
+
+3. **If `docs/compliance/profile.yaml` is present:** the project declares Lane B usage. Now apply the predicate:
+   - If `Change-Lane:` is `Lane-B`: PROCEED with Spec 089's existing behavior verbatim. Compute/verify/clear the SHA per the existing logic.
+   - If `Change-Lane:` is `hotfix`, `small-change`, `standard-feature`, or `process-only`: SKIP Spec 089's behavior. No GATE line, no prompt. Proceed silently.
+   - If `Change-Lane:` is missing or any other value (e.g., a typo like `Lane_B`): STOP. Do not proceed. Emit `GATE [spec-integrity]: FAIL — Change-Lane missing or unrecognized ('<value>') under a Lane B compliance profile. Set Change-Lane explicitly before proceeding.` HALT. Do not invoke the SHA logic. Do not transition status. Do not proceed to subsequent steps.
+
+This block is load-bearing prose — Claude reads it as instructions and follows the predicate. The fail-closed branch ("STOP. Do not proceed.") is imperative; do not soften the phrasing.
+
+See: docs/process-kit/close-validator-coverage.md § Lane-gate sentinel — canonical source.
+# <<< spec-344 lane-gate
 
 If the spec has an `Approved-SHA:` field in frontmatter:
 
@@ -157,9 +173,15 @@ Read the spec file's `## Shadow Validation` section:
 1. If the section **does not exist** or contains only the template placeholder comments (`<!-- Uncomment ONE strategy`): skip silently — shadow validation is not applicable.
 2. If the section exists with a **declared strategy** (an uncommented `**Strategy**:` line):
    a. Check for corresponding evidence: look for a filled `**Evidence**:` field (not "pending" or empty).
-   b. Evidence present → `GATE [shadow-validation]: PASS — shadow validation evidence found. Strategy: <strategy>.`
-   c. Evidence missing or "pending" → `GATE [shadow-validation]: CONDITIONAL_PASS — spec declares shadow validation (strategy: <strategy>) but no evidence recorded. This is a non-blocking warning — shadow validation is advisory. Consider running the shadow comparison before closing.`
-   d. **This gate is non-blocking.** CONDITIONAL_PASS does not halt the close workflow.
+   b. **Determine lane**: check if `docs/compliance/profile.yaml` exists (Lane B) or not (Lane A).
+   c. **Lane A** (no compliance profile):
+      - Evidence present → `GATE [shadow-validation]: PASS — shadow validation evidence found. Strategy: <strategy>.`
+      - Evidence missing or "pending" → `GATE [shadow-validation]: CONDITIONAL_PASS — spec declares shadow validation (strategy: <strategy>) but no evidence recorded. This is a non-blocking warning — shadow validation is advisory. Consider running the shadow comparison before closing.`
+      - **This gate is non-blocking for Lane A.** CONDITIONAL_PASS does not halt the close workflow.
+   d. **Lane B** (compliance profile exists):
+      - Evidence present AND reviewer sign-off present (a `**Reviewer sign-off**:` or `Reviewed-by:` line that is not empty/pending) → `GATE [shadow-validation]: PASS — shadow validation evidence found with reviewer sign-off. Strategy: <strategy>.`
+      - Evidence present but reviewer sign-off missing → `GATE [shadow-validation]: FAIL — shadow validation evidence found (strategy: <strategy>) but Lane B requires reviewer sign-off. Remediation: add reviewer sign-off per docs/process-kit/shadow-validation-checklist.md.` **This is blocking — halt the close workflow.**
+      - Evidence missing or "pending" → `GATE [shadow-validation]: FAIL — spec declares shadow validation (strategy: <strategy>) but no evidence recorded. Lane B requires shadow validation evidence before closing. Remediation: execute the shadow validation checklist (docs/process-kit/shadow-validation-checklist.md) and record evidence.` **This is blocking — halt the close workflow.**
 
 ## [mechanical] Step 2b4 — Dependency sign-off gate (Spec 126)
 
@@ -187,6 +209,29 @@ Check whether the spec has outstanding dependency review requirements:
    - Emit: `GATE [dependency-review]: PASS — dependency gate skipped at close with justification: "<reason>".`
    - Proceed normally.
 
+<!-- module:compliance -->
+## [mechanical] Step 2c — Lane B spec sealing (Spec 052, conditional)
+After completing the status transition to `closed` (Step 3 below), if `docs/compliance/profile.yaml` exists (Lane B project):
+a. Add `Lane-B-Sealed: YYYY-MM-DD` to the spec's frontmatter (after `Last updated:`).
+b. Add a revision entry: `YYYY-MM-DD: Spec sealed (Lane B) — content is now an immutable audit record. Future changes require a successor spec with Supersedes: NNN.`
+c. Report: "Spec NNN sealed (Lane B). The spec file is now an immutable audit record."
+- If `docs/compliance/profile.yaml` is absent (Lane A): skip — Lane A specs are not sealed.
+- This step runs AFTER Step 3 (status transition), not before.
+<!-- /module:compliance -->
+
+<!-- module:compliance -->
+## [mechanical] Step 2b — Lane B compliance gate check (conditional)
+If `docs/compliance/profile.yaml` exists (Lane B project):
+a. Load the profile `gate_rules` list.
+b. For each gate rule with `required: true`, check that the required evidence artifacts are present in `docs/` (paths specified in `evidence_required`):
+   - Evidence present → `GATE [lane-b/<gate-name>]: PASS — <evidence artifact> found.`
+   - Evidence missing and `required: true` → `GATE [lane-b/<gate-name>]: FAIL — missing: <evidence artifact>. Remediation: generate required evidence before closing.` (blocking — stop if any Lane B gate FAILs)
+   - Evidence missing and `required: false` → `GATE [lane-b/<gate-name>]: CONDITIONAL_PASS — advisory gate: <evidence artifact> missing. Non-blocking.`
+c. Check `docs/compliance/profile-verification.md` for valid sign-off:
+   - Sign-off present and not expired → `GATE [lane-b/profile-verification]: PASS — sign-off valid until <expiry>.`
+   - Sign-off missing or expired → `GATE [lane-b/profile-verification]: FAIL — profile verification sign-off missing or expired. Remediation: update docs/compliance/profile-verification.md.` (blocking)
+- Skip this step if `docs/compliance/profile.yaml` is absent (Lane A project).
+<!-- /module:compliance -->
 
 ### [mechanical] Step 2d — Validator Gate (Spec 078, updated by Specs 083, 099)
 
@@ -311,18 +356,33 @@ Before transitioning to closed, spawn an independent validator to verify accepta
    YYYY-MM-DD HH:MM | validator | spec-NNN | <result> | criteria: <pass>/<total> | mode: <subagent|inline>
    ```
 
-## [mechanical] Step 2f — Role Registry Review (Spec 167)
+### [mechanical] Step 2d+ — Intelligent Role Dispatch at Close (Spec 187)
 
-After the validator gate (Step 2d), before generating the Review Brief (Step 2e):
+After the validator gate completes, check `forge.dispatch_rules.enabled` in AGENTS.md. If `false` or absent: skip this step.
 
-1. **Role registry check**: Read `AGENTS.md` for the `forge.role_registry` block. Find all entries with `contexts` containing `close` or `all`.
-   - If no registry found, or `.claude/agents/` does not exist: skip this step silently.
-2. **Invoke roles**: For each matching entry, read the role instruction file at the listed path. Apply the role's perspective to the spec being closed — use the spec's Objective, Scope, Requirements, and Acceptance Criteria as context. Produce the structured output block defined in each role's "Output Format" section.
-3. **Present role reviews**: Display all role output blocks in a "### Role Reviews (Spec 167)" subsection. Include each review in the Review Brief (Step 2e) under "Needs Your Review" if the role recommends REVISE or BLOCK.
-4. **Flag BLOCK recommendations**: If any role recommends BLOCK, emit:
-   `GATE [role-review/<role-name>]: CONDITIONAL_PASS — <role> recommends BLOCK: <key concern>. Human review required.`
+If enabled:
+1. **Skip threshold check**: Read the spec's E and R scores. If E ≤ `skip_threshold.effort` AND R ≤ `skip_threshold.risk`: skip. Report: "Close dispatch: skipped (E=<e>, R=<r> — below threshold)."
 
-Note: The Validator role's formal AC verification gate is handled by Step 2d. The role registry review supplements it with additional deliberation perspectives (e.g., Devil's Advocate, CTO).
+2. **Evaluate dispatch conditions** (same rules as /implement Step 2b+):
+   - `cross_cutting` → CTO, `security` → CISO, `lane_b` / `high_risk` → CQO, `high_effort` / `process_only` → CEfO.
+
+3. **Dispatch**: For each selected role (1-3 max), spawn an isolated sub-agent with the role preamble and the spec file. Roles run in **parallel**. Each produces a closing advisory (3-5 sentences).
+
+4. **Present advisory output**: Display role review blocks. Advisory only — does not block close.
+   ```
+   ## Closing Advisory (Spec 187)
+   Dispatched: <roles> (reason: <conditions>)
+
+   <role review blocks>
+
+   Advisory summary: <N> PROCEED, <N> REVISE, <N> BLOCK
+   Note: Non-DA/validator recommendations are advisory. Close proceeds.
+   ```
+
+5. Log to `docs/sessions/agent-file-registry.md`:
+   ```
+   YYYY-MM-DD HH:MM | <role> | spec-NNN | <recommendation> | advisory-close | mode: dispatch
+   ```
 
 ### [mechanical] Step 2g — Shadow-Mode Gate Comparison (Spec 277, Phase 1)
 
@@ -344,7 +404,7 @@ See `docs/process-kit/gate-comparison-methodology.md` for the shadow-run rationa
    - Invoke Claude Code's built-in `/ultrareview` against the spec's committed diff.
    - Wrap with the shared instrumentation wrapper above.
    - **Capture only — do not display.** The wrapped output must never appear in operator-visible channels: no `GATE [...]` line, no Review Brief section, no stdout findings.
-   - On `/ultrareview` sub-agent error: record `{skipped: true, skip_reason: "ultrareview-error: <short error>"}` and proceed. Errors must not cascade into `/close`.
+   - On `/ultrareview` sub-agent error: record `{skipped: true, skip_reason: "ultrareview-error: <short error>"}` and proceed. Errors must not cascade into `/close`. Non-Claude-Code agents (cursor, copilot, cline) where `/ultrareview` is unavailable record `{skipped: true, skip_reason: "ultrareview-error: command-not-available"}` and proceed silently — Validator Stage 2 and DA captures still complete.
 
 4. **Write per-gate persistence files** under `.forge/state/gate-comparison/<spec-id>/`:
    - `ultrareview.json`: `{gate: "ultrareview-shadow", spec_id, timestamp, duration_s, tokens, severity_counts, raw_output}` — or `{gate: "ultrareview-shadow", spec_id, timestamp, skipped: true, skip_reason}` if skipped.
@@ -362,38 +422,35 @@ See `docs/process-kit/gate-comparison-methodology.md` for the shadow-run rationa
 - MUST NOT block `/close` under any circumstance in Phase 1.
 - MUST NOT add or read `Ultrareview:` / `Ultrareview-Blocking:` spec front-matter fields (no such fields exist in Phase 1).
 
-### [mechanical] Step 2d++ — Template/Own-Copy Dual-Check (Spec 188, upgraded by Spec 180)
+### [mechanical] Step 2d++ — Template/FORGE Dual-Check (Spec 188, upgraded by Spec 180)
 
 Before generating the Review Brief, actively verify bidirectional sync:
 
-1. If `.copier-answers.yml` does not exist: skip silently — no template/own-copy duality to check.
-2. If `.copier-answers.yml` exists (this project is itself a Copier template):
-
 **Detection logic**: Run `git diff --name-only <spec-baseline>..HEAD` to get the list of files changed by this spec. For each changed file:
-- If the file is under `template/.claude/commands/`, `template/.forge/commands/`, `template/.claude/agents/`, `template/docs/process-kit/`, or `template/docs/QUICK-REFERENCE.md`: check if a corresponding own-copy exists at `.claude/commands/`, `.forge/commands/`, `.claude/agents/`, `docs/process-kit/`, or `docs/QUICK-REFERENCE.md` (same filename, ignoring `.jinja` suffix).
-- If the file is under `.claude/commands/`, `.forge/commands/`, `.claude/agents/`, `docs/process-kit/`, or is `docs/QUICK-REFERENCE.md`: check if a corresponding template file exists under `template/`.
+- If the file is under `template/.claude/commands/`, `template/.forge/commands/`, `template/.claude/agents/`, `template/docs/process-kit/`, `template/docs/QUICK-REFERENCE.md`, `template/bin/`, or `template/scripts/`: check if a corresponding own-copy exists at `.claude/commands/`, `.forge/commands/`, `.claude/agents/`, `docs/process-kit/`, `docs/QUICK-REFERENCE.md`, `bin/`, or `scripts/` (same filename, ignoring `.jinja` suffix).
+- If the file is under `.claude/commands/`, `.forge/commands/`, `.claude/agents/`, `docs/process-kit/`, `bin/`, `scripts/`, or is `docs/QUICK-REFERENCE.md`: check if a corresponding template file exists under `template/`.
 
 **Evaluation**:
-- If **no dual files found in the changed set**: mark `[x] Template/own-copy dual-check — no dual files changed`. Proceed silently.
-- If **dual files found and both sides were changed**: mark `[x] Template/own-copy dual-check — both sides updated`. Proceed silently.
+- If **no dual files found in the changed set**: mark `[x] Template/FORGE dual-check — no dual files changed`. Proceed silently.
+- If **dual files found and both sides were changed**: mark `[x] Template/FORGE dual-check — both sides updated`. Proceed silently.
 - If **only one side was changed** (drift detected):
 
   Present:
   ```
-  TEMPLATE/OWN-COPY DRIFT DETECTED — The following files were changed on one side but not the other:
+  TEMPLATE/FORGE DRIFT DETECTED — The following files were changed on one side but not the other:
   <list of drifted files with which side was changed>
 
-  This drift must be resolved before closing. Template and own-copy command files must stay in sync.
+  This drift must be resolved before closing. FORGE requires template and own-copy command files to stay in sync.
   ```
   > **Choose** — type a number or keyword:
-  > | # | Action | What happens |
-  > |---|--------|--------------|
-  > | **1** | `sync` | Apply the changes to the missing side now |
-  > | **2** | `intentional` | Drift is intentional — document reason and proceed |
-  > | **3** | `block` | Block close until drift is fixed manually |
+  > | # | Rank | Action | Rationale | What happens |
+  > |---|------|--------|-----------|--------------|
+  > | **1** | 1 | `sync` | Restores parity automatically; safest default | Apply the changes to the missing side now |
+  > | **2** | 2 | `intentional` | Drift may be intentional; record reason | Drift is intentional — document reason and proceed |
+  > | **3** | — | `block` | Manual fix path; use only if sync is unsafe | Block close until drift is fixed manually |
 
   - If `sync`: for each drifted file, copy the changes to the other side. Re-run the check to confirm sync.
-  - If `intentional`: append to the spec's Revision Log: `YYYY-MM-DD: Template/own-copy dual-check: drift noted as intentional for <files> — <reason>.` Proceed.
+  - If `intentional`: append to the spec's Revision Log: `YYYY-MM-DD: Template/FORGE dual-check: drift noted as intentional for <files> — <reason>.` Proceed.
   - If `block`: report "Close blocked — resolve template/own-copy drift and re-run /close." Stop.
 
 ### [mechanical] Step 2d+++ — Consumer-Propagation Check (Spec 303)
@@ -422,11 +479,11 @@ After the template/FORGE dual-check passes, verify that any documentation refere
   Consumer projects bootstrap from the template and/or receive the sync-to-public stream. A referenced doc must be reachable via at least one path or the pointer will be broken on their side.
   ```
   > **Choose per violation** — type a number or keyword:
-  > | # | Action | What happens |
-  > |---|--------|--------------|
-  > | **1** | `sync` | Create `template/docs/<path>` by copying the source `docs/<path>` |
-  > | **2** | `whitelist` | Append `docs/<path>` to `scripts/sync-to-public.sh`'s `PUBLIC_DOC_FILES` array |
-  > | **3** | `skip` | Record intentional drift in the spec's Revision Log (reason required) |
+  > | # | Rank | Action | Rationale | What happens |
+  > |---|------|--------|-----------|--------------|
+  > | **1** | 1 | `sync` | Mirrors the doc; consumers receive it via Copier | Create `template/docs/<path>` by copying the source `docs/<path>` |
+  > | **2** | 1 | `whitelist` | Sync-to-public path; consumers receive via forge-public stream | Append `docs/<path>` to `scripts/sync-to-public.sh`'s `PUBLIC_DOC_FILES` array |
+  > | **3** | — | `skip` | Record intentional drift; reason required | Record intentional drift in the spec's Revision Log (reason required) |
 
   - If `sync`: `mkdir -p template/docs/<dirname>` then `cp docs/<path> template/docs/<path>`. Re-verify the target — check passes for this violation.
   - If `whitelist`: edit `scripts/sync-to-public.sh` to add `"docs/<path>"` inside the `PUBLIC_DOC_FILES=( ... )` array block. Re-verify — check passes for this violation.
@@ -523,12 +580,12 @@ After all Step 2 gates complete, generate the Review Brief. This is the primary 
    - **Chat mode**: Present the Review Brief, then present a choice block:
 
      > **Review Brief complete** — choose an action:
-     > | # | Action | What happens |
-     > |---|--------|--------------|
-     > | **1** | `approve` | Confirm all items reviewed — proceed to close |
-     > | **2** | `show <item>` | Expand a Machine-Handled item for inspection |
-     > | **3** | `reject` | Halt close — return spec to implemented for rework |
-     > | **4** | `consensus` | Defer to /consensus — run structured multi-role review before deciding |
+     > | # | Rank | Action | Rationale | What happens |
+     > |---|------|--------|-----------|--------------|
+     > | **1** | 1 | `approve` | Validator + DA already passed; default path | Confirm all items reviewed — proceed to close |
+     > | **2** | 2 | `show <item>` | Inspect before approving; reversible | Expand a Machine-Handled item for inspection |
+     > | **3** | — | `reject` | Use when validator missed a defect; sends back to implementer | Halt close — return spec to implemented for rework |
+     > | **4** | — | `consensus` | Heavy review; reserve for genuinely contentious specs | Defer to /consensus — run structured multi-role review before deciding |
      >
      > _(Type the number or keyword directly)_
 
@@ -558,6 +615,46 @@ If no /consensus was invoked: skip silently.
 
 ## [mechanical] Step 3 — Status transition
 Perform the `closed` status transition:
+
+# >>> spec-344 guards
+SPEC-344 STEP-3 GUARDS: close the validator-approval-window gap surfaced by /close 318. Read these in order; each guard is independent.
+
+**Off-limits section headings** (canonical list — single source in `docs/process-kit/close-validator-coverage.md` § Guard 2):
+- `## Scope`
+- `## Requirements`
+- `## Acceptance Criteria`
+- `## Test Plan`
+
+**Guard 1 — Diff re-validation at Step 3 start (Req 1)**
+
+If the spec file has an `Approved-SHA:` field (Lane B): compare the spec file's current bytes to the bytes that were Approved-SHA-verified at Step 2. The check uses spec-file bytes ONLY (not the working-tree). If the spec file changed between Step 2 and Step 3:
+- Invoke the validator on the full spec file (matches Step 2d behavior).
+- Validator FAIL → emit `GATE [spec-344-guard-1]: FAIL — spec file modified between Step 2 verification and Step 3; re-validation FAILed.` STOP. Do not proceed.
+- Validator PASS → emit `GATE [spec-344-guard-1]: PASS — spec file modified post-verification; re-validation PASS.` Continue.
+If no diff: emit `GATE [spec-344-guard-1]: PASS — no pre-Step-3 edits.` Continue.
+If no `Approved-SHA:` (Lane A): skip silently — no SHA anchor to compare against.
+
+**Guard 2 — Off-limits section restriction (Req 2)**
+
+Any spec-file edit during Step 3 MUST be confined to non-scoped sections: frontmatter (excluding `Status:` and `Closed:` and `Validated:`), `## Implementation Summary`, `## Revision Log`, `## Evidence`, and any closure-logging block. Edits whose changed lines fall inside the body of `## Scope`, `## Requirements`, `## Acceptance Criteria`, or `## Test Plan` MUST be refused with: `GATE [spec-344-guard-2]: FAIL — Step 3 attempted to modify protected section <heading>. Use /revise — these sections are off-limits at /close.` STOP.
+
+This guard applies to ALL lanes — protected sections are off-limits at /close regardless of whether the spec carries an Approved-SHA.
+
+Permitted Step 3 edits (no guard violation): Status transition, Closed/Validated dates, Implementation Summary, Revision Log entries, Evidence section additions, frontmatter metadata.
+
+Note on genuine post-close corrections (typos, broken links discovered later): those are a SEPARATE problem from /close-time edits. If you hit one, file a follow-up spec for the optional Pattern A errata-file mechanism (deferred follow-up; not implemented today). The guards above do NOT handle post-close corrections.
+
+**Guard 3 — Approved-SHA re-verify post-Step-3 (Req 3)**
+
+After Step 3 completes (sub-steps a-f), if the spec file has an `Approved-SHA:` field (Lane B): recompute the SHA-256 over the four protected sections (Scope + Requirements + AC + Test Plan, per Spec 089's extraction rule). Compare to the stored `Approved-SHA:` value.
+- Match → emit `GATE [spec-344-guard-3]: PASS — protected sections unchanged post-Step-3.` Continue.
+- Mismatch → emit `GATE [spec-344-guard-3]: FAIL — Step 3 modified protected sections (post-Step-3 SHA mismatch). This indicates a path that bypassed Guard 2.` STOP. Do not push. Investigate the Step 3 sub-step that allowed the protected-section edit.
+
+If no `Approved-SHA:` (Lane A): skip silently — Guard 3 has no anchor.
+
+See: docs/process-kit/close-validator-coverage.md for the full /close 318 incident motivation, threat-coverage handoff (Spec 003 + 145 + Guards 1+2 cover Lane A), and the Spec 035 ↔ Spec 344 cross-edit invariant.
+# <<< spec-344 guards
+
 a. Set `Status: closed` and add `Closed: YYYY-MM-DD` in the spec file.
 b. Add a dated revision entry based on enforcement mode:
    - Chat/PAL: `YYYY-MM-DD: Closed via /close (Chat mode). Human confirmed all deliverables.`
@@ -569,6 +666,15 @@ d. **Backlog sync (Spec 086)**: Find the spec's row in `docs/backlog.md`.
    - **Duplicate detection**: If the spec appears in multiple rows, warn: "Duplicate backlog row detected for Spec NNN — consolidating." Remove all but the most recent row (highest rank or most recent status). Log the duplicate as a process defect.
    - If no row exists, add one at the bottom with ✅ status.
 e. Add a CHANGELOG entry: `- YYYY-MM-DD: Spec NNN closed via /close.`
+e2. **Score-Audit observed record (Spec 368)**: Append an `observed` record to the score-audit log via the shared helper. Do NOT inline JSON here. The helper computes `wallclock_days`, `session_count`, `revise_rounds`, `validator_outcome`, `da_outcome`, `tc_overrun_derived`, and `creation_ts_source` from artifacts (git timestamps, session JSON sidecars, spec body) — Claude does NOT compute or transcribe duration values.
+
+   ```bash
+   bash .forge/lib/score-audit.sh record-observed "$spec_id"
+   ```
+
+   (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-observed "$spec_id"`.)
+
+   The helper is advisory — failures emit `WARN: score-audit append failed (advisory; close continues)` to stderr but never block the close. The `tc_overrun_derived` boolean is computed automatically from the proxy mapping documented in [docs/process-kit/score-calibration-loop.md](../../docs/process-kit/score-calibration-loop.md); no operator prompt is added at /close for this field.
 f. **Three-source verification (Spec 086)**: After updating, read back all three sources and confirm they agree:
    - Spec file `Status:` field
    - README.md row status
@@ -577,14 +683,6 @@ f. **Three-source verification (Spec 086)**: After updating, read back all three
    - If any mismatch: emit `GATE [status-sync]: FAIL — status drift detected after update. Spec file: <s1>, README: <s2>, Backlog: <s3>. Remediation: manually correct the mismatched source.`
 
 Emit: `GATE [human-confirmation]: PASS — status transition to closed completed, human confirmed deliverables.`
-
-### [mechanical] Activity log event (Spec 134)
-
-Append a `spec-closed` event to `docs/sessions/activity-log.jsonl`:
-```
-{"timestamp":"<ISO 8601>","agent_id":"<operator or agent ID>","event_type":"spec-closed","spec_id":"<NNN>","message":"Spec NNN closed — <title>","metadata":{"gates_passed":<N>,"gates_failed":<N>,"signals_captured":<N>}}
-```
-Use the Bash tool with a single `echo '...' >> docs/sessions/activity-log.jsonl` command (append-only).
 
 ### [mechanical] Step 3 addendum — Delegated close evidence trail (Spec 160, Requirement 7)
 
@@ -635,7 +733,9 @@ After the status transition, check whether the spec declares delta markers for t
 
 5. **Conflict detection**: If the REQ-ID being modified or removed does not exist, or if its current text does not match expected state (e.g., already modified by another spec in this session): flag for human resolution. Report: "Delta merge conflict: <REQ-ID> — expected <X>, found <Y>. Resolve manually."
 
-6. **Enforcement**: delta merge is **advisory**. If merge fails: `GATE [delta-merge]: CONDITIONAL_PASS — delta merge encountered issues. Review canonical spec manually.` Proceed.
+6. **Lane enforcement**:
+   - **Lane B** (`docs/compliance/profile.yaml` exists): delta merge is a **blocking gate**. If merge fails or conflicts are unresolved: `GATE [delta-merge]: FAIL — delta merge could not be applied. Remediation: resolve conflicts in the canonical spec.` Stop.
+   - **Lane A** (no compliance profile): delta merge is **advisory**. If merge fails: `GATE [delta-merge]: CONDITIONAL_PASS — delta merge encountered issues but Lane A does not block on this. Review canonical spec manually.` Proceed.
 
 7. If merge succeeds: `GATE [delta-merge]: PASS — <N> delta(s) applied to canonical product spec.`
 
@@ -646,16 +746,53 @@ rm -f .forge/state/implementing.json
 ```
 If the file does not exist, skip silently.
 
-### [mechanical] Step 3a+ — README stats auto-update (Spec 235)
-Run `validate-readme-stats.sh --fix` to auto-correct spec and session counts in README.md before committing:
+### [mechanical] Step 3a+ — README stats auto-update (Spec 235, extended by Spec 319)
+Run `validate-readme-stats.sh --fix` and `validate-readme-counts.sh --fix` to auto-correct README.md numeric claims before committing. `stats.sh` owns specs+sessions ("N specs across N sessions" prose); `counts.sh` owns commands+roles (and validate-only on specs+sessions to avoid pingpong):
 ```bash
 if [[ -f "scripts/validate-readme-stats.sh" ]]; then
   bash scripts/validate-readme-stats.sh --fix || true
 fi
+if [[ -f "scripts/validate-readme-counts.sh" ]]; then
+  bash scripts/validate-readme-counts.sh --fix || true
+fi
 ```
-- If the script is absent: skip silently (consumer projects may not have it).
+- If a script is absent: skip silently (consumer projects may not have them).
 - If `--fix` corrects counts: the updated README.md is included in the /close commit.
-- If the script fails for any reason: proceed (non-blocking, `|| true`).
+- If a script fails for any reason: proceed (non-blocking, `|| true`).
+
+<!-- module:compliance -->
+## [mechanical] Step 3b — V&V report generation (Spec 039, conditional)
+If `docs/compliance/profile.yaml` exists (Lane B project):
+a. Aggregate evidence for the V&V report from the spec file:
+   - Gate outcomes: collect all `GATE [*]: PASS|FAIL|CONDITIONAL_PASS` entries from the spec's Evidence section and from steps 2b/2c above.
+   - Test evidence: collect test outputs from spec's Evidence section and `tmp/evidence/SPEC-NNN-*/`.
+   - Traceability links: read the spec's "Traceability Links" section.
+   - Compliance gate evidence: collect from step 2b gate check results.
+   - Acceptance criteria: read spec's Acceptance Criteria section, cross-reference with Evidence.
+b. Generate V&V report: create `docs/compliance/reports/YYYY-MM-DD-NNN-vv.md` from `docs/compliance/reports/_template.md`, filling in:
+   - All metadata fields (spec number, title, revision, profile framework, close date)
+   - Gate outcomes table (all gates from this spec's lifecycle)
+   - Test evidence table
+   - Traceability matrix excerpt
+   - Compliance gate evidence table (profile gate_rules vs evidence found)
+   - AC verification table
+   - Disclaimer header (required — do not remove)
+c. Emit: `GATE [vv-report]: PASS — V&V report generated at docs/compliance/reports/YYYY-MM-DD-NNN-vv.md`
+   - If any required gate has no evidence: emit `GATE [vv-report]: CONDITIONAL_PASS — V&V report generated but missing evidence for: <gates>. Remediation: fill in missing evidence before submitting to certification authority.`
+- Skip this step if `docs/compliance/profile.yaml` is absent (Lane A project).
+<!-- /module:compliance -->
+
+## [mechanical] Step 3b+ — Active-tab Spec(s) clear (Spec 353)
+
+If `.forge/state/active-tab-*.json` marker exists for this session, locate the registry row whose first column matches the marker's `registry_row_pointer` and clear `<NNN>` (the just-closed spec ID) from the row's `Spec(s)` column. If the column held only `<NNN>`, replace it with the placeholder dash (`—`); if it held a comma-separated list, remove `<NNN>` and trim. Also update the marker file's `spec_id` field to empty string and bump `last_command_at` to now.
+
+Skip silently if no marker exists. The registry row remains `active` (the tab is still open) — only the spec claim is released. Operator runs `/tab close` to release the row itself.
+
+This is the symmetric counterpart to `/implement` Step 3a (Spec(s) write-back). Together they make the registry row's `Spec(s)` column reflect the in-flight spec across the lifecycle.
+
+## [mechanical] Step 3b++ — Lane-mismatch warning (Spec 353)
+
+If the active-tab marker exists and `marker.lane` is `process-only`, emit a one-line warning at /close start: `⚠ Closing a feature-lane spec inside a process-only tab. Continue?` Soft-gate only — do not refuse. Operator decides.
 
 ## [mechanical] Step 3c — Session log incremental entry (Spec 131)
 
@@ -674,31 +811,63 @@ Append a structured "spec closed" entry to today's session log:
    ```
 3. Report: "Session log updated: spec NNN closed."
 
-## [mechanical] Step 4 — Auto-commit and push
+### [mechanical] Step 3d — release-eligible signal emission (Spec 291)
 
-**Commit guard marker (Spec 257)**: Before committing, set the active-close marker so the specless commit guard allows the commit:
-```bash
-mkdir -p .forge/state
-echo "close-NNN" > .forge/state/active-close
-```
+After the spec status transitions to `closed`, scan the spec's
+`## Implementation Summary` `Changed files` list for any path matching one of
+the four release-policy trigger paths (per `docs/process-kit/release-policy.md`
+§ Tag-cut triggers):
 
-Run `git status`. If there are outstanding changes, stage relevant files and commit: "Close Spec NNN — <title>".
+- `template/**`
+- `copier.yml`
+- `.claude/commands/**`
+- `.forge/templates/project-schema.yaml`
 
-**Commit guard cleanup (Spec 257)**: After committing (or if no commit was needed), clear the active-close marker:
-```bash
-rm -f .forge/state/active-close
-```
+If **no** trigger files are present in the changed-files list: skip silently.
+Most specs (process-only docs, test fixtures, scripts) skip this step.
+
+If **at least one** trigger file is present:
+
+1. **Classify surfaces** (one or more of S1/S2/S3 per release-policy.md
+   § Versioning contract):
+   - `copier.yml` → S1
+   - Any `*/commands/*.md` mirror under `.claude/commands/`, `.forge/commands/`,
+     `template/.claude/commands/`, or `template/.forge/commands/` → S2
+   - `.forge/templates/project-schema.yaml` → S3
+
+2. **Append signal** to `docs/sessions/signals.md`:
+   ```
+   ### SIG-NNN-RE (release-eligible)
+   - **Spec**: NNN
+   - **Date**: YYYY-MM-DD
+   - **Surfaces affected**: S<n>[, S<n>...]
+   - **Proposed bump (initial)**: PATCH — audit (`docs/process-kit/v1.0.0-to-next-audit.md`) is authoritative; may revise upward.
+   - **Changed-file basis**: <comma-separated list of trigger-path files>
+   ```
+
+3. Emit: `GATE [release-eligible-signal]: PASS — Spec NNN appended to signals.md (surfaces=<list>, proposed_bump=PATCH).`
+
+The signal is consumed by `/now` and `/evolve` (which surface the count of
+pending release-eligible entries — Spec 291 Req 4) and by
+`scripts/cut-release.sh` when the operator decides to cut a tag. The audit doc
+remains the authoritative classifier; signal-time PATCH is a conservative
+default that the audit may revise upward to MINOR or MAJOR after surface-diff
+analysis.
+
+If `docs/sessions/signals.md` is missing: create it with a single `# Signals`
+header, then append.
 
 
-After committing, push to remote:
-a. Check if the current branch has a remote tracking branch: `git rev-parse --abbrev-ref @{upstream}`
-b. If a tracking branch exists: run `git push`. Report: "Pushed to <remote>/<branch>."
-c. If push fails: report as a warning ("Push failed: <error>. Changes are committed locally.") and continue — do not block the rest of `/close`.
-d. If no remote tracking branch: skip silently with a note: "No remote tracking branch — skipping push."
+
+## [mechanical] Step 4 — (auxiliary actions only — see Step 8a for commit and push)
+
+The `git commit` and `git push` actions previously located here have moved to **Step 8a — Auto-commit and push** (after Steps 5–8 complete) so the close commit captures all spec-mutating step output (deferred-scope dispositions, signal capture, runbook amendments, session-log update, etc.) in a single atomic commit. See `docs/process-kit/runbook.md` § /close for the rationale (Spec 348).
+
+Step 4 now consists only of the auxiliary subsections 4a/4b/4c below — none of which commit.
 
 ## [mechanical] Step 4a — Append artifact relationships (Spec 108)
 
-After committing, update the cross-artifact relationship index for the just-closed spec:
+After the spec status transitions in Step 3, update the cross-artifact relationship index for the just-closed spec (writes are uncommitted at this point and will be captured by the Step 8a commit):
 
 1. Read the just-closed spec file (`docs/specs/NNN-*.md`).
 2. Scan the spec file for cross-references using the reference patterns defined in `/trace` Step A2:
@@ -727,7 +896,7 @@ If any error occurs reading or writing the index: warn but do not block the clos
 
 ## [mechanical] Step 4b — Auto evolve loop check (Spec 043, enhanced by Spec 157)
 
-After committing, check whether evolve trigger conditions are met:
+After the spec status transitions in Step 3, check whether evolve trigger conditions are met (this step reads CHANGELOG.md which Step 3 has already written; the close commit at Step 8a captures the entry):
 
 a. Read `docs/sessions/evolve-config.yaml` (skip silently if absent — use defaults: `auto_fast_path: true`, `spec_count_threshold: 5`, `time_interval_days: 30`).
 b. Read `docs/sessions/evolve-state.md` (or last session log's `Last evolve loop review:` field) for the date of the last evolve review.
@@ -752,6 +921,26 @@ e. **Full review recommendation**: If `time_interval_days` threshold is met (≥
 f. If neither threshold is met, report briefly: "Evolve loop: N specs since last review (threshold: M). Not yet due."
 g. This step never blocks the close workflow.
 
+## [mechanical] Step 4c — Ambient status lines (Spec 220)
+
+Two informational one-liners. Both are silent-skip if data is unavailable. Neither blocks execution or prompts for input.
+
+**Session-log line**: Find today's session log in `docs/sessions/` (file matching today's date pattern). Count accumulated structured entries (sections appended by `/implement`, `/close`, and other commands during this session — look for `###`-level headings or structured entry markers). If count ≥ 1, emit:
+```
+Session: N entries captured — run /session when wrapping up.
+```
+If count is 0 or no session log exists for today, skip silently.
+
+**Evolve-status line**: Use the evolve trigger state already computed in Step 4b (specs-since-last-review count vs threshold). Report the trigger closest to its threshold:
+```
+Evolve: N/M specs since last review (K away from full review trigger).
+```
+If any trigger already crossed its threshold (i.e., evolve was already recommended or auto-triggered in Step 4b), instead emit:
+```
+Evolve: triggered — run /evolve when ready.
+```
+If no evolve state is computable (no evolve-state.md, no CHANGELOG entries, Step 4b skipped), skip silently.
+
 ## [decision] Step 5 — Deferred Scope Review
 Read the just-closed spec's "Out of scope" section. If it contains any items:
 a. Present each item as a numbered list.
@@ -769,9 +958,32 @@ Run the retrospective signal capture inline for this spec. Three signal categori
 - **Process**: What worked/didn't in the workflow
 - **Architecture**: Design insights for future work
 
-Present draft signal entries. **Re-read `docs/sessions/signals.md` now** (Spec 123 — context overflow guard), then append confirmed entries.
+### Signal classification (Spec 267)
 
-After presenting signals, write confirmed entries to `docs/sessions/signals.md` using the established format (`###` header with date and spec, then categorized signal entries). If the file doesn't exist, create it from the signals log header. This is a [mechanical] step — do not skip.
+Before drafting each SIG entry, **infer the three Spec 267 classification fields from the implementation and close context**:
+- **Root-cause category**: pick one of `spec-expectation-gap`, `model-knowledge-gap`, `implementation-error`, `process-defect`, `other`. Use `other` when categorization is genuinely unclear — do not guess. See `docs/process-kit/signal-quality-guide.md` for the taxonomy and worked examples.
+- **Wrong assumption** (optional): the specific belief held before the issue surfaced, now known to be false. Empty string if the signal is not about an assumption failure (e.g., positive-outcome content/architecture signals).
+- **Evidence-gate coverage**: pick one of `caught-by-existing-gate`, `missed-by-existing-gate`, `no-applicable-gate`. If `missed-by-existing-gate`, name the gate that should have caught it.
+
+Then draft each SIG entry in this format:
+```
+### SIG-NNN-XX — <title>
+- Date: YYYY-MM-DD
+- Type: [content|process|architecture|trust]
+- Spec: NNN
+- Impact: <low|medium|high>
+- Observation: <what happened>
+- Root-cause category: <spec-expectation-gap|model-knowledge-gap|implementation-error|process-defect|other>
+- Wrong assumption: <the specific false belief, or empty>
+- Evidence-gate coverage: <caught-by-existing-gate|missed-by-existing-gate|no-applicable-gate> [— gate name if missed]
+- Recommendation: <what to change>
+```
+
+**Re-read `docs/sessions/signals.md` now** (Spec 123 — context overflow guard) to avoid collision with concurrent edits, then **auto-append** all drafted entries directly to the file using the established format (`###` header with date and spec, then categorized signal entries). If the file doesn't exist, create it from the signals log header.
+
+Emit a single one-line confirmation in chat: `N signals captured to docs/sessions/signals.md` (where N is the appended count). Do NOT prompt the operator to confirm/edit/skip individual drafts — entries land as-is with their classification fields intact. Curation (dedup, miscategorization correction, scope-trimming) is deferred to `/evolve` pattern analysis (Step 8) where cross-signal context is available and the cost of over-capture is low.
+
+This is a [mechanical] step — do not skip. Absence/empty values for the three Spec 267 classification fields are acceptable (treated as `other` / empty / `no-applicable-gate` downstream) — the goal is to capture signal at low ceremony cost, not block on field completeness.
 
 ### Step 6a — Upstream contribution check (Spec 226)
 After capturing process signals, check if any should be contributed upstream:
@@ -790,10 +1002,10 @@ b. For each **process signal** just captured (content and architecture signals a
        Contribution path: <canonical | fork>
        Target: <repo URL>
      ```
-     > | # | Action | What happens |
-     > |---|--------|--------------|
-     > | **1** | `note` | Add to scratchpad as upstream candidate for later |
-     > | **2** | `skip` | Project-specific — not an upstream improvement |
+     > | # | Rank | Action | Rationale | What happens |
+     > |---|------|--------|-----------|--------------|
+     > | **1** | 1 | `note` | Cheap to capture; lets /matrix triage later | Add to scratchpad as upstream candidate for later |
+     > | **2** | — | `skip` | Project-specific signal; no upstream value | Project-specific — not an upstream improvement |
 
      - If `note`: append to scratchpad: `- [ ] <date>: [upstream] SIG-NNN-XX — <signal summary>. Target: <repo>.`
      - If `skip`: proceed silently.
@@ -817,21 +1029,7 @@ c. If a match is found, present a runbook amendment proposal:
 d. If user chooses "amend": apply the edit and update the `<!-- Last updated: -->` comment at the top of the runbook file.
 e. If no process signals match any runbook headings: skip silently.
 
-### [mechanical] Step 6c — ADR gap detection (Spec 138)
-
-After capturing retro signals, scan for missed ADR opportunities:
-
-1. **Keyword scan**: Search the spec's Objective, Scope, and Requirements sections for ADR indicators: "chose", "alternative", "trade-off", "tradeoff", "migration from", "replaces", "evaluated" (in context of comparing approaches), "compared".
-2. **Check ADR References**: Read the `ADR References:` section of the just-closed spec.
-3. **Flag condition**: If indicators found AND `ADR References:` says "none" or is empty, add an architecture signal to the retro output:
-   ```
-   [architecture] SIG-NNN-AX: Architectural decision made without ADR — spec contains decision language ("<indicator>") but ADR References is "none". Consider running /decision retroactively to document the decision rationale.
-   ```
-   Append this signal to `docs/sessions/signals.md` along with other retro signals.
-4. **No-flag conditions**: Skip silently if no ADR indicators are found, or if `ADR References:` already contains a valid reference.
-5. This is advisory — does not block the close workflow.
-
-Emit:  Use CONDITIONAL_PASS if no signals were identified (unusual but possible).
+Emit: `GATE [retro-completion]: PASS/CONDITIONAL_PASS — <signal count> signals captured.` Use CONDITIONAL_PASS if no signals were identified (unusual but possible).
 
 ## [mechanical] Step 7 — Auto-chain /matrix (Evolve Loop fast path)
 a. **AC spot-check**: Pick one acceptance criterion from the just-closed spec. Check the corresponding file/function. State the criterion, file, and whether it satisfies. Flag drift as a process defect.
@@ -843,23 +1041,77 @@ Emit: `GATE [matrix-completion]: PASS/FAIL — <AC spot-check result, backlog co
 ## [mechanical] Step 8 — Session log update
 Check `docs/sessions/` for a log file matching today's date. If none exists, create one from `docs/sessions/_template.md`. **Re-read the session log file now** before editing (Spec 123 — context overflow guard). Record the just-closed spec.
 
+## [mechanical] Step 8a — Auto-commit and push (Spec 348)
+
+This step captures the close commit AFTER all spec-mutating steps (3, 4a, 5, 6, 6a, 6b, 7, 8) have completed, ensuring a single atomic commit covers every mutation.
+
+**Commit guard marker (Spec 257)**: Before committing, set the active-close marker so the specless commit guard allows the commit:
+```bash
+mkdir -p .forge/state
+echo "close-NNN" > .forge/state/active-close
+```
+
+Run `git status`. If there are outstanding changes, stage relevant files and commit: "Close Spec NNN — <title>".
+
+**Commit guard cleanup (Spec 257)**: After committing (or if no commit was needed), clear the active-close marker:
+```bash
+rm -f .forge/state/active-close
+```
+
+After committing, push to remote (explicit confirmation required — per AGENTS.md:127, `git push` is a second authorization-required action separate from the `/close` invocation itself):
+a. Check if the current branch has a remote tracking branch: `git rev-parse --abbrev-ref @{upstream}`
+b. If no remote tracking branch: skip silently with a note: "No remote tracking branch — skipping push." Stop here.
+c. If a tracking branch exists: emit the following prompt verbatim and wait for an explicit operator response:
+
+   > Push to `<remote>/<branch>`? (yes/no)
+
+   **Compaction-boundary rule**: If a context compaction occurs between this prompt and the operator's response, re-emit the prompt. Do not treat any pre-compaction response as valid (per AGENTS.md:130-132).
+
+d. On explicit "yes": run `git push`. Report: "Pushed to <remote>/<branch>."
+e. On any other response (including "no", silence, ambiguous input, or a compaction-summary inference): abort the push with: "Push skipped — commit is local-only. Run `git push` manually when ready." Continue with the rest of `/close`.
+f. If the push in step d fails: report as a warning ("Push failed: <error>. Changes are committed locally.") and continue — do not block the rest of `/close`.
+
 ## [decision] Step 9 — Pick next
 a. **Closing queue**: count of remaining specs at `implemented` status. For each: `Spec NNN — <title>: run /close NNN`.
 b. **Next recommended spec**: highest-ranked `draft` spec from backlog — ID, title, score, lane. Read the spec file (`docs/specs/NNN-*.md`) and extract the first sentence of its `## Objective` section — display it below the spec title as: "_<objective>_".
-c. **If no draft specs exist in the backlog**: report "Backlog is empty — run `/brainstorm` to surface new spec candidates, or `/interview` if the next problem area needs deeper exploration first."
+c. **If no draft specs exist in the backlog**: run `/brainstorm` inline to generate spec recommendations from the roadmap, signals, and scratchpad. If `/brainstorm` is not available, report: "Backlog is empty. Run `/brainstorm` or `/spec <description>` to create new specs."
 d. Present a Choice Block (Spec 025, see `docs/process-kit/implementation-patterns.md`):
 
-> **Choose** — type a number or keyword:
-> | # | Action | What happens |
-> |---|--------|--------------|
-> | **1** | `implement` | Start `/implement next` (highest-ranked draft) |
-> | **2** | `close NNN` | Close another implemented spec (type spec number) |
-> | **3** | `brainstorm` | Generate new spec recommendations |
-> | **4** | `interview` | Explore next problem area before speccing (if backlog is empty) |
-> | **5** | `consensus` | Defer a decision to /consensus for structured multi-role input |
-> | **6** | `stop` | End session |
->
-> _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_
+<!-- Spec 347 Phase 1: this choice block is declared as canonical YAML data and rendered per the renderer protocol (docs/process-kit/choice-block-renderer-protocol.md). The agent reads the fenced block, evaluates each row's `precondition` field via the documented bash one-liner from docs/process-kit/choice-block-preconditions.md, drops false-precondition rows, applies the session-data safety rule, sorts by rank, and emits a Spec 320 v2.0 markdown table. The output is byte-identical to a hand-authored v2.0 table for the same row set. -->
+
+```choice-block
+title: Pick next
+rows:
+  - key: implement
+    rationale: Top-of-backlog ready; clean transition
+    what_happens: Start /implement next (highest-ranked draft)
+    rank: "1"
+    precondition: backlog_has_draft_specs
+  - key: close NNN
+    rationale: Drain remaining implemented queue
+    what_happens: Close another implemented spec (type spec number)
+    rank: "2"
+    precondition: implemented_specs_count_gt_zero
+  - key: brainstorm
+    rationale: Use when backlog is empty or stale
+    what_happens: Generate new spec recommendations
+    rank: "—"
+    precondition: backlog_has_no_draft_specs
+  - key: consensus
+    rationale: Heavy review; reserve for contentious decisions
+    what_happens: Defer a decision to /consensus for structured multi-role input
+    rank: "—"
+  - key: synthesize --topic NNN
+    rationale: Capture this spec's reasoning into refined reference doc (Spec 328)
+    what_happens: Run /synthesize --topic NNN where NNN is the just-closed spec ID. Mode hint defaults to --topic for the just-closed spec; if 5+ sessions have passed since the last synthesize, --postmortem is the safer alternative. --all runs all four modes.
+    rank: "—"
+  - key: stop
+    rationale: Downgraded if today's session log has unsynthesized entries
+    what_happens: End session
+    rank: "—"
+```
+
+The renderer's session-data safety rule applies automatically: if `today_session_log_unsynthesized` evaluates true, a synthetic `session` row is inserted at rank 1 and `stop` is demoted to rank `—`. Operators see no change in the visible interface — only the source representation in this command file is the canonical YAML data.
 
 e. Report: "Spec NNN is now `closed`. Commit: <done/skipped>."
 

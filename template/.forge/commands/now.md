@@ -1,12 +1,15 @@
 ---
 name: now
 description: "Review current project state and suggest next action"
-model_tier: haiku
 workflow_stage: session
 ---
 
 # Framework: FORGE
 # Model-Tier: haiku
+<!-- multi-block mode: serialized — choice blocks fire at distinct mechanical steps (validation queue at Step 1, exit gate at Step 13). They do not co-present in the same agent message. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
+
+**Output verbosity (Spec 225)**: At the start of execution, read `forge.output.verbosity` from `AGENTS.md` (default: `lean`). In **lean** mode, suppress non-actionable diagnostic output (passing-gate confirmations, KPI tables, calibration deltas, MCP pin status, deprecation scans, signal-by-signal pattern dumps, root-cause groupings, deferred-scope aging when none aged, score-rubric details when unchanged) — write the full content to its file artifact (session log, `pattern-analysis.md`, etc.) and emit a one-line pointer in chat (or omit entirely if purely informational). In **verbose** mode, emit full detail as before. **Never suppressed in either mode**: choice blocks, FAILed gates, push-confirmation prompts, Review Brief "Needs Your Review" items, operator-input prompts, error/abort messages. See `docs/process-kit/output-verbosity-guide.md` for the full rules and worked examples.
+
 Review the current project state and tell me what should happen next.
 
 If $ARGUMENTS is `?` or `help`:
@@ -17,6 +20,7 @@ If $ARGUMENTS is `?` or `help`:
   No arguments accepted.
   Reads: docs/backlog.md, docs/sessions/ (latest log + JSON sidecar), CLAUDE.md, docs/specs/README.md
   Reports: validation queue, active work, next recommended spec, evolve loop status, blockers.
+          Also: count of drafts past `valid-until:` (Spec 363) — silent on zero.
   Prefers JSON handoff sidecars for structured context; falls back to markdown parsing.
   See: CLAUDE.md (operating loop, spec lifecycle), docs/backlog.md
   ```
@@ -150,11 +154,11 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
      Then offer a choice for each implemented spec:
      ```
      > **Choose** — type a number or keyword:
-     > | # | Action | What happens |
-     > |---|--------|--------------|
-     > | **1** | `review NNN` | Display full validation checklist from human-validation-runbook.md |
-     > | **2** | `close NNN` | Run /close NNN to validate and close the spec |
-     > | **3** | `skip` | Defer validation — continue to backlog recommendations |
+     > | # | Rank | Action | Rationale | What happens |
+     > |---|------|--------|-----------|--------------|
+     > | **1** | 2 | `review NNN` | Inspect first; reduces accidental approvals | Display full validation checklist from human-validation-runbook.md |
+     > | **2** | 1 | `close NNN` | Closure path; default after operator review | Run /close NNN to validate and close the spec |
+     > | **3** | — | `skip` | Defer validation; pick up other work | Defer validation — continue to backlog recommendations |
      ```
      If user selects "review NNN":
 
@@ -202,7 +206,17 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    - explore-<topic>.md (proposed, <date>)
    ```
    If no proposed explorations exist or the directory is absent, skip silently.
-8. **Active tabs check**: Read `docs/sessions/registry.md` (if it exists). Report any rows with Status = `active`, listing their tab label, lane, claimed spec(s), and start time. Flag any stale claims (last active > 30 minutes ago). If no registry or no active rows, skip silently.
+8. **Active tabs check (Spec 352)**: Glob `.forge/state/active-tab-*.json` (Spec 353 marker primitive). For each marker file, parse the JSON and read `last_command_at`. Classify:
+   - **active**: `last_command_at` within 30 minutes of now.
+   - **stale**: `last_command_at` older than 30 minutes.
+   - **malformed/unreadable**: treat as not-active (skip the file; do not error).
+
+   Emit a single one-line surface based on the counts:
+   - If active count `N == 0`: emit nothing (suppress line — single-tab/solo sessions see zero noise, regardless of stale count).
+   - If `N >= 1` and stale count `M == 0`: emit `Tabs: N active`.
+   - If `N >= 1` and `M >= 1`: emit `Tabs: N active, M stale (run /tab close to clean stale)`.
+
+   This surface is read-only — `/now` does not modify, delete, or prompt against marker files. The visibility nudge drives `/tab init` adoption without imposing per-command friction.
 8b. **Runbook staleness check** (Spec 107): Read all `.md` files in `docs/process-kit/`. For each file, look for a `<!-- Last updated: YYYY-MM-DD -->` comment. If the date is more than 30 days ago (or the comment is missing), flag the runbook as potentially stale:
    ```
    ## Stale runbooks
@@ -210,6 +224,11 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    - docs/process-kit/<filename>.md — last updated: <date> (<N> days ago)
    ```
    If all runbooks are current, skip silently.
+
+8d. **Aging drafts count surface (Spec 363)**: Read every `docs/specs/[0-9][0-9][0-9]-*.md` file with `Status: draft` in frontmatter. Parse the `valid-until: YYYY-MM-DD` field, if present. Count drafts whose `valid-until:` is **populated AND past today**. Drafts lacking `valid-until:` (pre-backfill state, missing field, or commented-out) are silent — not counted, not warned.
+   - If count `N >= 1`: emit one line `Aging drafts: N past validity — run /matrix to triage via strategic-fit flow.`
+   - If count `N == 0` (zero populated-and-expired) OR no drafts have `valid-until:` populated yet: emit nothing.
+   This surface is read-only and additive. `/now` does not modify any spec frontmatter. Renewal happens via `/revise NNN` (refreshes `valid-until:`) or operator direct edit. Triage of expired drafts happens via `/matrix` Step 8 strategic-fit flow.
 
 8c. **Process-kit external-source freshness check** (Spec 278): Read `forge.process_kit.freshness_threshold_days` from AGENTS.md (default: **180** if absent or unset). Scan `.md` files under `docs/process-kit/` AND `template/docs/process-kit/` for a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker within the first 10 lines.
    - For each file carrying the marker: compare the date to today. If the date is older than the threshold, flag the guide as stale.
@@ -251,9 +270,6 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    <confirmed operator name from Step 0b.f>
    ```
 
-10. **Current session cost** (Spec 085 — skip if `forge.model_router.mode` is `static` or `.forge/metrics/command-costs.yaml` does not exist):
-   Read `.forge/metrics/command-costs.yaml`. Filter entries to today. Summarize: total commands, total estimated cost, tier distribution. Include in the context snapshot under `## Session Cost`.
-
 Then report:
 - **Validation queue**: specs at `implemented` awaiting `/close` (from step 1) — this is the top priority
 - **Active work**: any open spec triggers or process improvement items from the last session log that haven't been converted to specs yet
@@ -264,6 +280,48 @@ Then report:
 - **Blockers**: anything that must be resolved before the next spec can start
 
 If no outstanding items exist and the backlog is current, recommend the single highest-value next action and explain the rationale using the scoring rubric.
+
+## [mechanical] Step 0e — Release-eligible + deprecation surfacing (Spec 291)
+
+Surface two release-policy signals so they cannot decay silently between tag
+cuts (see `docs/process-kit/release-policy.md`).
+
+### Release-eligible count
+
+Read `docs/sessions/signals.md`. Count entries matching `^### SIG-[0-9]+-RE`
+(emitted by `/close` Step 3d). If the file is missing, count is 0.
+
+- If count is 0: skip silently.
+- If count is ≥ 1: emit a single one-line advisory:
+  ```
+  N release-eligible spec(s) pending tag cut. See docs/process-kit/v1.0.0-to-next-audit.md to audit before running scripts/cut-release.sh.
+  ```
+
+### Deprecation warnings
+
+Scan two surfaces for machine-readable deprecation markers (per
+release-policy.md § Deprecation policy):
+
+1. **Surface 1 — `copier.yml`**: parse for top-level variables carrying
+   `deprecated: true`. Emit one line per match:
+   ```
+   ⚠ Deprecated copier variable: <name> (deprecated_in: <ver>, removed_in: <ver>) — see release-policy.md.
+   ```
+
+2. **Surface 2 — slash command files**: scan `.claude/commands/*.md` for files
+   whose YAML frontmatter (between `---` markers at the top) or first 10 lines
+   contain `deprecated: true`. Emit one line per match:
+   ```
+   ⚠ Deprecated command: /<name> (deprecated_in: <ver>, removed_in: <ver>) — see release-policy.md.
+   ```
+
+If `copier.yml` is absent (consumer projects without the template's `copier.yml`):
+skip Surface 1 silently. If `.claude/commands/` is absent: skip Surface 2 silently.
+
+These advisories are read-only and non-blocking. They surface twice — once at
+`/now` (for daily visibility) and again at `/evolve` (during periodic review).
+
+
 
 ## [mechanical] Step 11 — Session log staleness detection (Spec 131, enhanced by Spec 157)
 
@@ -308,26 +366,45 @@ Read the most recent session log's `Last evolve review:` field (or `Last evolve 
     ```
   - Update the overdue count in context-snapshot.md.
 
-## [mechanical] Step 13 — Context-aware choice block (Spec 131)
+## [mechanical] Step 13 — Context-aware choice block (Spec 131; convention v2.0 per Spec 320)
 
-At the end of every `/now` invocation, present a numbered choice block based on current context. Build the options dynamically:
+<!-- safety-rule: session-data — if today's session log has unsynthesized spec activity AND ## Summary is unpopulated, /session is inserted at rank 1 and stop is downgraded to —. See docs/process-kit/implementation-patterns.md § Session-data safety rule. -->
+
+At the end of every `/now` invocation, present a numbered choice block based on current context. Build the options dynamically using the v2.0 convention (Rank + Rationale columns; ≤80 char rationale; `—` for unranked):
 
 ```
 > **Choose** — type a number or keyword:
-> | # | Action | What happens |
-> |---|--------|--------------|
+> | # | Rank | Action | Rationale | What happens |
+> |---|------|--------|-----------|--------------|
 ```
 
-Always include these options (numbered dynamically based on which apply):
+Always include these options (numbered dynamically based on which apply). Default ranks (override per session-data safety rule):
 
-1. **If implemented specs exist**: `close NNN` — Run `/close NNN` to validate and close
-2. **If draft/approved specs exist in backlog**: `implement` — Run `/implement next` for the top-ranked spec. Read the top-ranked spec file (`docs/specs/NNN-*.md`) and append its objective as a sub-line: "_<first sentence from the spec's ## Objective section>_"
-3. **If session log is stale** (from Step 11): `session` — Run `/session` to update the session log
-4. **If evolve loop is overdue** (from Step 12): `evolve` — Run `/evolve` for process review
-5. **If backlog is empty or has no draft specs**: `brainstorm` — Run `/brainstorm` to discover new spec opportunities
-6. **Always**: `stop` — No action needed right now
+1. **If implemented specs exist**: `close NNN` — rank `1`, rationale "Closure first; clears the validation queue" — Run `/close NNN` to validate and close
+2. **If draft/approved specs exist in backlog**: `implement` — rank `1` if no validation queue else `2`, rationale "Top-of-backlog ready; clean transition" — Run `/implement next` for the top-ranked spec. Read the top-ranked spec file (`docs/specs/NNN-*.md`) and append its objective as a sub-line: "_<first sentence from the spec's ## Objective section>_"
+3. **If session log is stale** (from Step 11): `session` — rank `1` if safety rule fires (see above) else `2`, rationale "Synthesize before next work" — Run `/session` to update the session log
+4. **If evolve loop is overdue** (from Step 12): `evolve` — rank `2`, rationale "Process review; cumulative signal threshold crossed" — Run `/evolve` for process review
+5. **If backlog is empty or has no draft specs**: `brainstorm` — rank `2`, rationale "Discover next work when backlog is dry" — Run `/brainstorm` to discover new spec opportunities
+6. **If evolve loop is overdue OR knowledge consolidation may help** (Spec 328): `synthesize --postmortem` — rank `—`, rationale "Consolidate accumulated knowledge into a refined reference doc" — Run `/synthesize --postmortem` (default mode hint; operator can pick `--decisions`, `--topic <theme>`, `--architecture`, or `--all` instead)
+7. **Always**: `stop` — rank `—` (always unranked; session-data safety rule may further downgrade), rationale "No action needed right now" — End the /now invocation
 
-Present only the options that apply to the current context. Number them sequentially starting from 1.
+**Session-data safety rule (Spec 320 Req 4)**: Before emitting the choice block, evaluate today's session log per the positive "populated Summary" definition (heading present + ≥1 non-placeholder body line). If the rule fires (unsynthesized spec activity AND Summary unpopulated): **insert `session` at rank 1**, downgrade `stop` to `—`. The dynamic options above are the *normal* presentation; when the rule fires, prepend a `session` row at rank 1.
+
+Present only the options that apply to the current context. Number them sequentially starting from 1. Each option carries an explicit Rank cell (`1`, `2`, …, or `—`) and a Rationale cell ≤80 chars (use `—` if it would echo the Action label).
 
 After the choice block, include the footer:
 > _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_
+
+
+## [mechanical] Tab-lane awareness directive (Spec 351)
+
+Before emitting any next-action choice block in this command, consult the active-tab marker (Spec 353 primitive):
+
+1. Read `.forge/state/active-tab-*.json` (primary). If present, extract `lane`. If `last_command_at` > 30 minutes ago, treat marker as **stale**.
+2. If no marker, fall back to `docs/sessions/registry.md` rows with `Status = active` for the current session. Use the row's `Lane` column.
+3. If neither yields an active lane: emit the choice block as today. No preamble, no filtering, no annotation. **Skip the rest of this directive.**
+4. If an active lane is detected: emit the one-line preamble (`Tab lane: <lane>. Options below filtered to lane scope.` / `... Cross-lane options annotated.` / `... (stale ~Nm)...`) and apply the filter/annotate decision rules from `docs/process-kit/tab-lane-awareness-guide.md` § Per-lane decision rules.
+5. Filtered rows are struck through with rank `—` (not silently dropped) so the operator can override by typing the keyword directly.
+
+The guide is the single source of truth for which rows filter vs annotate per lane. This directive is intentionally short — the central guide encodes the rules so every emitter stays consistent.
+

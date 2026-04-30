@@ -1,9 +1,10 @@
 ---
 name: spec
 description: "Create a new spec from the template"
-model_tier: sonnet
 workflow_stage: planning
 ---
+<!-- multi-block mode: serialized — choice blocks fire at distinct mechanical steps (vague-AC scan Step 6c, behavioral-AC fixture scan Step 6d). Each block waits for operator response before the next mechanical step proceeds. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
+
 # Framework: FORGE
 # Model-Tier: sonnet
 Create a new spec from the template.
@@ -18,6 +19,10 @@ If $ARGUMENTS is `?` or `help`:
     --from-explore <topic>  Pre-populate from docs/research/explore-<topic>.md
   Behavior:
     - Produces a valid FORGE spec in draft status, scored and indexed.
+    - Drafts get a 90-day validity window (`valid-until:`) — configurable via
+      `forge.spec.draft_validity_days` in AGENTS.md. /now reports a count when
+      drafts are past validity; /matrix Step 8 absorbs them into strategic-fit triage.
+      Renew validity by running /revise on the draft.
   After saving: review the draft and run /implement, or request edits via /revise.
   See: docs/specs/_template.md, docs/process-kit/scoring-rubric.md
   ```
@@ -30,6 +35,23 @@ Read `docs/sessions/context-snapshot.md`. If a `## Active evolve loop` section e
 - Stop and report: "Evolve loop in progress (started <started>). Solve-loop commands (/implement, /spec, /close) are blocked until the evolve loop completes. Return to the /evolve session and use the exit gate to choose your next action."
 - Do NOT proceed with spec creation.
 If the section is absent or `status: complete`: proceed normally.
+
+## [mechanical] Step 0z — Lane-mismatch warning (Spec 353)
+
+If `.forge/state/active-tab-*.json` marker exists for this session, read its `lane` field.
+
+This command's natural lane (per `docs/process-kit/multi-tab-quickstart.md` § Lane choice):
+
+| Command | Lane |
+|---------|------|
+| /parallel | feature |
+| /spec | feature OR process-only (depending on spec subject) |
+| /scheduler | feature |
+| /forge stoke | process-only |
+
+If `marker.lane` does not match this command's natural lane, emit a one-line warning: `⚠ Action targets <expected> lane; active tab is '<marker.lane>'. Continue?` Soft-gate only — do not refuse. Operator decides whether the mismatch matters.
+
+Skip silently if no marker exists.
 
 ## [mechanical] Step 0b — Pre-populate from explore artifact (Spec 197)
 If `--from-explore <topic>` is in $ARGUMENTS:
@@ -90,12 +112,14 @@ If $ARGUMENTS does not contain `--guided`: continue with Step 1 below.
    - Check verification type → unit test = `$`, integration = `$$`, manual/browser/E2E = `$$$`
    - Check SR score → SR ≥ 4 = `$`, SR = 3 = `$$`, SR ≤ 2 = `$$$`
    - TC = highest applicable indicator (e.g., 3 files but manual verification → `$$`)
-   - If `.forge/metrics/command-costs.yaml` exists, check for historical cost data on similar specs to calibrate.
+   - TC is operator-judgment input — calibrate against memory of similar past specs (Spec 316: FORGE no longer collects per-invocation cost data).
 6. Write the spec file at `docs/specs/NNN-<slug>.md` by filling in the template:
    - Set `Status: draft`
    - Set `Change-Lane:` based on the description (infer; ask only if genuinely ambiguous)
    - Set `Trigger:` in the frontmatter
    - Set `Token-Cost: $|$$|$$$` in the frontmatter (from step 5)
+   - Set `Last updated:` to today (YYYY-MM-DD)
+   - Set `valid-until:` to `today + N` where `N` is `forge.spec.draft_validity_days` from AGENTS.md, or 90 if the key is absent (Spec 363 — draft validity window). Format: YYYY-MM-DD.
    - Fill in all sections: Objective, Scope, Requirements, Acceptance Criteria, Test Plan
    - Set `Priority-Score:` in frontmatter with the scored values
    - Leave Evidence and Reproduction Commands as placeholders
@@ -155,16 +179,65 @@ a. Present a choice block:
    Vague acceptance criteria reduce testability and may cause disagreement at the validation gate.
    ```
    > **Choose** — type a number or keyword:
-   > | # | Action | What happens |
-   > |---|--------|--------------|
-   > | **1** | `rewrite` | Revise each vague criterion before saving |
-   > | **2** | `skip` | Save as-is — skip recorded in revision log |
+   > | # | Rank | Action | Rationale | What happens |
+   > |---|------|--------|-----------|--------------|
+   > | **1** | 1 | `rewrite` | Vague ACs cause validation gate disagreement; fix now | Revise each vague criterion before saving |
+   > | **2** | — | `skip` | Skip recorded in revision log; accept downstream risk | Save as-is — skip recorded in revision log |
 b. If `rewrite`: for each flagged criterion, prompt for a replacement. Rewrite in the draft before saving.
 c. If `skip`: append to the spec's Revision Log: `YYYY-MM-DD: Acceptance criteria vague-language scan: skipped.`
 
 If no vague language detected: proceed silently.
 
 **Meta-rule (Spec 171)**: New checklist items added to any FORGE command file must include a `Detection:` annotation — values: `active | passive-acceptable | N/A`. If `passive-acceptable`, include a one-line explanation why active detection is not feasible.
+
+---
+
+### [mechanical] Step 6d — Behavioral-AC Fixture Scan (Spec 349)
+
+Sibling pattern to Step 6c. Where Step 6c catches *vague* AC language, Step 6d catches ACs that are specific in language but require driving the system to verify — runtime behaviors the validator subagent cannot directly observe. Such ACs frequently close as DEFER or PARTIAL (Spec 225: 3/8 PARTIAL; Spec 315: 10/16 DEFER) when the validator has no runnable artifact to gate against. Pairing the AC with a fixture turns the AC mechanically-verifiable. See `docs/process-kit/behavioral-ac-fixture-guide.md` for the canonical convention, fixture naming (`.forge/bin/tests/test-spec-NNN-<behavior>.{sh,ps1}`), and PASS/SKIP/FAIL semantic.
+
+After the spec draft is written (and after Step 6c completes), scan each acceptance criterion for behavioral-AC patterns:
+- `(running|run|invoke|execute) /[a-z-]+`
+- `(fresh|new) (fixture|copy|repo|project)`
+- `after <action>, the operator (sees|observes)`
+
+If any acceptance criterion matches:
+a. Present a choice block:
+   ```
+   Behavioral acceptance criteria found — the following ACs describe runtime behavior the validator cannot drive directly:
+   - Criterion N: "<text>" — matched pattern: "<pattern>"
+   ...
+   Pair each behavioral AC with a fixture at `.forge/bin/tests/test-spec-NNN-<behavior>.{sh,ps1}` to graduate it from DEFER to mechanically-verifiable. See docs/process-kit/behavioral-ac-fixture-guide.md.
+   ```
+   > **Choose** — type a number or keyword:
+   > | # | Rank | Action | Rationale | What happens |
+   > |---|------|--------|-----------|--------------|
+   > | **1** | 1 | `pair` | Behavioral ACs validate poorly without fixtures; pair now | For each flagged AC, prompt for fixture filename and add a Test Plan note |
+   > | **2** | — | `skip` | Operator accepts downstream DEFER risk | Save as-is — skip recorded in revision log |
+b. If `pair`: for each flagged criterion, prompt for `test-spec-NNN-<behavior>` (filename stem). Append the fixture path to the spec's Test Plan with a note: `Fixture: .forge/bin/tests/test-spec-NNN-<behavior>.{sh,ps1} (authored at /implement)`.
+c. If `skip`: append to the spec's Revision Log: `YYYY-MM-DD: Behavioral-AC fixture scan: skipped.`
+
+If no behavioral-AC patterns detected: proceed silently.
+
+Detection: active.
+
+The fixture itself is authored at `/implement` (not `/spec`); this directive only ensures the spec records the intent and the validator at `/close` has a runnable artifact to gate against.
+
+### [mechanical] Step 6e — Score-Audit Predicted Record (Spec 368)
+
+After the spec file is written and scored, append a `predicted` record to the score-audit log so `/evolve` F4 can compare predictions against observed proxies at close time. The helper at `.forge/lib/score-audit.sh` (PowerShell parity at `.forge/lib/score-audit.ps1`) handles JSON formatting, atomic-append bound, and shell-derived timestamps; do NOT inline JSON here.
+
+`kind_tag` is one of: `instrumentation`, `doc`, `command-edit`, `linter`, `template-sync`, `process-defect`, `feature`, `hotfix`, `other`. Default: infer from spec title and lane (e.g., a `process-only` spec touching `template/.claude/commands/` → `command-edit`; a `standard-feature` spec adding a script → `feature`). Operator may override at `/spec`.
+
+```bash
+bash .forge/lib/score-audit.sh record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" 0
+```
+
+(PowerShell: `pwsh .forge/lib/score-audit.ps1 record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" 0`.)
+
+The helper is advisory — failures emit a WARN to stderr but never block `/spec`. Records land in `${SCORE_AUDIT_FILE:-.forge/state/score-audit.jsonl}`.
+
+See: [docs/process-kit/score-calibration-loop.md](../../docs/process-kit/score-calibration-loop.md) for the proxy mapping and time-blindness mitigation principle.
 
 ---
 
@@ -221,7 +294,10 @@ Write the spec file at `docs/specs/NNN-<slug>.md` with:
 - Status: `draft`
 - All sections populated from Spec Kit mapping + FORGE defaults
 - `Trigger: spec-kit-guided`
+- `Last updated:` today (YYYY-MM-DD)
+- `valid-until:` today + `forge.spec.draft_validity_days` (default 90) — Spec 363 draft validity window
 
 ### [mechanical] Step F — Finalize via main flow
 
 After Step E, return to the main flow at Step 6b (Review Router) and continue through Steps 7-10 (index, changelog, backlog, report). When reporting completion in Step 10, append: "Created via Spec Kit guided flow."
+

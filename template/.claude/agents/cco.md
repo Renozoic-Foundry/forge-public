@@ -28,6 +28,7 @@ Produce a structured review block (3-5 sentences):
 ```
 
 ## Constraints
-- BLOCK for missing evidence trails or traceability gaps in high-risk specs
-- REVISE when compliance improvements would reduce future risk
+- Always included for Lane B projects — compliance is non-negotiable in regulated environments
+- BLOCK for missing evidence trails or traceability gaps in Lane B
+- REVISE for Lane A when compliance improvements would reduce future risk
 - Keep assessment to 3-5 sentences

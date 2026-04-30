@@ -116,6 +116,26 @@ function Test-Git {
 }
 
 function Test-Copier {
+    $script:CopierVersion = ""
+    $script:CopierSource = ""
+
+    # Spec 306 — prefer standalone `copier` / `copier.exe` on PATH (winget, pipx, brew).
+    # The binary is more reliable than `python -m copier` because it runs in its own environment.
+    if (Get-Command copier -ErrorAction SilentlyContinue) {
+        try {
+            $out = & copier --version 2>&1
+            if ($out -match "(\d+)\.(\d+)") {
+                $major = [int]$Matches[1]
+                if ($major -ge 9) {
+                    $script:CopierVersion = "$($Matches[1]).$($Matches[2])"
+                    $script:CopierSource = "binary"
+                    return $true
+                }
+            }
+        } catch { }
+    }
+
+    # Fallback: `python -m copier` (pip --user, venv, system install)
     foreach ($cmd in @($script:PythonCmd, "python3", "python")) {
         if (-not $cmd) { continue }
         try {
@@ -124,12 +144,12 @@ function Test-Copier {
                 $major = [int]$Matches[1]
                 if ($major -ge 9) {
                     $script:CopierVersion = "$($Matches[1]).$($Matches[2])"
+                    $script:CopierSource = "python-module ($cmd)"
                     return $true
                 }
             }
         } catch { }
     }
-    $script:CopierVersion = ""
     return $false
 }
 
@@ -175,10 +195,121 @@ function Install-Python {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
+function Test-Pep668Managed {
+    param([string]$PyCmd)
+    if (-not $PyCmd) { return $false }
+    if (-not (Get-Command $PyCmd -ErrorAction SilentlyContinue)) { return $false }
+    try {
+        $probe = & $PyCmd -m pip install --dry-run --quiet --no-input pip 2>&1
+        if ($probe -match "externally-managed-environment") { return $true }
+    } catch { }
+    return $false
+}
+
 function Install-Copier {
     Write-Step "Installing Copier..."
-    $pipCmd = if ($script:PythonCmd) { $script:PythonCmd } else { "python" }
-    & $pipCmd -m pip install "copier>=9.0"
+    $attempted = @()
+    $script:CopierInstallPath = ""
+
+    # Tier 1: winget (standalone binary — cleanest on Windows).
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Info "Attempting: winget install copier"
+        $attempted += "winget"
+        try {
+            & winget install --id copier-org.copier -e --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $script:CopierInstallPath = "winget"
+                # Refresh PATH so copier.exe is visible in this session
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+                return $true
+            }
+        } catch { }
+        Write-Warn "winget install copier failed or formula unavailable — trying pipx"
+    }
+
+    # Tier 2: pipx (isolated env, standalone binary, avoids PEP 668).
+    if (Get-Command pipx -ErrorAction SilentlyContinue) {
+        Write-Info "Attempting: pipx install 'copier>=9.0'"
+        $attempted += "pipx"
+        try {
+            & pipx install "copier>=9.0"
+            if ($LASTEXITCODE -eq 0) {
+                $script:CopierInstallPath = "pipx"
+                return $true
+            }
+        } catch { }
+        Write-Warn "pipx install failed — trying pip --user"
+    }
+
+    $pyCmd = if ($script:PythonCmd) { $script:PythonCmd } else { "python" }
+
+    # Tier 3: pip install --user (user scheme; bypasses PEP 668 marker on most systems).
+    if (Get-Command $pyCmd -ErrorAction SilentlyContinue) {
+        Write-Info "Attempting: $pyCmd -m pip install --user 'copier>=9.0'"
+        $attempted += "pip --user"
+        try {
+            & $pyCmd -m pip install --user "copier>=9.0"
+            if ($LASTEXITCODE -eq 0) {
+                $script:CopierInstallPath = "pip --user"
+                # Ensure user-site Scripts is on PATH for this session
+                try {
+                    $userBase = & $pyCmd -m site --user-base 2>$null
+                    if ($userBase) {
+                        $userScripts = Join-Path $userBase "Scripts"
+                        if (Test-Path $userScripts) {
+                            $env:Path = "$userScripts;$env:Path"
+                        }
+                    }
+                } catch { }
+                return $true
+            }
+        } catch { }
+        Write-Warn "pip --user install failed — trying venv fallback"
+    }
+
+    # Tier 4: dedicated venv at ~/.forge/venv (last resort).
+    if (Get-Command $pyCmd -ErrorAction SilentlyContinue) {
+        $venvDir = Join-Path $FORGE_CONFIG_DIR "venv"
+        Write-Info "Attempting: venv fallback at $venvDir"
+        $attempted += "venv"
+        if (-not (Test-Path $FORGE_CONFIG_DIR)) {
+            New-Item -ItemType Directory -Path $FORGE_CONFIG_DIR -Force | Out-Null
+        }
+        try {
+            & $pyCmd -m venv $venvDir
+            if ($LASTEXITCODE -eq 0) {
+                $venvPy = Join-Path (Join-Path $venvDir "Scripts") "python.exe"
+                if (-not (Test-Path $venvPy)) {
+                    $venvPy = Join-Path (Join-Path $venvDir "bin") "python"
+                }
+                if (Test-Path $venvPy) {
+                    & $venvPy -m pip install "copier>=9.0"
+                    if ($LASTEXITCODE -eq 0) {
+                        $script:CopierInstallPath = "venv ($venvDir)"
+                        $venvScripts = Join-Path $venvDir "Scripts"
+                        if (-not (Test-Path $venvScripts)) { $venvScripts = Join-Path $venvDir "bin" }
+                        if (Test-Path $venvScripts) { $env:Path = "$venvScripts;$env:Path" }
+                        return $true
+                    }
+                }
+            }
+        } catch { }
+    }
+
+    # All tiers failed.
+    Write-Err "Failed to install Copier. Attempted: $($attempted -join ', ')"
+    if (Test-Pep668Managed -PyCmd $pyCmd) {
+        Write-Warn "Detected PEP 668 externally-managed Python at '$pyCmd'."
+        Write-Warn "Bare 'pip install' is disallowed; FORGE will NOT override with --break-system-packages."
+    }
+    Write-Host ""
+    Write-Host "  Try one of these manually:"
+    Write-Host "    1. winget install copier-org.copier            (recommended on Windows)"
+    Write-Host "    2. pipx install 'copier>=9.0'                  (recommended — isolated env)"
+    Write-Host "       (install pipx first: python -m pip install --user pipx; pipx ensurepath)"
+    Write-Host "    3. python -m pip install --user 'copier>=9.0'  (user install)"
+    Write-Host "    4. python -m venv `$HOME\.forge\venv && `$HOME\.forge\venv\Scripts\pip.exe install 'copier>=9.0'"
+    return $false
 }
 
 # --- Git auth preflight ---
@@ -324,16 +455,24 @@ function Initialize-Project {
         New-Item -ItemType Directory -Path $Path -Force | Out-Null
     }
 
-    $pipCmd = if ($script:PythonCmd) { $script:PythonCmd } else { "python" }
+    # Spec 306 — prefer standalone `copier` when available (winget, pipx, brew installs).
+    # Fall back to `python -m copier` for --user / venv installs.
+    $useBinary = [bool](Get-Command copier -ErrorAction SilentlyContinue)
+    $pyCmd = if ($script:PythonCmd) { $script:PythonCmd } else { "python" }
 
     # --trust allows Copier to run template tasks/hooks. Warn the user.
     Write-Warn "Copier will run with --trust, which allows the template to execute tasks."
     Write-Host "        Source: $RepoUrl"
-    if (Confirm-Action "Proceed with --trust?") {
-        & $pipCmd -m copier copy $RepoUrl $Path --defaults --trust
-    } else {
+    $useTrust = Confirm-Action "Proceed with --trust?"
+    if (-not $useTrust) {
         Write-Warn "Running without --trust (template tasks will be skipped)."
-        & $pipCmd -m copier copy $RepoUrl $Path --defaults
+    }
+    if ($useBinary) {
+        if ($useTrust) { & copier copy $RepoUrl $Path --defaults --trust }
+        else            { & copier copy $RepoUrl $Path --defaults }
+    } else {
+        if ($useTrust) { & $pyCmd -m copier copy $RepoUrl $Path --defaults --trust }
+        else            { & $pyCmd -m copier copy $RepoUrl $Path --defaults }
     }
     if ($LASTEXITCODE -ne 0) {
         Write-Err "Copier failed to bootstrap project at $Path"
@@ -444,15 +583,19 @@ if ($missing.Count -gt 0) {
                 }
             }
             "copier" {
-                if (Confirm-Action "Install Copier (via pip)?") {
-                    Install-Copier
-                    if (-not (Test-Copier)) {
-                        Write-Err "Copier installation failed. Run: pip install 'copier>=9.0'"
+                if (Confirm-Action "Install Copier (winget/pipx/pip --user - auto-selected)?") {
+                    $ok = Install-Copier
+                    if (-not $ok) {
+                        Write-Err "Copier installation failed across all tiers. See guidance above."
                         exit 1
                     }
-                    Write-Info "Copier $script:CopierVersion installed"
+                    if (-not (Test-Copier)) {
+                        Write-Err "Copier installed but not detected on PATH. Restart your shell and re-run, or inspect: $($script:CopierInstallPath)"
+                        exit 1
+                    }
+                    Write-Info "Copier $script:CopierVersion installed via $($script:CopierInstallPath) (detected as: $($script:CopierSource))"
                 } else {
-                    Write-Err "Copier 9.0+ is required. Install manually: pip install 'copier>=9.0'"
+                    Write-Err "Copier 9.0+ is required. Install manually: winget install copier-org.copier | pipx install 'copier>=9.0' | python -m pip install --user 'copier>=9.0'"
                     exit 1
                 }
             }

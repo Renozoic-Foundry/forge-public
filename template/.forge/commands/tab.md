@@ -1,7 +1,6 @@
 ---
 name: tab
 description: "Initialize or close a multi-tab session for parallel development"
-model_tier: sonnet
 workflow_stage: implementation
 ---
 # Framework: FORGE
@@ -34,10 +33,15 @@ If $ARGUMENTS is `?` or `help`:
 If $ARGUMENTS starts with `close`:
 
 1. Read `docs/sessions/registry.md`.
-2. Find the row for the current session (match by today's date and context — ask if ambiguous).
+2. Find the row for the current session (match by today's date and context — ask if ambiguous; if `.forge/state/active-tab-*.json` marker exists, use the `registry_row_pointer` from the most recent marker for an exact match).
 3. Update that row's Status to `closed` and add a `Closed` timestamp.
+3b. **Delete the active-tab marker (Spec 353)**: remove any `.forge/state/active-tab-*.json` files matching this session. Use:
+   ```bash
+   rm -f .forge/state/active-tab-*.json
+   ```
+   Skip silently if no marker exists (fallback path: operator opened a tab without /tab register, or marker was manually cleaned up).
 4. List all files modified during this session (from git status or session context).
-5. Report: "Tab '<label>' closed. Claims released. Modified files: <list>."
+5. Report: "Tab '<label>' closed. Claims released. Marker deleted. Modified files: <list>."
 6. Stop.
 
 ---
@@ -73,6 +77,38 @@ If $ARGUMENTS starts with `close`:
    ```
    | <session-id> | <label> | <spec-number or —> | <lane> | active | <now> | <now> |
    ```
+
+5b. **Write active-tab marker (Spec 353)**: After the registry row is appended, write a session-local identity marker at `.forge/state/active-tab-<id>.json` so other lifecycle commands (`/implement`, `/close`, `/session`, `/parallel`, `/spec`, `/scheduler`, `/forge stoke`) can identify which registry row belongs to this chat.
+
+   - Generate a stable random `<id>` for this session. Use either:
+     ```bash
+     # Bash:
+     id=$(head -c 6 /dev/urandom | base64 | tr -d '/+=' | head -c 8)
+     ```
+     ```powershell
+     # PowerShell:
+     $id = -join ((48..57) + (97..122) | Get-Random -Count 8 | ForEach-Object {[char]$_})
+     ```
+   - Marker schema (all fields required except `spec_id` which is empty string when no spec is claimed):
+     ```json
+     {
+       "session_id": "<id>",
+       "label": "<label>",
+       "lane": "<lane>",
+       "spec_id": "<spec-number or empty string>",
+       "tab_started": "<ISO 8601 now>",
+       "last_command_at": "<ISO 8601 now>",
+       "registry_row_pointer": "<session-id used in registry row column 1>"
+     }
+     ```
+   - Write atomically:
+     ```bash
+     mkdir -p .forge/state
+     cat > ".forge/state/active-tab-${id}.json" <<EOF
+     {"session_id":"${id}","label":"<label>","lane":"<lane>","spec_id":"<spec-number or empty string>","tab_started":"<ISO 8601 now>","last_command_at":"<ISO 8601 now>","registry_row_pointer":"<session-id used in registry row column 1>"}
+     EOF
+     ```
+   - The marker is **ephemeral and not authoritative** — it is a hint that lets lifecycle commands find their registry row without operator prompting. The registry row in `docs/sessions/registry.md` remains the persisted truth for claim history. See `docs/process-kit/multi-tab-quickstart.md` § Registry artifacts for the naming distinction.
 
 6. **Report active tabs**: List all rows with Status = `active` (including the one just added):
    ```

@@ -80,7 +80,7 @@
           },
           "gate": {
             "type": "string",
-            "description": "Gate name or type (e.g., implementation-gate, validation-gate, ultrareview-shadow, validator-stage2, da)."
+            "description": "Gate name or type (e.g., implementation-gate, validation-gate)."
           },
           "result": {
             "type": "string",
@@ -90,36 +90,6 @@
           "notes": {
             "type": "string",
             "description": "Additional context about the gate outcome."
-          },
-          "duration_s": {
-            "type": "number",
-            "description": "Wall-clock seconds from gate invocation to completion. Spec 277 Phase 1 (shadow-mode gate comparison) adds this to validator-stage2, da, and ultrareview-shadow gate entries. Optional; absent on gates that do not report timing."
-          },
-          "tokens": {
-            "type": "integer",
-            "description": "Token usage reported by the sub-agent for this gate. Spec 277 Phase 1. Optional; 0 or absent when unreported."
-          },
-          "severity_counts": {
-            "type": "object",
-            "description": "Count of findings by severity reported by the sub-agent. Spec 277 Phase 1.",
-            "properties": {
-              "critical": {"type": "integer"},
-              "warning": {"type": "integer"},
-              "info": {"type": "integer"}
-            },
-            "additionalProperties": false
-          },
-          "skipped": {
-            "type": "boolean",
-            "description": "True if the gate did not run. Spec 277 Phase 1 uses this on ultrareview-shadow entries for skip recording."
-          },
-          "skip_reason": {
-            "type": "string",
-            "description": "Skip reason when skipped=true. Spec 277 Phase 1 values: hotfix, process-only, operator-skip, not-triggered, no-diff, ultrareview-error:<err>, role-registry-absent."
-          },
-          "comparison_dir": {
-            "type": "string",
-            "description": "Path to the shadow-comparison directory (e.g., .forge/state/gate-comparison/NNN/). Spec 277 Phase 1; present only on ultrareview-shadow entries."
           }
         },
         "additionalProperties": false
@@ -190,9 +160,23 @@
           },
           "root_cause": {
             "type": "string"
+          },
+          "root_cause_category": {
+            "type": "string",
+            "enum": ["spec-expectation-gap", "model-knowledge-gap", "implementation-error", "process-defect", "other"],
+            "description": "Spec 267 — taxonomy bucket for downstream pattern analysis. Absent fields are treated as 'other' (backward-compat with pre-Spec-267 entries)."
+          },
+          "wrong_assumption": {
+            "type": "string",
+            "description": "Spec 267 — the specific belief held before the bug surfaced, now known to be false. Empty string when the error wasn't an assumption failure."
+          },
+          "evidence_gate_coverage": {
+            "type": "string",
+            "enum": ["caught-by-existing-gate", "missed-by-existing-gate", "no-applicable-gate"],
+            "description": "Spec 267 — whether an existing evidence gate caught this, missed this, or no gate applies. When 'missed-by-existing-gate', the named gate appears in the markdown entry."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": true
       }
     },
     "chat_insights": {
@@ -212,9 +196,23 @@
           },
           "action": {
             "type": "string"
+          },
+          "root_cause_category": {
+            "type": "string",
+            "enum": ["spec-expectation-gap", "model-knowledge-gap", "implementation-error", "process-defect", "other"],
+            "description": "Spec 267 — taxonomy bucket for downstream pattern analysis. Absent fields are treated as 'other' (backward-compat with pre-Spec-267 entries)."
+          },
+          "wrong_assumption": {
+            "type": "string",
+            "description": "Spec 267 — the specific belief held before the insight surfaced, now known to be false. Empty string when the insight is not about an assumption failure."
+          },
+          "evidence_gate_coverage": {
+            "type": "string",
+            "enum": ["caught-by-existing-gate", "missed-by-existing-gate", "no-applicable-gate"],
+            "description": "Spec 267 — whether an existing evidence gate caught this, missed this, or no gate applies. When 'missed-by-existing-gate', the named gate appears in the markdown entry."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": true
       }
     }
   },

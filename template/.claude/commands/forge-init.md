@@ -21,35 +21,12 @@
      Bootstrap source — determines where /forge stoke pulls future updates:
      1. gh:Renozoic-Foundry/forge-public  ← recommended (public GitHub — works on any machine)
      2. <current directory path>  ← local path (only works on this machine)
-     3. Private repo URL          ← enter a Git URL (GitHub private, Azure DevOps, GitLab, etc.)
 
-     Choose (1, 2, or 3, default: 1):
+     Choose (1 or 2, default: 1):
      ```
      Set `TEMPLATE_SRC` to the chosen value. **Note**: if the user is a FORGE developer working from a local clone and wants local stoke behavior, they should choose option 2.
-
-     **If option 3 selected**: prompt for the URL. Then apply URL validation (Step 0a-url below).
-
    - Else if `TARGET` has `.copier-answers.yml` with `_src_path`: use that as `TEMPLATE_SRC`.
    - Else: ask the human for the path to the FORGE repo.
-
-### [mechanical] Step 0a-url — URL validation and credential check (Spec 200)
-
-After `TEMPLATE_SRC` is set (from any source), apply these checks:
-
-1. **Azure DevOps URL detection**: If `TEMPLATE_SRC` matches `https://.*dev\.azure\.com/` or `https://.*visualstudio\.com/` but does NOT start with `git+https://`:
-   - Auto-correct: prepend `git+` to the URL.
-   - Report: "Azure DevOps URL detected — auto-corrected to `git+<original URL>`. Copier requires the `git+` prefix for Azure DevOps URLs (see Copier issue #1956)."
-
-2. **Credential leakage check**: If `TEMPLATE_SRC` matches the regex `://[^@]+:[^@]+@` (i.e., `user:secret@host`):
-   - Warn:
-     ```
-     **CREDENTIAL LEAKAGE WARNING** — this URL appears to contain an embedded credential.
-     Credentials in `.copier-answers.yml` are committed to version control.
-     Recommended: use SSH keys or Git Credential Manager instead.
-     See: docs/process-kit/private-repo-guide.md
-     ```
-   - Present options: **proceed** (continue with warning) | **change** (enter a different URL)
-   - A plain `username@host` (no colon-separated secret) does NOT trigger this warning.
 
 ### [mechanical] Step 0b — Write-access gate (Spec 066)
 
@@ -441,13 +418,7 @@ After `TEMPLATE_SRC` is set (from any source), apply these checks:
     - `CLAUDE.md` exists → **brownfield**
     - `docs/specs/` exists → **brownfield**
     - `.claude/commands/` exists → **brownfield**
-    - None of the above markers → check for **source files** (Spec 202):
-      Scan the target directory (non-recursively, then one level deep) for common source file patterns:
-      `*.java`, `*.py`, `*.ts`, `*.js`, `*.go`, `*.rs`, `*.cs`, `*.kt`, `*.swift`, `*.rb`, `*.php`,
-      `package.json`, `pom.xml`, `build.gradle`, `requirements.txt`, `Cargo.toml`, `go.mod`,
-      `pyproject.toml`, `composer.json`, `Gemfile`, `*.csproj`, `*.sln`
-      - If any source files found → **brownfield** (existing codebase without FORGE markers)
-      - If no source files found → **greenfield**
+    - None of the above → **greenfield**
 
 25. Report:
     - Greenfield: "No existing process kit detected. Starting greenfield bootstrap with PRD interview."

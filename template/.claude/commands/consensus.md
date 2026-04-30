@@ -1,7 +1,6 @@
 ---
 name: consensus
 description: "Run a proposal through all registry roles for structured consensus"
-model_tier: sonnet
 workflow_stage: review
 ---
 # Framework: FORGE
@@ -147,12 +146,16 @@ Present the structured output:
 
 ## [decision] Step 6 — Next action
 
+<!-- safety-rule: session-data — if today's session log has unsynthesized spec activity AND ## Summary is unpopulated, /session is inserted at rank 1 and stop is downgraded to —. See docs/process-kit/implementation-patterns.md § Session-data safety rule. -->
+
 > **Choose** — type a number or keyword:
-> | # | Action | What happens |
-> |---|--------|--------------|
-> | **1** | `detail <role>` | Show the full assessment from a specific role |
-> | **2** | `rerun` | Run the consensus again (e.g., after revising the topic) |
-> | **3** | `spec` | Create a spec from this consensus (if topic warrants it) |
-> | **4** | `stop` | Done — use the consensus output as-is |
+> | # | Rank | Action | Rationale | What happens |
+> |---|------|--------|-----------|--------------|
+> | **1** | 2 | `detail <role>` | Drill into one role's reasoning before deciding | Show the full assessment from a specific role |
+> | **2** | — | `rerun` | Re-vote after revising; reserve for material changes | Run the consensus again (e.g., after revising the topic) |
+> | **3** | 1 | `spec` | Convert consensus into actionable spec; common path | Create a spec from this consensus (if topic warrants it) |
+> | **4** | — | `stop` | Downgraded if today's session log has unsynthesized entries | Done — use the consensus output as-is |
 >
 > _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_
+
+**Session-data safety rule (Spec 320 Req 4)**: Before emitting the choice block, evaluate today's session log per the positive "populated Summary" definition. If the rule fires (unsynthesized spec activity AND Summary unpopulated): **insert `session` at rank 1**, downgrade `stop` to `—`, renumber rows.

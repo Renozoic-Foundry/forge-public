@@ -27,7 +27,9 @@ param(
     [string]$Agents = "",
     [ValidateSet("project", "user", "both")]
     [string]$Scope = "project",
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Force,  # Spec 329: overwrite mirror files even when body diverges from canonical
+    [switch]$TemplateSide  # Spec 281: process template/.forge/commands -> template/.claude/commands (4th-edge sync)
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,7 +40,18 @@ $ForgeDir = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) ".."
 $ForgeDir = (Resolve-Path $ForgeDir).Path
 $ProjectDir = (Resolve-Path (Join-Path $ForgeDir "..")).Path
 $CanonicalDir = Join-Path $ForgeDir "commands"
+$BaseDir = $ProjectDir  # Spec 281: base for agent target directories (overridden by -TemplateSide)
 $TriggerMap = Join-Path $ForgeDir "templates\codex-trigger-map.yaml"
+
+# --- Spec 281: -TemplateSide switches both canonical source and target base ---
+if ($TemplateSide) {
+    $CanonicalDir = Join-Path $ProjectDir "template\.forge\commands"
+    $BaseDir = Join-Path $ProjectDir "template"
+    if ($Scope -eq "user" -or $Scope -eq "both") {
+        Write-Error "-TemplateSide is incompatible with -Scope user|both (template processing is project-side only)"
+        exit 1
+    }
+}
 
 # --- Resolve agents ---
 function Resolve-Agents {
@@ -76,31 +89,43 @@ function Resolve-Agents {
 }
 
 # --- Get agent command directory ---
+# Spec 281: $BaseDir resolves to $ProjectDir by default, or $ProjectDir/template when -TemplateSide is set
 function Get-AgentCommandDir {
     param([string]$Agent)
     switch ($Agent) {
-        "claude-code" { return Join-Path $ProjectDir ".claude\commands" }
-        "cursor"      { return Join-Path $ProjectDir ".cursor\commands" }
-        "copilot"     { return Join-Path $ProjectDir ".github\prompts" }
-        "cline"       { return Join-Path $ProjectDir ".cline\commands" }
+        "claude-code" { return Join-Path $BaseDir ".claude\commands" }
+        "cursor"      { return Join-Path $BaseDir ".cursor\commands" }
+        "copilot"     { return Join-Path $BaseDir ".github\prompts" }
+        "cline"       { return Join-Path $BaseDir ".cline\commands" }
         default       { Write-Warning "Unknown agent: $Agent"; return "" }
     }
 }
 
 # --- Strip YAML frontmatter ---
+# CRLF-tolerant: trims trailing \r before comparing.
 function Remove-Frontmatter {
     param([string[]]$Lines)
     $inFrontmatter = $false
     $frontmatterDone = $false
     $output = @()
+    $firstLine = $true
     foreach ($line in $Lines) {
+        $stripped = $line -replace "`r$", ""
         if (-not $frontmatterDone) {
-            if ($line -eq "---" -and -not $inFrontmatter) {
-                $inFrontmatter = $true
+            if ($firstLine) {
+                $firstLine = $false
+                if ($stripped -eq "---") {
+                    $inFrontmatter = $true
+                    continue
+                }
+                # No leading frontmatter — fall through
+                $frontmatterDone = $true
+                $output += $line
                 continue
             }
-            elseif ($line -eq "---" -and $inFrontmatter) {
+            elseif ($stripped -eq "---" -and $inFrontmatter) {
                 $frontmatterDone = $true
+                $inFrontmatter = $false
                 continue
             }
             elseif ($inFrontmatter) {
@@ -112,12 +137,54 @@ function Remove-Frontmatter {
     return $output
 }
 
-# --- Check if file is FORGE-managed ---
+# --- Spec 329: Extract frontmatter block (returns lines including --- markers, or empty) ---
+function Get-Frontmatter {
+    param([string]$FilePath)
+    if (-not (Test-Path $FilePath)) { return @() }
+    $lines = Get-Content $FilePath
+    $output = @()
+    $inFm = $false
+    $first = $true
+    foreach ($line in $lines) {
+        $stripped = $line -replace "`r$", ""
+        if ($first) {
+            $first = $false
+            if ($stripped -eq "---") {
+                $inFm = $true
+                $output += $line
+                continue
+            }
+            return @()
+        }
+        if ($inFm) {
+            $output += $line
+            if ($stripped -eq "---") {
+                return $output
+            }
+        }
+    }
+    return @()
+}
+
+# --- Spec 329: Check if file is FORGE-managed (frontmatter-aware) ---
+# Strips leading YAML frontmatter (if any), then checks first 5 BODY lines for the
+# FORGE header. Fixes the head-5 scan that misidentified mirrors-with-frontmatter.
 function Test-ForgeCommand {
     param([string]$FilePath)
     if (-not (Test-Path $FilePath)) { return $false }
-    $first5 = Get-Content $FilePath -TotalCount 5 -ErrorAction SilentlyContinue
-    return ($first5 -join "`n") -match "# Framework: FORGE"
+    $body = Remove-Frontmatter -Lines (Get-Content $FilePath)
+    if ($body.Count -eq 0) { return $false }
+    $first5Body = $body | Select-Object -First 5
+    return (($first5Body -join "`n") -match "(# Framework: FORGE|## Subcommand:)")
+}
+
+# --- Spec 329: Compare two files body-to-body (frontmatter stripped from both) ---
+function Test-BodiesEqual {
+    param([string]$FileA, [string]$FileB)
+    if (-not (Test-Path $FileA) -or -not (Test-Path $FileB)) { return $false }
+    $bodyA = (Remove-Frontmatter -Lines (Get-Content $FileA)) -join "`n"
+    $bodyB = (Remove-Frontmatter -Lines (Get-Content $FileB)) -join "`n"
+    return $bodyA -eq $bodyB
 }
 
 # --- Read frontmatter field ---
@@ -336,7 +403,36 @@ foreach ($agent in $agentList) {
         $body = Remove-Frontmatter -Lines $srcLines
 
         switch ($agent) {
-            { $_ -in @("claude-code", "cursor", "cline") } {
+            "claude-code" {
+                # Spec 329: refuse-overwrite-without-force when body diverges
+                if ((Test-Path $dstFile) -and -not $Force) {
+                    if (-not (Test-BodiesEqual -FileA $srcFile.FullName -FileB $dstFile)) {
+                        Write-Error "REFUSED OVERWRITE: $dstFile body diverges from canonical $($srcFile.FullName). Re-run with -Force to overwrite."
+                        exit 2
+                    }
+                }
+                # Frontmatter-preserving regen for claude-code:
+                # If mirror exists with frontmatter, preserve it; replace body only.
+                # If mirror has no frontmatter, fall back to canonical's frontmatter.
+                # If mirror does not exist, copy canonical's frontmatter + body.
+                if (Test-Path $dstFile) {
+                    $mirrorFm = Get-Frontmatter -FilePath $dstFile
+                    if ($mirrorFm.Count -eq 0) {
+                        $mirrorFm = Get-Frontmatter -FilePath $srcFile.FullName
+                    }
+                    if ($Force -and -not (Test-BodiesEqual -FileA $srcFile.FullName -FileB $dstFile)) {
+                        Write-Warning "FORCE OVERWRITE: $dstFile body replaced from canonical"
+                    }
+                } else {
+                    $mirrorFm = Get-Frontmatter -FilePath $srcFile.FullName
+                }
+                if ($mirrorFm.Count -gt 0) {
+                    ($mirrorFm + $body) | Set-Content -Path $dstFile -Encoding UTF8
+                } else {
+                    $body | Set-Content -Path $dstFile -Encoding UTF8
+                }
+            }
+            { $_ -in @("cursor", "cline") } {
                 $body | Set-Content -Path $dstFile -Encoding UTF8
             }
             "copilot" {

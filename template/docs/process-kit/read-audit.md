@@ -12,7 +12,6 @@ Audit of which files each command reads and the read frequency across a typical 
 | `/implement` | specs/NNN-*.md, specs/README.md, CHANGELOG.md, registry.md | registry conditional |
 | `/close` | specs/NNN-*.md, specs/README.md (×2), backlog.md (×2), CHANGELOG.md, sessions/ (today) | README+backlog read twice (step 2 + step 8) |
 | `/session` | sessions/ (today), scratchpad.md, error-log.md, insights-log.md, registry.md | registry conditional |
-| `/handoff` | specs/NNN-*.md, human-validation-runbook.md, scratchpad.md | — |
 | `/matrix` | backlog.md, scoring-rubric.md, specs/README.md, spec frontmatter files | — |
 | `/spec` | specs/README.md, specs/_template.md, scoring-rubric.md | — |
 | `/revise` | specs/NNN-*.md | — |
@@ -20,8 +19,6 @@ Audit of which files each command reads and the read frequency across a typical 
 | `/evolve` | human-validation-runbook.md, specs/NNN-*.md, backlog.md, scratchpad.md | most conditional on fast-path vs monthly |
 | `/tab` | registry.md | — |
 | `/test` | (none — runs tests) | — |
-| `/skills` | (none — prints table) | — |
-| `/spec-gate` | specs/ directory, specs/README.md | — |
 
 ## Optimization approach
 

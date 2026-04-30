@@ -208,7 +208,16 @@ See [shadow-validation-guide.md](shadow-validation-guide.md) for strategy detail
 
 ### Quick Check (always run)
 - [ ] Session log file exists at `docs/sessions/YYYY-MM-DD-NNN.md` (G1)
+- [ ] If spec is partially implemented: completed/remaining ACs documented in session log (G1)
 - [ ] Process improvement items have backlog entries (G2)
+
+### Partial failure recovery rule
+
+**If a spec is partially implemented** (some ACs committed, others remaining) and the session must end:
+
+- **Spec status stays `in-progress`** — do not revert to `draft`. Rationale: reverting to `draft` loses the signal that real progress was made and risks re-work of already-completed acceptance criteria.
+- Document the partial state in the session log (see G1 checklist below).
+- Use [Spec 119 (JSON session handoff)](../specs/119-json-session-handoff.md) to capture structured state for the next session, and [Spec 123 (checkpoint resume)](../specs/123-checkpoint-resume-on-context-overflow.md) for mid-command recovery on context overflow.
 
 ### G1. Review the session log
 
@@ -220,6 +229,7 @@ See [shadow-validation-guide.md](shadow-validation-guide.md) for strategy detail
    - [ ] **Process pain points** lists anything that caused friction
    - [ ] **Spec triggers** lists new specs needed
    - [ ] **Process improvement items** lists workflow changes needed
+   - [ ] **If spec is partially implemented** (some ACs committed, others remaining): document completed ACs, remaining ACs, and suggested resume point in the session log
 
 ### G2. Act on process improvement items
 

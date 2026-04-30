@@ -8,6 +8,7 @@ This workflow keeps AI-assisted development fast while reducing regressions and 
 
 ## Inner loop — per change (Capture → Structure → Reuse → Improve)
 
+0. **Explore (optional)**: For topics needing investigation before committing to a spec, run `/explore <topic>` to produce a research artifact at `docs/research/explore-<topic>.md`. This creates a `proposed` state artifact. Specs can still start directly at `draft` — exploration is not mandatory.
 1. **Reuse first**: Search `docs/specs/` for an existing spec before creating a new one.
 2. **Capture at point of need**: Write or update the spec now — not retroactively after code is committed.
 3. **Structure**: Fill all template sections; select and record `Change-Lane:` in spec frontmatter.

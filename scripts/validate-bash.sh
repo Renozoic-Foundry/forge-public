@@ -68,6 +68,7 @@ trap 'rm -rf "$tmpdir"' EXIT
 SHELLCHECK_ARGS=()
 if [[ -f "$REPO_ROOT/.shellcheckrc" ]]; then
     while IFS= read -r line; do
+        line="${line%$'\r'}"  # Defensive CR-strip: catches CRLF .shellcheckrc on systems where .gitattributes does not apply (Spec 313). MUST precede comment/blank-line skips so blank CRLF lines do not produce phantom keys.
         # Skip comments and blank lines
         if [[ "$line" =~ ^[[:space:]]*# ]]; then continue; fi
         if [[ -z "${line// /}" ]]; then continue; fi

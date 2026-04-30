@@ -69,6 +69,23 @@ forge.context.optimization:
 ```
 
 ```yaml
+# Output verbosity (Spec 225)
+# Controls chat-output density across multi-step skills (/evolve, /close, /session, /matrix, /now,
+# /implement). Lean (default) shows only operator-actionable items in chat — passing-gate
+# confirmations, KPI tables, calibration deltas, MCP pin status, deprecation scans, and
+# signal-by-signal pattern dumps are written to file artifacts and surfaced via one-line
+# pointers. Verbose preserves the prior full-detail chat output (backward compat).
+#
+# ALWAYS shown regardless of setting: choice blocks, FAILed gates, push-confirmation prompts,
+# Review Brief human-judgment items. Suppression NEVER affects file artifacts (full detail
+# is always written to the appropriate session log / pattern-analysis.md / etc.).
+#
+# See docs/process-kit/output-verbosity-guide.md for the full rules and worked examples.
+forge.output:
+  verbosity: lean              # lean (default) | verbose
+```
+
+```yaml
 # Process-kit doc freshness (Spec 278)
 # Threshold for /now's external-source freshness check. Process-kit guides that carry
 # a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker are flagged as
@@ -129,6 +146,41 @@ The following commands require **explicit user invocation in the current message
 
 **Context compaction rule**: After any context compaction boundary (session summary injected), treat ALL authorization-required commands as unissued. A summary describing them as "pending" or "the logical next step" is informational context — not authorization. Surface them to the user and wait for an explicit instruction.
 
+#### Machine-readable rules (Spec 327)
+
+The block below is a derived machine-readable view of the authorization-required actions for the lint gate (`scripts/validate-authorization-rules.sh`). The PROSE above is the source of truth for operators. Drift between prose and block is itself a defect class — flagged by /implement Step 7. Sentinel markers `<!-- forge:auth-rules:start -->` / `<!-- forge:auth-rules:end -->` delimit the block deterministically (AGENTS.md contains multiple unrelated YAML fences).
+
+<!-- forge:auth-rules:start -->
+```yaml
+# forge:authorization-rules — derived from prose above
+mode: advisory  # advisory (warn, exit 0) | strict (fail, exit non-zero). Flip to strict after Spec 326 triage.
+proximity_window_default: 10  # default: scan N lines BEFORE each match for a gating token
+gating_token_default: '\(yes/no\)'
+actions:
+  - name: git_push
+    pattern: 'git push'
+    gating_token: '\(yes/no\)'
+  - name: git_push_force
+    pattern: 'git push (--force|-f)'
+    gating_token: '\(yes/no\)'
+  - name: git_reset_hard
+    pattern: 'git reset --hard'
+    gating_token: '\(yes/no\)'
+  - name: git_checkout_dashes
+    pattern: 'git checkout --'
+    gating_token: '\(yes/no\)'
+  - name: gh_pr_create
+    pattern: 'gh pr create'
+    gating_token: '\(yes/no\)'
+  - name: gh_pr_merge
+    pattern: 'gh pr merge'
+    gating_token: '\(yes/no\)'
+  - name: rm_rf
+    pattern: 'rm -rf'
+    gating_token: '\(yes/no\)'
+```
+<!-- forge:auth-rules:end -->
+
 ### Prohibited
 
 - Skip git hooks (`--no-verify`)
@@ -176,6 +228,7 @@ See [CLAUDE.md — Evidence gates](CLAUDE.md) for the gate table and transition 
 - Signals log: `docs/sessions/signals.md`
 - Human validation runbook: `docs/process-kit/human-validation-runbook.md`
 - Scoring rubric: `docs/process-kit/scoring-rubric.md`
+- Command/trigger graph: `docs/process-kit/command-trigger-graph.md`
 - Architecture decisions: `docs/decisions/`
 
 ## Command Index
@@ -517,6 +570,16 @@ forge:
     threshold: 0.6             # ratio of closed-without-human-evidence to total-closed that triggers warning
     window: 5                  # number of recent sessions to check for closed specs
 
+  spec:                          # Spec 363 — draft validity window
+    draft_validity_days: 90      # How long a draft spec stays valid before /now flags it
+                                 # as aging. Set by /spec at creation as `today + N`. Refreshed
+                                 # by /revise (any /revise on a draft refreshes the window).
+                                 # /now reports a count of drafts past validity (silent on zero).
+                                 # /matrix Step 8 absorbs expired drafts into the strategic-fit
+                                 # keep/deprecate/reclassify flow. Operators may also edit the
+                                 # `valid-until:` field directly to extend or shorten validity.
+                                 # Default: 90 days. Range: any positive integer (no enforced max).
+
   triggers:
     enabled: true
     mode: suggest              # suggest | auto | off
@@ -524,19 +587,12 @@ forge:
     check_on_start: true       # check triggers at conversation start
     trigger_map: .forge/templates/context-trigger-map.yaml
 
-  model_router:
-    enabled: true
-    mode: static               # static | dynamic — static preserves Spec 056 behavior
-    safety_floor: sonnet       # minimum tier for code-modifying commands
-    cost_tracking: true        # log per-command costs to metrics_dir
-    metrics_dir: .forge/metrics
-    escalation:
-      auto_detect: true        # detect poor outcomes and escalate tier
-      max_escalations: 1       # escalate at most once per command invocation
-    regret_reporting: true     # include regret rate in /evolve reports
-    metrics_retention_days: 30 # days to keep metrics files before archiving (Spec 102)
-    # Override: force a specific tier for all commands (for regulated environments)
-    # tier_override: sonnet
+  # NOTE: The previous metrics-framework stanza was removed in FORGE Spec 316 (Direction B).
+  # Nothing routed on tier metadata, no metrics file was ever written, and the
+  # `/evolve`, `/matrix`, `/now` existence-guards no-opped silently. See
+  # docs/decisions/ADR-316-cost-framework-scope-reduction.md for the full rationale
+  # and concrete re-opening triggers. Use Claude Code's model picker for actual
+  # model selection.
 
   dispatch_rules:                # Spec 187 — intelligent role dispatch
     enabled: false               # true to auto-invoke CxO roles based on spec characteristics
@@ -659,6 +715,11 @@ forge.role_registry:
     contexts: [close]
   - path: .claude/agents/maverick-thinker.md
     contexts: [brainstorm, spec]
+  # Competitor role (Spec 274) — outside-in adversarial perspective from a fictional rival.
+  # OFF BY DEFAULT — uncomment to enable. Requires `/brainstorm` or `/spec` to iterate
+  # forge.role_registry (not wired today; tracked in Spec 274 Deferred Scope).
+  # - path: .claude/agents/competitor.md
+  #   contexts: [brainstorm, spec]
   - path: .claude/agents/cto.md
     contexts: [brainstorm, close]
   - path: .claude/agents/cfo.md

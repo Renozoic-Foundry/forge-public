@@ -1,38 +1,41 @@
 ---
 name: synthesize
 description: "Synthesize accumulated project artifacts into refined documents"
-model_tier: sonnet
 workflow_stage: session
 ---
 # Framework: FORGE
 # Model-Tier: sonnet
 Synthesize accumulated FORGE artifacts into a refined, actionable document.
 
+> Timing guidance: see [session-synthesize-evolve-guide](../../docs/process-kit/session-synthesize-evolve-guide.md) for the canonical comparison of `/session` vs `/synthesize` vs `/evolve` — triggers, cadence, automation class.
+
 If $ARGUMENTS is `?` or `help`:
   Print a usage block with the following information then stop — do not execute any further steps:
   - Command: /synthesize — Knowledge synthesis command (FORGE Spec 106).
   - Usage: /synthesize <mode> [options]
   - Modes (exactly one required):
-    - --postmortem: Generate incident/sprint postmortem from recent session logs
+    - --postmortem: Generate narrative sprint retrospective from recent session logs (use /evolve for process gate reviews)
     - --topic <query>: Summarize all artifacts related to a topic
     - --decisions [--since YYYY-MM-DD]: Compile decision log from session logs
     - --architecture: Draft architecture overview from ADRs, specs, and agent config
+    - --all: Run all four modes sequentially. For --topic, uses the dominant theme inferred from recent sessions, or falls back to a generic "recent-activity" topic if no theme dominates. Continue-on-error: if any mode fails, the remaining modes still run; the final summary lists per-mode pass/fail and output paths. (Spec 328)
   - Options:
     - --sessions N: Number of recent sessions to include (postmortem only, default 5)
     - --since YYYY-MM-DD: Limit to artifacts on or after this date (decisions mode)
-  - Output: docs/synthesis/YYYY-MM-DD-<mode>.md
+  - Output: docs/synthesis/YYYY-MM-DD-<mode>.md (one file per mode; --all writes four)
   - Each output includes a Sources section listing every artifact that contributed.
   - Reference: docs/specs/106-knowledge-synthesis-command.md
 
 ---
 
 Parse $ARGUMENTS:
-- Detect the mode flag: `--postmortem`, `--topic`, `--decisions`, `--architecture`.
+- Detect the mode flag: `--postmortem`, `--topic`, `--decisions`, `--architecture`, `--all`.
 - If no mode flag is present, print the help text above and stop.
 - If `--postmortem`: set `MODE=postmortem`. Parse optional `--sessions N` (default 5).
 - If `--topic`: set `MODE=topic`. The next argument is `QUERY` (required — if missing, print help and stop).
 - If `--decisions`: set `MODE=decisions`. Parse optional `--since YYYY-MM-DD`.
 - If `--architecture`: set `MODE=architecture`.
+- If `--all`: set `MODE=all`. No additional arguments required. Skip directly to **Mode E — All modes** below.
 
 Set `TODAY` = current date in YYYY-MM-DD format.
 Set `OUTPUT_DIR` = `docs/synthesis`.
@@ -205,6 +208,42 @@ Write a structured architecture overview document to `OUTPUT_FILE` with these se
 
 ---
 
+## Mode E — All modes (`--all`) (Spec 328)
+
+When `MODE=all`, run all four single-mode bodies sequentially in this order: postmortem → decisions → architecture → topic. Each mode writes its standard output file using the existing naming convention. **Continue-on-error**: if any mode fails (missing input artifacts, write error, etc.), record the failure and proceed to the next mode — do NOT abort the run.
+
+### [mechanical] Step E1 — Resolve --topic query for the topic mode
+
+For the `--topic` portion of `--all`, no QUERY was supplied at invocation. Infer one:
+- Read the 3 most recent session logs from `docs/sessions/` (sorted by filename descending).
+- Count mentions of each spec ID and significant concept (e.g., recurring multi-word phrases) across those logs.
+- If a single spec ID or concept appears 3+× more than any other, set `QUERY=<that-token>`.
+- Otherwise, set `QUERY=recent-activity` and run the topic mode against general recent-session content.
+- Record the inferred query in the run summary (Step E3) so the operator can override on the next manual invocation.
+
+### [mechanical] Step E2 — Run each mode
+
+For each mode in the order [postmortem, decisions, architecture, topic]:
+1. Set `CURRENT_MODE` and `OUTPUT_FILE` per the mode's standard naming convention.
+2. Execute the mode's existing Step body (Mode A, C, D, B respectively above).
+3. On success: record `<mode>: PASS — <path>`.
+4. On failure (e.g., insufficient artifacts, write error): record `<mode>: FAIL — <reason>` and continue to the next mode. Do NOT propagate the failure or abort.
+
+### [mechanical] Step E3 — Write run summary
+
+After all four modes have been attempted, print a single summary block:
+
+    Synthesis (--all) complete:
+    - postmortem: <PASS|FAIL> — <path or reason>
+    - decisions:  <PASS|FAIL> — <path or reason>
+    - architecture: <PASS|FAIL> — <path or reason>
+    - topic ({QUERY}): <PASS|FAIL> — <path or reason>
+    Total: <N>/4 modes succeeded.
+
+Then proceed to **Step 3 — Next action** below (the next-action recommendations apply to whichever modes succeeded).
+
+---
+
 ## [mechanical] Step 2 — Confirm output
 
 After writing the output file, print:
@@ -212,6 +251,8 @@ After writing the output file, print:
     Synthesis complete: {OUTPUT_FILE}
     Mode: {MODE}
     Sources: {count} artifacts consulted
+
+**Skip this step if `MODE=all`** — the run summary in Step E3 replaces this single-mode confirmation.
 
 ## [mechanical] Step 3 — Next action
 

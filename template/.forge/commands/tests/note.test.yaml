@@ -25,16 +25,12 @@ template_vars:
   must_not_contain_raw:
     - "cookiecutter."
 
-model_tier:
-  expected: "haiku"
 
 frontmatter:
   required_fields:
     - "name"
     - "description"
-    - "model_tier"
     - "workflow_stage"
   expected_values:
     name: "note"
-    model_tier: "haiku"
     workflow_stage: "session"

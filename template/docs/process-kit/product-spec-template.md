@@ -22,5 +22,5 @@ Last merged from: Spec NNN
 - REQ-001: <requirement text> [Added: Spec NNN, YYYY-MM-DD]
 
 <!-- Add more sections as the product grows.
-     Example sections: Authentication, Data Model, API, Compliance, etc.
+     Example sections: Authentication, Data Model, API, UI, Compliance, etc.
      Each section groups related requirements for a specific domain or feature area. -->

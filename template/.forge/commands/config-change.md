@@ -1,7 +1,6 @@
 ---
 name: config-change
 description: "Propose and apply changes to agent configuration files"
-model_tier: sonnet
 workflow_stage: configuration
 ---
 # Framework: FORGE

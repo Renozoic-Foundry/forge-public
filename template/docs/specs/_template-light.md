@@ -6,6 +6,7 @@
 - Trigger: <!-- error | user correction | agent recommendation | evolve loop | other -->
 - Author: <name>
 - Last updated: YYYY-MM-DD
+- valid-until: YYYY-MM-DD  <!-- Spec 363 — set by /spec at creation, refreshed by /revise -->
 
 ## Objective
 

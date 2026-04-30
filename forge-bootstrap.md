@@ -62,7 +62,9 @@ find . -maxdepth 1 -not -name '.*' -not -name '.' | head -5
 - If files found:
   ```
   This directory contains existing files. FORGE template files will be added alongside them.
-  Existing files will NOT be overwritten — Copier only creates new files.
+  Existing files will NOT be overwritten silently — if any root-level files collide with the FORGE template
+  (README.md, CLAUDE.md, AGENTS.md, memory files), you'll get a single batched prompt with diffs and
+  per-file choices (merge / keep-original + append / overwrite). See Step 3c.
 
   Proceed? (yes / no)
   ```
@@ -119,6 +121,91 @@ Before running Copier, resolve the latest forge-public release tag and let the o
    - Choice `3` / `tag` → prompt "Enter tag name (e.g. v1.2.0):"; validate with `gh api "repos/$REPO/git/refs/tags/<tag>"` (or `git ls-remote`); if unknown, re-prompt up to 2 times then abort. Set `FORGE_VCS_REF=<validated-tag>`.
 
 5. Report: `Resolved install ref: $FORGE_VCS_REF`.
+
+## [decision] Step 3c — Root-file conflict detection (Spec 307)
+
+Before running Copier directly over the project tree, detect conflicts between pre-existing root-level files and the files the template is about to write. The full rules (canonical file list, detection order, recommendation rules R1–R6, merge/append/overwrite output formats) are authoritative in [`docs/process-kit/bootstrap-conflict-resolution.md`](docs/process-kit/bootstrap-conflict-resolution.md). This step summarizes the flow — **always follow the rules doc when there's a conflict between this summary and the doc**.
+
+### 3c.1 — Render template to a scratch dir
+
+Render the resolved `$FORGE_VCS_REF` to a scratch location (OS-aware temp path):
+
+```bash
+# OS-aware temp dir (Git Bash on Windows maps /tmp/ to AppData\Local\Temp).
+FORGE_SCRATCH="${TMPDIR:-${TEMP:-/tmp}}/forge-bootstrap-preview-$$"
+mkdir -p "$FORGE_SCRATCH"
+python -m copier copy "gh:Renozoic-Foundry/forge-public" "$FORGE_SCRATCH" --defaults --vcs-ref "$FORGE_VCS_REF" >/dev/null 2>&1
+```
+
+If the scratch render fails for any reason: **skip conflict detection** (report the reason), fall through to Step 4 with the pre-Spec-307 behavior (Copier's skip-if-exists + `.original.<ext>` preservation). Do not block bootstrap on preview failure.
+
+### 3c.2 — Enumerate canonical conflict set
+
+For each path in the canonical set (see rules doc §1):
+- `README.md`
+- `CLAUDE.md`
+- `AGENTS.md`
+- any root-level `*MEMORY*.md` (match: `MEMORY.md`, `PROJECT_MEMORY.md`, etc.)
+- **skip** `.copier-answers.yml` — Step 2 already handled it
+
+check whether BOTH `$FORGE_SCRATCH/<path>` AND `./<path>` exist with different content. If content is identical (sha256 match), drop the entry (rule R1).
+
+If the resulting conflict list is empty: **proceed silently to Step 4.** No prompt. (AC 4 — greenfield-safe / zero-impact.)
+
+### 3c.3 — Apply recommendation rules
+
+For each entry, apply rules R1 → R2 → R3 → R4 → R5 → R6 (see rules doc §4). First-match wins. Capture the rule name in the rationale.
+
+### 3c.4 — Emit the batched prompt
+
+Emit a **single** prompt covering all conflicts (AC 5 — no N separate blocking prompts):
+
+```
+Root-file conflicts detected (<N> files). Resolve before bootstrap:
+
+────────────────────────────────────────────────────
+[1] README.md
+    Diff (original → FORGE template):
+    --- original
+    +++ template
+    <unified diff, truncated per §3 of rules doc: 120 line cap, 60+30 window>
+    Recommendation: merge  —  <rationale keyed to rule R4>
+
+[2] CLAUDE.md
+    Diff:
+    <…>
+    Recommendation: keep-append  —  <rationale keyed to rule R5>
+
+[3] AGENTS.md
+    Diff:
+    <…>
+    Recommendation: overwrite  —  <rationale keyed to rule R2 / R3>
+────────────────────────────────────────────────────
+
+Choose per-file or accept all recommendations:
+
+  [Enter]            accept-all  (apply the recommendation for each)
+  merge N            force merge on file N
+  keep-append N      force keep-original + append on file N
+  overwrite N        force overwrite (original preserved as .original) on file N
+  show full N        expand truncated diff for file N and re-prompt
+  cancel             abort bootstrap — touch nothing
+
+Example: "merge 1, overwrite 3" (comma-separated per-file overrides; remaining files use recommendation)
+```
+
+### 3c.5 — Apply choices
+
+For each file, apply the chosen action per the rules doc:
+- **merge** (§6): write merged file with `<!-- BEGIN FORGE-inserted (spec-307) -->` / `<!-- END FORGE-inserted (spec-307) -->` source markers around inserted sections. No `.original.*` file produced.
+- **keep-append** (§7): write original verbatim + blank line + `<!-- BEGIN FORGE-inserted (spec-307) -->` marker + `## FORGE Process` heading + downshifted template content + `<!-- END FORGE-inserted (spec-307) -->`. No `.original.*` file produced.
+- **overwrite** (§8): rename original to `<stem>.original.<ext>` (collision-suffixed `.1`, `.2` … if needed), then let Copier write the template version. **This is the regression-guard path — matches pre-Spec-307 behavior.**
+
+Apply choices to the project tree **before** invoking Copier in Step 4 so Copier's own skip-if-exists logic treats them as "already present".
+
+### 3c.6 — Clean up
+
+Remove `$FORGE_SCRATCH` on success or failure: `rm -rf "$FORGE_SCRATCH"`.
 
 ## [mechanical] Step 4 — Run Copier
 

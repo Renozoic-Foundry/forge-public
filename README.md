@@ -2,6 +2,8 @@
 
 AI coding assistants lose context between sessions, drift from the original goal, and declare work done before it meets acceptance criteria. FORGE fixes that with specs, evidence gates, and a structured delivery process that remains reliable as agent autonomy increases.
 
+CI: see [.github/workflows/sync-and-lint.yml](.github/workflows/sync-and-lint.yml) — runs cross-level sync + commands sync + shellcheck on every push to `main` and every PR (Spec 337 backstop for the local pre-commit hook).
+
 ## Mission
 
 FORGE's mission is to make each individual developer the CEO of a continuously-optimizing development company. FORGE provides strategic advisors, executive staff, and auditable process at every step — but the developer decides exactly what happens, when, and why.
@@ -9,6 +11,7 @@ FORGE's mission is to make each individual developer the CEO of a continuously-o
 ## Contents
 
 - [Quickstart](#quickstart) — install and bootstrap in minutes
+- [What's new](#whats-new) — recent FORGE updates by audience
 - [What is FORGE?](#what-is-forge) — the problem, the approach, how it works
 - [MCP Documentation Servers](#mcp-documentation-servers) — optional doc servers
 - [Architecture Overview](#architecture-overview) — layer model and module system
@@ -17,6 +20,32 @@ FORGE's mission is to make each individual developer the CEO of a continuously-o
 - [Contributing](#contributing) — how to contribute
 - [Compliance Disclaimer](#compliance-disclaimer) — what FORGE is not
 - [License](#license) — MIT
+
+## What's new
+
+Recent changes since the last published refresh — split by audience. Each item cites the closed spec for traceability.
+
+### User-facing changes
+
+- **Aging-draft surface in `/now`** — drafts past their `valid-until` date now appear in the daily report so they don't silently rot (Spec 363).
+- **Tab-lane awareness in choice blocks** — when a tab is active, post-action menus filter or annotate options to match lane scope (Spec 351). Single-tab sessions stay quiet — no active-tabs noise (Spec 352).
+- **Active-tab marker** — lifecycle commands (`/implement`, `/close`, `/session`) now self-identify their registry row from `.forge/state/active-tab-*.json`, eliminating ambiguous "which tab am I?" prompts (Spec 353).
+- **Post-implementation value demo** — high-risk and consensus-reviewed specs get an optional before/after demonstration to aid `/close` review (Spec 261).
+- **Parallel-batch suggestion in `/implement next`** — when adjacent backlog items are independent, the command surfaces a `/parallel` recommendation instead of serializing silently (Spec 087).
+- **Checkpoint resume for `/implement`** — interrupted runs can resume from the last completed step instead of restarting from scratch (Spec 123).
+- **Choice-block format standardized** — every lifecycle action ends with a numbered table of next moves, ranks, and rationales (Spec 025).
+- **Cost-framework scope reduction** — operator-advisory model tiering replaces brittle frontmatter routing; the IDE picker is the only real selector (Spec 316).
+
+### Backend & process changes
+
+- **Forge-public publish scrub** — build-time exclusion list, genericization transforms, and forbidden-token validator harden the public-facing sync (Spec 374).
+- **`/matrix` backlog hygiene pass** — recomputes scores, surfaces drift, and ships byte-identical guide mirrors across template surfaces (Spec 370).
+- **Score-prediction audit loop** — every `/matrix` run logs predicted-vs-recomputed deltas to `.forge/state/score-audit.jsonl` for cross-session calibration (Spec 368).
+- **CI parity gate for spec-integrity sentinels** — the `lane-gate` block in `/implement` and `/close` is now hash-checked at PR time so silent drift between mirrors becomes impossible (Spec 367).
+- **Approved-SHA recompute step** — `/implement` Step 6c rewrites the spec-integrity hash after DA dispositions edit protected sections, closing the recurring SHA-pingpong defect class (Spec 365).
+- **AGENTS.md prose↔YAML drift detector** — sibling check to the auth-rule lint gate that catches prose bullets not yet reflected in the structured authorization block (Spec 330).
+- **Authorization-rule lint gate** — `/implement` Step 7c scans command bodies for sensitive actions (`git push`, `gh pr create`, `rm -rf`) that lack a confirmation token within proximity (Spec 327).
+- **Two-pass adversarial DA review** — when the first DA pass finds zero issues, a deeper second pass confirms or surfaces hidden risk (Spec 181).
 
 ## Quickstart
 
@@ -137,9 +166,9 @@ These capabilities are built into every FORGE project out of the box:
 - **AI-generated specs** — Describe what you need; AI produces the full spec in seconds. Human approves; AI implements with evidence at every gate.
 - **Evidence gates** — Every lifecycle transition requires proof. Structured PASS/FAIL outcomes. Gate failures produce actionable feedback.
 - **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
-- **Role-separated agents** — 16 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
+- **Role-separated agents** — 17 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **29 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
+- **30 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
 - **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
 
 ### Enhancing features (opt-in)
@@ -269,7 +298,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 303 specs across 77 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 376 specs across 95 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

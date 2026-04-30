@@ -195,20 +195,37 @@ check_git() {
 }
 
 check_copier() {
-    local version major minor
-    for cmd in "$PYTHON_CMD" python3 python; do
+    local version major
+    COPIER_VERSION=""
+    COPIER_SOURCE=""
+
+    # Prefer standalone `copier` binary on PATH (Homebrew, pipx, winget — isolated env, more reliable)
+    if command -v copier >/dev/null 2>&1; then
+        version=$(copier --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1) || version=""
+        if [ -n "$version" ]; then
+            major=$(echo "$version" | cut -d. -f1)
+            if [ "$major" -ge 9 ] 2>/dev/null; then
+                COPIER_VERSION="$version"
+                COPIER_SOURCE="binary"
+                return 0
+            fi
+        fi
+    fi
+
+    # Fallback: `python -m copier` (pip --user, venv, system install)
+    for cmd in "${PYTHON_CMD:-}" python3 python; do
         if [ -n "$cmd" ] && command -v "$cmd" >/dev/null 2>&1; then
             version=$("$cmd" -m copier --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1) || continue
             if [ -n "$version" ]; then
                 major=$(echo "$version" | cut -d. -f1)
                 if [ "$major" -ge 9 ] 2>/dev/null; then
                     COPIER_VERSION="$version"
+                    COPIER_SOURCE="python-module ($cmd)"
                     return 0
                 fi
             fi
         fi
     done
-    COPIER_VERSION=""
     return 1
 }
 
@@ -294,20 +311,136 @@ install_python() {
     esac
 }
 
+# Detect PEP 668 "externally-managed-environment" on the active Python interpreter.
+# Returns 0 (true) if pip would refuse bare `pip install` without --user/venv.
+# Spec 306 — never use --break-system-packages.
+is_pep668_managed() {
+    local py="${1:-}"
+    [ -z "$py" ] && return 1
+    command -v "$py" >/dev/null 2>&1 || return 1
+    # Probe with a harmless dry-run — pip emits "externally-managed-environment" on managed Pythons.
+    # `pip install --dry-run` is available in pip 22.2+; fall back to checking for EXTERNALLY-MANAGED marker.
+    local probe
+    probe=$("$py" -m pip install --dry-run --quiet --no-input pip 2>&1) || true
+    if printf "%s" "$probe" | grep -qi 'externally-managed-environment'; then
+        return 0
+    fi
+    # Secondary check: stdlib sysconfig reports the marker file path; presence means PEP 668.
+    if "$py" - <<'PYEOF' 2>/dev/null
+import sys, os, sysconfig
+stdlib = sysconfig.get_path("stdlib")
+if stdlib and os.path.exists(os.path.join(os.path.dirname(stdlib), "EXTERNALLY-MANAGED")):
+    sys.exit(0)
+sys.exit(1)
+PYEOF
+    then
+        return 0
+    fi
+    return 1
+}
+
 install_copier() {
     step "Installing Copier..."
-    local pip_cmd
-    if [ -n "${PYTHON_CMD:-}" ]; then
-        pip_cmd="$PYTHON_CMD -m pip"
-    elif command -v pip3 >/dev/null 2>&1; then
-        pip_cmd="pip3"
-    elif command -v pip >/dev/null 2>&1; then
-        pip_cmd="pip"
-    else
-        error "pip not found. Install Python first, then run: pip install 'copier>=9.0'"
-        return 1
+    local attempted=()
+    COPIER_INSTALL_PATH=""
+
+    # Tier 1: Homebrew on macOS (standalone binary — cleanest, survives PEP 668).
+    if [ "${PLATFORM:-}" = "macos" ] && command -v brew >/dev/null 2>&1; then
+        info "Attempting: brew install copier"
+        attempted+=("brew")
+        if brew install copier; then
+            COPIER_INSTALL_PATH="brew"
+            return 0
+        fi
+        warn "brew install copier failed — trying pipx"
     fi
-    $pip_cmd install "copier>=9.0"
+
+    # Tier 2: pipx (isolated environment, standalone binary on PATH, avoids PEP 668).
+    if command -v pipx >/dev/null 2>&1; then
+        info "Attempting: pipx install 'copier>=9.0'"
+        attempted+=("pipx")
+        if pipx install "copier>=9.0"; then
+            COPIER_INSTALL_PATH="pipx"
+            # pipx binaries land in ~/.local/bin — ensure PATH hint for this shell
+            if [ -d "$HOME/.local/bin" ]; then
+                case ":$PATH:" in
+                    *":$HOME/.local/bin:"*) ;;
+                    *) export PATH="$HOME/.local/bin:$PATH" ;;
+                esac
+            fi
+            return 0
+        fi
+        warn "pipx install failed — trying pip --user"
+    fi
+
+    # Determine the Python we'll target for --user / venv fallbacks.
+    local py="${PYTHON_CMD:-}"
+    if [ -z "$py" ]; then
+        if command -v python3 >/dev/null 2>&1; then py="python3"
+        elif command -v python >/dev/null 2>&1; then py="python"
+        fi
+    fi
+
+    # Tier 3: pip install --user (works on most PEP 668 systems; user scheme bypasses the marker).
+    if [ -n "$py" ]; then
+        info "Attempting: $py -m pip install --user 'copier>=9.0'"
+        attempted+=("pip --user")
+        if "$py" -m pip install --user "copier>=9.0"; then
+            COPIER_INSTALL_PATH="pip --user"
+            # Ensure user-site bin is on PATH for this shell
+            local user_base
+            user_base=$("$py" -m site --user-base 2>/dev/null || printf "")
+            if [ -n "$user_base" ] && [ -d "$user_base/bin" ]; then
+                case ":$PATH:" in
+                    *":$user_base/bin:"*) ;;
+                    *) export PATH="$user_base/bin:$PATH" ;;
+                esac
+            fi
+            return 0
+        fi
+        warn "pip --user install failed — trying venv fallback"
+    fi
+
+    # Tier 4: dedicated venv at ~/.forge/venv (last resort; works even on PEP 668).
+    if [ -n "$py" ]; then
+        local venv_dir="$FORGE_CONFIG_DIR/venv"
+        info "Attempting: venv fallback at $venv_dir"
+        attempted+=("venv")
+        mkdir -p "$FORGE_CONFIG_DIR"
+        if "$py" -m venv "$venv_dir"; then
+            local venv_py="$venv_dir/bin/python"
+            [ -x "$venv_py" ] || venv_py="$venv_dir/Scripts/python.exe"
+            if [ -x "$venv_py" ] && "$venv_py" -m pip install "copier>=9.0"; then
+                COPIER_INSTALL_PATH="venv ($venv_dir)"
+                local venv_bin="$venv_dir/bin"
+                [ -d "$venv_bin" ] || venv_bin="$venv_dir/Scripts"
+                if [ -d "$venv_bin" ]; then
+                    case ":$PATH:" in
+                        *":$venv_bin:"*) ;;
+                        *) export PATH="$venv_bin:$PATH" ;;
+                    esac
+                fi
+                return 0
+            fi
+        fi
+    fi
+
+    # All tiers failed — emit actionable guidance. Never suggest --break-system-packages.
+    error "Failed to install Copier. Attempted: ${attempted[*]:-none}"
+    if [ -n "$py" ] && is_pep668_managed "$py"; then
+        warn "Detected PEP 668 externally-managed Python at '$py'."
+        warn "Bare 'pip install' is disallowed by this Python; FORGE will NOT override with --break-system-packages."
+    fi
+    echo ""
+    echo "  Try one of these manually:"
+    if [ "${PLATFORM:-}" = "macos" ]; then
+        echo "    1. brew install copier                         (recommended on macOS)"
+    fi
+    echo "    2. pipx install 'copier>=9.0'                  (recommended — isolated env)"
+    echo "       (install pipx first: python3 -m pip install --user pipx && pipx ensurepath)"
+    echo "    3. python3 -m pip install --user 'copier>=9.0' (user install)"
+    echo "    4. python3 -m venv ~/.forge/venv && ~/.forge/venv/bin/pip install 'copier>=9.0'"
+    return 1
 }
 
 # --- Git auth preflight ---
@@ -450,7 +583,6 @@ plant_bootstrap() {
 init_project() {
     local path="$1"
     local repo="$2"
-    local pip_cmd
 
     step "Bootstrapping project at $path..."
 
@@ -458,12 +590,17 @@ init_project() {
         mkdir -p "$path"
     fi
 
-    if [ -n "${PYTHON_CMD:-}" ]; then
-        pip_cmd="$PYTHON_CMD"
+    # Spec 306 — prefer standalone `copier` binary when available (handles brew/pipx/winget installs).
+    # Fall back to `python -m copier` for --user / venv installs.
+    local copier_invoker=()
+    if command -v copier >/dev/null 2>&1; then
+        copier_invoker=(copier)
+    elif [ -n "${PYTHON_CMD:-}" ]; then
+        copier_invoker=("$PYTHON_CMD" -m copier)
     elif command -v python3 >/dev/null 2>&1; then
-        pip_cmd="python3"
+        copier_invoker=(python3 -m copier)
     else
-        pip_cmd="python"
+        copier_invoker=(python -m copier)
     fi
 
     # --trust allows Copier to run template tasks/hooks. Warn the user.
@@ -471,14 +608,14 @@ init_project() {
     printf "        Source: %s\n" "$repo"
     if ! confirm "Proceed with --trust?"; then
         warn "Running without --trust (template tasks will be skipped)."
-        $pip_cmd -m copier copy "$repo" "$path" --defaults || {
+        "${copier_invoker[@]}" copy "$repo" "$path" --defaults || {
             error "Copier failed to bootstrap project at $path"
             return 1
         }
         return 0
     fi
 
-    $pip_cmd -m copier copy "$repo" "$path" --defaults --trust || {
+    "${copier_invoker[@]}" copy "$repo" "$path" --defaults --trust || {
         error "Copier failed to bootstrap project at $path"
         return 1
     }
@@ -572,12 +709,18 @@ if [ ${#MISSING[@]} -gt 0 ]; then
                 fi
                 ;;
             copier)
-                if confirm "Install Copier (via pip)?"; then
-                    install_copier
-                    check_copier || { error "Copier installation failed. Run: pip install 'copier>=9.0'"; exit 1; }
-                    info "Copier $COPIER_VERSION installed"
+                if confirm "Install Copier (brew/pipx/pip --user — auto-selected)?"; then
+                    install_copier || {
+                        error "Copier installation failed across all tiers. See guidance above."
+                        exit 1
+                    }
+                    check_copier || {
+                        error "Copier installed but not detected on PATH. Restart your shell and re-run, or inspect: ${COPIER_INSTALL_PATH:-unknown path}"
+                        exit 1
+                    }
+                    info "Copier $COPIER_VERSION installed via ${COPIER_INSTALL_PATH:-unknown} (detected as: ${COPIER_SOURCE:-unknown})"
                 else
-                    error "Copier 9.0+ is required. Install manually: pip install 'copier>=9.0'"
+                    error "Copier 9.0+ is required. Install manually: brew install copier | pipx install 'copier>=9.0' | python3 -m pip install --user 'copier>=9.0'"
                     exit 1
                 fi
                 ;;

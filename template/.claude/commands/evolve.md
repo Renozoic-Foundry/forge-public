@@ -1,12 +1,17 @@
 ---
 name: evolve
 description: "Run the KCS Evolve Loop review"
-model_tier: sonnet
 workflow_stage: review
 ---
 
 # Framework: FORGE
+<!-- multi-block mode: serialized — evolve emits choice blocks at distinct mechanical steps (trust calibration, proposal disposition, scratchpad disposition, exit gate). Each block waits for operator response before the next is presented. Bare numerics work because only one block is ever co-presented at a time. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
+
+**Output verbosity (Spec 225)**: At the start of execution, read `forge.output.verbosity` from `AGENTS.md` (default: `lean`). In **lean** mode, suppress non-actionable diagnostic output (passing-gate confirmations, KPI tables, calibration deltas, MCP pin status, deprecation scans, signal-by-signal pattern dumps, root-cause groupings, deferred-scope aging when none aged, score-rubric details when unchanged) — write the full content to its file artifact (session log, `pattern-analysis.md`, etc.) and emit a one-line pointer in chat (or omit entirely if purely informational). In **verbose** mode, emit full detail as before. **Never suppressed in either mode**: choice blocks, FAILed gates, push-confirmation prompts, Review Brief "Needs Your Review" items, operator-input prompts, error/abort messages. See `docs/process-kit/output-verbosity-guide.md` for the full rules and worked examples.
+
 Run the KCS Evolve Loop review. Use this after a spec reaches `implemented` or monthly.
+
+> Timing guidance: see [session-synthesize-evolve-guide](../../docs/process-kit/session-synthesize-evolve-guide.md) for the canonical comparison of `/session` vs `/synthesize` vs `/evolve` — triggers, cadence, automation class.
 
 If $ARGUMENTS is `?` or `help`:
   Print:
@@ -85,16 +90,37 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    Check docs/README.md CLI commands against actual CLI help output.
 5. Report KPI trends from session logs: lead time, hotfix count, doc drift events since last review.
 6. Score calibration: compare predicted vs actual BV for completed specs — flag if systematic bias found.
-6b. **E/TC calibration (Spec 158)**: For specs closed since last calibration:
-   a. If `.forge/metrics/command-costs.yaml` exists: read actual token cost data for each spec. Compare `Token-Cost:` frontmatter estimate ($, $$, $$$) against actual tokens consumed. Flag specs where actual diverges significantly from estimate (e.g., $ estimate but $$$ actual cost).
-   b. If session data exists: compare expected session count (inferred from E score — E=1-2: single session, E=3: 1-2 sessions, E=4-5: 2+ sessions) vs actual sessions from session logs.
-   c. Flag systematic E over-prediction (AI handles it easier than estimated — 3+ specs where actual E was lower) or under-prediction (iteration loops not anticipated — 3+ specs where actual E was higher).
-   d. If systematic bias detected in either direction: recommend updating E anchor guidance and present specific anchor adjustments.
-   e. If no metrics data exists: report "E/TC calibration: no metrics data available. Calibration will activate when .forge/metrics/ data accumulates."
+6b. **E calibration (Spec 158, simplified per Spec 316)**: For specs closed since last calibration:
+   a. If session data exists: compare expected session count (inferred from E score — E=1-2: single session, E=3: 1-2 sessions, E=4-5: 2+ sessions) vs actual sessions from session logs.
+   b. Flag systematic E over-prediction (AI handles it easier than estimated — 3+ specs where actual E was lower) or under-prediction (iteration loops not anticipated — 3+ specs where actual E was higher).
+   c. If systematic bias detected in either direction: recommend updating E anchor guidance and present specific anchor adjustments.
+   d. Token-cost (TC) calibration is qualitative — operator-recall against the cost-feel of recent specs (Spec 316 removed the metrics framework that was documented but never wired).
+
+6b+. **Data-driven score calibration via score-audit log (Spec 368)**: Augment the operator-recall pass in 6b with predicted-vs-observed data from `.forge/state/score-audit.jsonl`. The shared helper at `.forge/lib/score-audit.sh` (PowerShell parity at `.forge/lib/score-audit.ps1`) renders the bias report; do NOT inline JSON parsing here.
+
+   Run the bias report:
+
+   ```bash
+   bash .forge/lib/score-audit.sh bias-report "$verbosity_mode"
+   ```
+
+   (PowerShell: `pwsh .forge/lib/score-audit.ps1 bias-report "$verbosity_mode"`. `$verbosity_mode` is `lean` or `verbose` per `forge.output.verbosity` in AGENTS.md.)
+
+   The helper:
+   - Reads predicted/observed pairs grouped by `lane + kind_tag` (Req 14b cross-tab from day one).
+   - Emits an anchor-revision advisory only when **N≥3** specs in the same dimension+lane+kind_tag cell show the same-direction deviation.
+   - Suffixes every advisory with the literal `(direction-only; magnitude not measured)` so downstream readers cannot cite the bias as quantitative (Req 14c, AC6).
+   - Annotates each advisory `(based on N=<count> closed specs since first record)` (Req 14d, AC6).
+   - In **lean** mode, suppresses cells below the N≥3 threshold (Spec 225). In **verbose** mode, renders sub-threshold cells as `insufficient data (N=<count>)` (AC7).
+
+   If the audit log is empty or absent (pre-instrumentation specs only), the helper emits `0 records — calibration deferred until data accumulates`. Continue with operator-recall calibration from Step 6b.
+
+   Note: this report is data, not authority. Anchor revisions still require operator judgment — see `docs/process-kit/score-calibration-loop.md` § Time-blindness mitigation for the principle that durations are derived from shell arithmetic over git timestamps, not model recall.
+
 6c. **CEfO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
    - Read `.claude/agents/cefo.md` for the role preamble.
-   - Spawn CEfO as an isolated sub-agent with the E/TC calibration data from step 6b and the regret rate data (if available from metrics).
-   - Prompt: "Review the E/TC calibration results and regret rate data. Assess whether effort estimates are systematically miscalibrated, token costs are trending unsustainably, or process overhead is disproportionate. Produce your standard review block."
+   - Spawn CEfO as an isolated sub-agent with the bias report from Step 6b+ (data-driven) and the E calibration data from step 6b (operator-recall).
+   - Prompt: "Review the E/TC calibration results and the score-audit bias report (predicted vs observed proxies from `.forge/state/score-audit.jsonl`, grouped by lane+kind_tag). Assess whether effort estimates are systematically miscalibrated, token costs are trending unsustainably, or process overhead is disproportionate. Report direction only; do not assert magnitude — observed proxies are direction-only signals (Spec 368 Req 14c, Req 15). Produce your standard review block."
    - Present the CEfO advisory inline after the calibration results:
      ```
      ### CEfO Advisory — Efficiency Review
@@ -106,6 +132,35 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    - If stale: emit a one-line advisory: `MCP pin stale: <package> pinned <N> days ago, threshold <T>. Run bump-verification checklist in docs/process-kit/mcp-pinning-policy.md before rotating.`
    - If all pins fresh: emit a one-line confirmation: `MCP pins current: <package1>@<v1> verified <N1>d ago, <package2>@<v2> verified <N2>d ago.`
    - This is an advisory checklist item — does NOT auto-bump pins. Operator executes the bump-verification checklist manually when ready.
+
+6e. **Release-eligible + deprecation surfacing (Spec 291)**: Surface two release-policy signals as part of the periodic review (full F1-F4 mode).
+
+   1. **Release-eligible count**: Read `docs/sessions/signals.md`. Count entries
+      matching `^### SIG-[0-9]+-RE`. If count ≥ 1, present:
+      ```
+      N release-eligible spec(s) pending tag cut.
+      Audit: docs/process-kit/v1.0.0-to-next-audit.md
+      Tooling: scripts/cut-release.sh (dry-run by default)
+      ```
+      Recommend the operator review the audit and decide whether to cut now or
+      continue accumulating. If the live audit doc is missing, flag it as a
+      process defect (release-policy.md § Post-cut disposition expects the doc
+      to exist between tag cuts).
+
+   2. **Deprecation surface scan**: Scan `copier.yml` for top-level variables
+      with `deprecated: true` and `.claude/commands/*.md` for files with
+      `deprecated: true` in YAML frontmatter (or the first 10 lines). For each
+      match, present a one-line item:
+      ```
+      ⚠ Deprecated <surface>: <name> (deprecated_in: <ver>, removed_in: <ver>)
+      ```
+      If any deprecation has a `removed_in:` ≤ the next likely tag (per the
+      live audit's proposed bump), recommend that the audit explicitly note
+      the removal as a MAJOR-cut item.
+
+   These signals are advisory — they do NOT block the evolve loop exit gate.
+
+
 7. Update `Last score calibration:` in docs/backlog.md.
 8. **Signal pattern analysis (Spec 044):** Read `docs/sessions/signals.md`. Apply structured pattern detection:
    a. **Parse**: Extract from each signal entry: type tag (e.g. `[process]`, `[tooling]`, `[template]`), affected component(s), root-cause keywords (words in title/description that could recur).
@@ -125,8 +180,34 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       - Patterns with 1 occurrence: list as "isolated — monitor"
       - Patterns with 2+ occurrences at medium+ severity: flag as "systemic gap → spec recommended"
    e. Save the pattern table to `docs/sessions/pattern-analysis.md` (append with date header; create if absent).
-   f. **Knowledge consolidation**: If pattern analysis reveals 10+ signals or 3+ recurring themes, recommend running `/synthesize` to consolidate accumulated knowledge into a refined reference document.
+   f. **Knowledge consolidation**: If pattern analysis reveals 10+ signals or 3+ recurring themes, recommend running `/synthesize --decisions` to consolidate accumulated knowledge into a refined reference document. Mode hint (Spec 328): `--decisions` is the default for /evolve-context recommendations because it aggregates the full decision history that pattern analysis builds on. Operator can override at invocation (`--postmortem` for general consolidation, `--topic <theme>` for a specific cluster, or `--all` for all four modes).
    g. **Architecture document update** (Spec 228): Check `docs/architecture.md`. If it exists and any of the following changed since its `Last updated` date: new modules added, commands added/removed, agent roles changed, or runtime adapters modified — flag for update: "Architecture document may be stale. Review `docs/architecture.md` and update feature inventory, module list, or integration points as needed."
+   h. **Root-cause category grouping (Spec 267)**: In addition to the type-tag + keyword clustering in (b), re-group all signals by their `Root-cause category` field (one of `spec-expectation-gap`, `model-knowledge-gap`, `implementation-error`, `process-defect`, `other`). Signals without this field (pre-Spec-267 entries) are treated as `other`. Append a category-grouping section to the pattern analysis output:
+      ```
+      Root-cause Category Grouping — <date>
+      | Category | Occurrences | Signal IDs | Notes |
+      |----------|-------------|------------|-------|
+      | spec-expectation-gap   | N | SIG-NNN, ... | <1-line summary of theme if any> |
+      | model-knowledge-gap    | N | SIG-NNN, ... | ... |
+      | implementation-error   | N | SIG-NNN, ... | ... |
+      | process-defect         | N | SIG-NNN, ... | ... |
+      | other                  | N | SIG-NNN, ... | (pre-267 entries + uncategorized) |
+      ```
+      - If the `other` bucket is >40% of signals since the last evolve review, emit an advisory: "Category quality regression — >40% of signals are `other`. Consider reviewing `docs/process-kit/signal-quality-guide.md` for calibration." (This is advisory, not blocking.)
+   i. **Gate-coverage gaps (Spec 267)**: Scan all signals for the `Evidence-gate coverage` field. Cluster `missed-by-existing-gate` signals by the named gate (the field is "missed-by-existing-gate — <gate name>"). A cluster qualifies as a **gate-coverage gap** when either:
+      - ≥3 `missed-by-existing-gate` signals name the same gate (AC 5 threshold), OR
+      - ≥50% of a pattern cluster (from step b) is `missed-by-existing-gate` (Requirement 5 threshold).
+
+      For each qualifying cluster, append to the pattern analysis output:
+      ```
+      Gate-Coverage Gaps — <date>
+      | Gate Named | Missed Count | % of Pattern Cluster | Signal IDs | Recommendation |
+      |-----------|--------------|----------------------|------------|----------------|
+      | <gate>    | N            | X%                   | SIG-NNN, ... | Review whether <gate> needs extension or a new gate is warranted |
+      ```
+      If no qualifying clusters exist: emit a single line "Gate-coverage gaps: none detected (N `missed-by-existing-gate` signals, no cluster ≥3 or ≥50%)."
+
+      This output is **advisory** — it does not block the evolve loop. It surfaces systemic evidence-gate gaps so the operator can propose spec-level gate improvements.
 8b. **Trust calibration review (Spec 160):** Read `docs/sessions/signals.md` for trust signals (type tag `[trust]`):
    a. **Aggregate corrections by check type**: For each check type that appears in trust signals, count:
       - Total spec closures where this check type was machine-verified (estimate from CHANGELOG close count)
@@ -144,12 +225,12 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       ```
       These are **recommendations only**:
       > **Choose** — type a number or keyword:
-      > | # | Action | What happens |
-      > |---|--------|--------------|
-      > | **1** | `apply all` | Apply all recommended category changes to gate-categories.md |
-      > | **2** | `apply <N>` | Apply a specific recommendation (type the row number) |
-      > | **3** | `defer` | Revisit all recommendations next cycle |
-      > | **4** | `dismiss` | Dismiss all — no adjustments warranted |
+      > | # | Rank | Action | Rationale | What happens |
+      > |---|------|--------|-----------|--------------|
+      > | **1** | 1 | `apply all` | Trust signals justify all recommended adjustments | Apply all recommended category changes to gate-categories.md |
+      > | **2** | 2 | `apply <N>` | Selective acceptance; apply only some adjustments | Apply a specific recommendation (type the row number) |
+      > | **3** | — | `defer` | Insufficient data; revisit later | Revisit all recommendations next cycle |
+      > | **4** | — | `dismiss` | Recommendations not warranted | Dismiss all — no adjustments warranted |
    d. If no trust signals exist or no adjustments are warranted: report "Trust calibration: no adjustments needed (N closures reviewed, 0 corrections)."
 
 8c. **CQO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
@@ -189,34 +270,19 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
        ...
        ```
        > **Choose** — type a number or keyword:
-       > | # | Action | What happens |
-       > |---|--------|--------------|
-       > | **1** | `approve all` | Approve all N proposals for spec creation |
-       > | **2** | `approve <N>` | Approve a specific proposal (type the number) |
-       > | **3** | `modify <N>` | Edit a proposal before approving |
-       > | **4** | `dismiss <N>` | Dismiss a specific proposal with reason |
-       > | **5** | `dismiss all` | Dismiss all proposals |
+       > | # | Rank | Action | Rationale | What happens |
+       > |---|------|--------|-----------|--------------|
+       > | **1** | — | `approve all` | Operator-driven; agent has no preference | Approve all N proposals for spec creation |
+       > | **2** | — | `approve <N>` | Operator-driven | Approve a specific proposal (type the number) |
+       > | **3** | — | `modify <N>` | Operator-driven; refine before commit | Edit a proposal before approving |
+       > | **4** | — | `dismiss <N>` | Operator-driven; reason recorded | Dismiss a specific proposal with reason |
+       > | **5** | — | `dismiss all` | Operator-driven; clear rejection | Dismiss all proposals |
     e. On `approve <N>` (or `approve all`): run `/spec` with the proposal title and content to create the draft spec.
     f. On `modify <N>`: accept operator edits to the proposal, then run `/spec` with revised content.
     g. On `dismiss <N>` (or `dismiss all`): record dismissal in `docs/sessions/pattern-analysis.md` as `dismissed: YYYY-MM-DD — <reason>`. Suppresses re-proposal for this pattern in subsequent cycles.
 
     h. **Multi-role vetting**: For high-impact proposals (severity `high` or BV >= 4), recommend running `/consensus <proposal>` to gather structured feedback from all registry roles before approving.
 After either path:
-- **Metrics rotation** (Spec 102 — skip if `.forge/metrics/` directory does not exist):
-  Read `forge.model_router.metrics_retention_days` from AGENTS.md (default: 30).
-  Run: `bash .forge/bin/forge-metrics-rotate.sh <retention_days>`
-  Report the rotation result (N archived, N retained).
-- **Regret rate reporting** (Spec 085 — skip if `forge.model_router.mode` is `static` or `.forge/metrics/command-costs.yaml` does not exist):
-  Read `.forge/metrics/command-costs.yaml`. For each command, count total invocations and escalations over the last 30 days. Report:
-  ```
-  Regret rate (last 30 days):
-    /brainstorm: X% (N/M escalated from <tier> → <tier>)
-    /implement: X% (N/M escalated)
-    ...
-    Overall: X%
-  ```
-  Flag any command with regret rate > 10% and recommend adjusting its baseline tier.
-  Save the regret rate table to `docs/sessions/pattern-analysis.md` under a `## Model Router Regret Rate` heading (append with date).
 - **Deferred scope aging (Spec 199):** Read `docs/backlog.md` for any items tagged as deferred scope. For each deferred item, check its origination date. Flag items older than 14 days without disposition:
   ```
   DEFERRED SCOPE AGING — The following items are >14 days old without disposition:
@@ -226,11 +292,11 @@ After either path:
   If no aged items found: report "Deferred scope: all items current (none >14 days)."
 - Check docs/sessions/scratchpad.md for open `[evolve]` (or legacy `[outer-loop]`) notes. If open notes exist, present them as a numbered list and offer disposition:
   > **Choose** — type a number or keyword:
-  > | # | Action | What happens |
-  > |---|--------|--------------|
-  > | **1** | `review all` | Walk through each item one at a time for disposition |
-  > | **2** | `batch dispose` | Recommend dispositions for all, approve/modify in bulk |
-  > | **3** | `carry forward` | Carry all items forward to next cycle |
+  > | # | Rank | Action | Rationale | What happens |
+  > |---|------|--------|-----------|--------------|
+  > | **1** | 1 | `review all` | Per-item disposition; highest care | Walk through each item one at a time for disposition |
+  > | **2** | 2 | `batch dispose` | Faster path; AI proposes, operator confirms | Recommend dispositions for all, approve/modify in bulk |
+  > | **3** | — | `carry forward` | Defer; fine if items are still ripening | Carry all items forward to next cycle |
 - Remind me to update the `Last evolve loop review:` field in today's session log.
 
 ## [decision] Evolve Loop Exit Gate (Spec 191)
@@ -251,15 +317,18 @@ Before returning control to the solve loop, verify all evolve-loop work is compl
    ```
    Evolve loop review complete.
    ```
+   <!-- safety-rule: session-data — if today's session log has unsynthesized spec activity AND ## Summary is unpopulated, /session is inserted at rank 1 and stop is downgraded to —. See docs/process-kit/implementation-patterns.md § Session-data safety rule. -->
    > **Choose** — type a number or keyword:
-   > | # | Action | What happens |
-   > |---|--------|--------------|
-   > | **1** | `implement next` | Exit evolve loop → `/implement next` |
-   > | **2** | `spec <title>` | Exit evolve loop → create spec from approved proposal |
-   > | **3** | `spec all` | Exit evolve loop → create all approved proposals as specs |
-   > | **4** | `stop` | Exit evolve loop → end session |
+   > | # | Rank | Action | Rationale | What happens |
+   > |---|------|--------|-----------|--------------|
+   > | **1** | 1 | `implement next` | Resume solve loop with top-of-backlog | Exit evolve loop → `/implement next` |
+   > | **2** | 2 | `spec <title>` | Convert one approved proposal now | Exit evolve loop → create spec from approved proposal |
+   > | **3** | 2 | `spec all` | Convert all approved proposals together | Exit evolve loop → create all approved proposals as specs |
+   > | **4** | — | `stop` | Downgraded if today's session log has unsynthesized entries | Exit evolve loop → end session |
    >
    > _(No solve-loop commands execute until you choose.)_
+
+   **Session-data safety rule (Spec 320 Req 4)**: Before emitting the choice block, evaluate today's session log per the positive "populated Summary" definition (heading present + ≥1 non-placeholder body line). If the rule fires (unsynthesized spec activity AND Summary unpopulated): **insert `/session` at rank 1**, downgrade `stop` to `—`, renumber rows.
 
 5. **Clear state marker**: After the operator chooses, remove the `## Active evolve loop` section from `docs/sessions/context-snapshot.md`. Report: "Evolve loop closed. Solve-loop commands re-enabled."
 
@@ -286,3 +355,17 @@ d. Update `docs/sessions/evolve-state.md`: set `last_evolve_loop_run: YYYY-MM-DD
 - If `notify_via=log-only`: append results to today's session log under `## Evolve Loop Run`. No NanoClaw message. Record `last_evolve_loop_run` in `docs/sessions/evolve-state.md`.
 - If `docs/sessions/evolve-config.yaml` is absent: treat as `notify_via=log-only`.
 <!-- /module:nanoclaw -->
+
+
+## [mechanical] Tab-lane awareness directive (Spec 351)
+
+Before emitting any next-action choice block in this command, consult the active-tab marker (Spec 353 primitive):
+
+1. Read `.forge/state/active-tab-*.json` (primary). If present, extract `lane`. If `last_command_at` > 30 minutes ago, treat marker as **stale**.
+2. If no marker, fall back to `docs/sessions/registry.md` rows with `Status = active` for the current session. Use the row's `Lane` column.
+3. If neither yields an active lane: emit the choice block as today. No preamble, no filtering, no annotation. **Skip the rest of this directive.**
+4. If an active lane is detected: emit the one-line preamble (`Tab lane: <lane>. Options below filtered to lane scope.` / `... Cross-lane options annotated.` / `... (stale ~Nm)...`) and apply the filter/annotate decision rules from `docs/process-kit/tab-lane-awareness-guide.md` § Per-lane decision rules.
+5. Filtered rows are struck through with rank `—` (not silently dropped) so the operator can override by typing the keyword directly.
+
+The guide is the single source of truth for which rows filter vs annotate per lane. This directive is intentionally short — the central guide encodes the rules so every emitter stays consistent.
+

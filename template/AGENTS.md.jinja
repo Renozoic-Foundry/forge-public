@@ -15,18 +15,24 @@
 {{ project_description }}
 
 ```yaml
-# Strategic scope — used by /matrix to evaluate spec fit (Spec 110)
+# Strategic scope — used by /matrix Step 8 to evaluate spec fit (Spec 110)
 # Defines what this project IS and IS NOT. /matrix classifies draft specs
 # as on-mission, borderline, or scope-creep based on this definition.
-# If absent, /matrix infers scope from CLAUDE.md project description.
-forge.strategic_scope: |
-  This project is a spec-driven development workflow template.
-  Core loop: spec → implement → close → learn (with evidence gates).
-  In scope: spec lifecycle, gates, evidence capture, process enforcement,
-  signal-driven improvement, template bootstrapping via Copier.
-  Out of scope: runtime infrastructure (scheduling, dispatch — that's NanoClaw),
-  code analysis engines (that's MCP servers), IDE extensions or web apps
-  (those are separate products), AI model features (those are upstream).
+#
+# Customization (Spec 382): /onboarding prompts for this value at first run.
+# Type SKIP-FOR-NOW to acknowledge deferred customization — /matrix Step 8
+# will skip scope-fit eval (with a one-line warning) until you fill it in.
+# To change later: edit the value below directly, or re-run /onboarding to
+# refresh the prompt. Use the yaml-aware helper at .forge/lib/strategic-scope.py
+# for programmatic updates.
+#
+# Example (illustrative — REPLACE the value below with your project's actual
+# scope, or set to SKIP-FOR-NOW to defer):
+#   forge.strategic_scope: |
+#     <Project name> — <one-sentence description>.
+#     In scope: <comma-separated list of in-scope work>.
+#     Out of scope: <comma-separated list of out-of-scope work>.
+forge.strategic_scope: SKIP-FOR-NOW
 ```
 
 ```yaml

@@ -66,9 +66,18 @@ If $ARGUMENTS is `?` or `help`:
    ```
    If no specs have dependencies defined, skip this section silently.
 
-8. **Strategic fit evaluation** (Spec 110, extended by Spec 363):
+8. **Strategic fit evaluation** (Spec 110, extended by Spec 363, sentinel-aware via Spec 382):
    a. Read the project's CLAUDE.md — extract the project description and mission statement (the first paragraph or "## What this project is" section).
-   b. Read AGENTS.md — check for `forge.strategic_scope` config under `## Project Context`. If present, use it as the strategic scope definition. If absent, infer scope from CLAUDE.md's project description.
+   b. Read AGENTS.md — check for `forge.strategic_scope` config under `## Project Context`. **Use the yaml-aware helper at `.forge/lib/strategic-scope.py`** to read the value (NOT regex on raw text — fragile against block-scalar variants per Spec 382 AC6):
+      ```bash
+      strategic_scope_value=$(python3 .forge/lib/strategic-scope.py read AGENTS.md 2>/dev/null || echo "")
+      ```
+   b1. **SKIP-FOR-NOW sentinel check (Spec 382)**: if the value equals literal `SKIP-FOR-NOW` (verifiable via `python3 .forge/lib/strategic-scope.py is-sentinel AGENTS.md`), emit the one-line warning and skip the strategic-fit eval entirely:
+      ```
+      ⚠ Step 8 — Strategic scope not yet customized (SKIP-FOR-NOW). Fill forge.strategic_scope in AGENTS.md to enable scope-fit evaluation. Skipping Step 8.
+      ```
+      Do NOT classify any spec as scope-creep against the sentinel. Proceed to step 9.
+   b2. If present (and not the sentinel), use the value as the strategic scope definition. If absent, infer scope from CLAUDE.md's project description.
    b2. **Aging-draft pre-pass (Spec 363)**: Before classifying, scan every `Status: draft` spec for `valid-until: YYYY-MM-DD` in frontmatter. Specs whose `valid-until:` is **populated AND past today** are pre-flagged as expired and added to the strategic-fit table (step e) regardless of their on-mission classification — explicit operator engagement (renewal via /revise or direct edit, OR deprecation via this flow) is the renewal mechanism. Drafts lacking `valid-until:` (pre-backfill state) are NOT pre-flagged — they pass through normal on-mission classification only. Mixed states are handled per-spec.
    c. **The strategic fit test**: For each draft spec, ask: "Does this spec's objective directly improve the project's core workflow loop as described in CLAUDE.md / `forge.strategic_scope`?" If the spec builds runtime infrastructure, a separate product, or features that belong in another tool <!-- module:nanoclaw -->(e.g., NanoClaw, an MCP server, an IDE extension)<!-- /module:nanoclaw -->, it fails the test.
    d. Classify each draft spec:

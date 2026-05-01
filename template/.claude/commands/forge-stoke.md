@@ -46,6 +46,31 @@ Before any update operations, check for uncommitted changes:
    - If the user selects **abort**, stop. Otherwise, proceed to Step 0b.
 3. If working tree is clean: proceed silently to Step 0a+.
 
+### [mechanical] Step 0a.5 — Shadow-tree creation (Spec 381)
+
+Before any mutation steps run (Step 0b restoration, Step 3 copier update, Step 3b conflict resolution, Step 3c deprecated cleanup), create a transient shadow tree under `$TMPDIR`. Steps 0b–3c then operate on the shadow, NOT on the live working tree. Live tree is read-only until Step 3c.6 apply step (after operator confirms the audit at Step 3c.5).
+
+This makes stoke transactional: the audit runs upstream of any live-tree mutation, so abort is "discard shadow, exit" with no recovery needed. Eliminates the silent-content-loss class documented in the 2026-05-01 SmileyOne bug report (~700 lines lost across one stoke run, undetected for ~30 days).
+
+Procedure:
+
+1. Orphan-cleanup of stale shadows from prior runs (Spec 381 R9):
+   ```bash
+   python3 .forge/lib/stoke.py orphan-gc --max-age-hours 24
+   ```
+   Removes any `$TMPDIR/forge-stoke-shadow-*` directory older than 24h.
+
+2. Create shadow:
+   ```bash
+   SHADOW=$(python3 .forge/lib/stoke.py shadow-create)
+   echo "Shadow tree: $SHADOW"
+   ```
+   The helper copies all tracked files (`git ls-files`) into `$SHADOW` and captures an mtime baseline at `$SHADOW/.mtime-baseline.tsv`. Untracked files in the live tree NEVER enter the shadow — Step 0b restoration in shadow cannot collide with operator's untracked working-tree content (eliminates the Spec 379 "already exists" stash-pop bug as a side-effect).
+
+3. Capture `SHADOW` for use in subsequent steps. All file operations from Step 0b through Step 3c that mutate tracked content MUST target paths under `$SHADOW`, not the live working tree.
+
+**Constraint**: live tree is physically untouched between Step 0a.5 and Step 3c.6 apply step. Any Steps 0b–3c that say "write to <path>" mean "write to `$SHADOW/<path>`". Conflict resolution prompts at Step 3b operate on shadow paths but the operator-facing UX (showing local vs upstream content) is unchanged from today.
+
 ### [decision] Step 0a+ — Template version drift and yank check (Spec 291)
 
 After the dirty-tree check and before the expensive template render in Step 0b, detect whether this project is behind the latest `forge-public` tag. A MAJOR-drift block aborts here so we never do render work that will be thrown away.
@@ -488,6 +513,79 @@ After copier update and conflict resolution, remove files that have been deleted
    - If the file does not exist: skip silently
 3. If no `removed` section or no files to remove: skip silently.
 
+### [mechanical] Step 3c.5 — Pre-commit audit (Spec 381)
+
+Before applying shadow → live (Step 3c.6) and committing (Step 3d), audit the shadow tree against the live tree for governance-content loss in Tier 3 config files (`AGENTS.md`, `CLAUDE.md`, `.mcp.json`).
+
+1. Run mtime drift check (Spec 381 R8/AC9):
+   ```bash
+   python3 .forge/lib/stoke.py mtime-check "$SHADOW" 2>/tmp/stoke-drift.txt
+   if [ $? -ne 0 ]; then
+       echo "⚠ The following live-tree files were modified during stoke:"
+       cat /tmp/stoke-drift.txt
+       echo "Proceed anyway (operator's edits will be overwritten unless excluded)? [y/abort]"
+       # Wait for response. On abort: rm -rf "$SHADOW", exit. On y: continue.
+   fi
+   ```
+
+2. Run audit:
+   ```bash
+   python3 .forge/lib/stoke.py audit "$SHADOW" > /tmp/stoke-audit.json
+   fired=$(python3 -c "import json; print(json.load(open('/tmp/stoke-audit.json'))['fired'])")
+   ```
+
+3. **Audit silent on clean stokes** (Spec 381 R4): if `fired=False`, emit no output and proceed directly to Step 3c.6 with no exclusions.
+
+4. **Decision gate** (only fires when `fired=True`):
+
+   Read the flagged files from `/tmp/stoke-audit.json` and present, sorted by severity (sections-lost first, then delta_pct desc per Spec 381 R5):
+
+   ```
+   ⚠ Audit detected potential loss in <N> Tier 3 file(s):
+   ! AGENTS.md: <pre> → <post> lines (-<delta>, -<pct>%)  [SECTIONS LOST: <count>]
+       Missing: <comma-separated section names>
+   · CLAUDE.md: <pre> → <post> lines (-<delta>, -<pct>%)  [SECTIONS LOST: 0]
+
+   Press Enter to recover-all (recommended) — apply stoke updates EXCEPT to flagged files.
+   Choose:
+     1   continue            — apply all stoke updates (including loss)
+     2   recover-selective   — per-file decision
+     3   abort               — discard ALL stoke work, live tree unchanged
+                                (NB: this discards any conflict resolutions you made during stoke)
+   ```
+
+   Severity prefix: `!` for files with `sections_lost > 0` OR `delta_pct > 30`; `·` for benign deltas.
+
+   Wait for operator response.
+
+5. **Apply decision** (sets exclusions for Step 3c.6):
+   - **Enter / recover-all** (default): EXCLUDES = list of flagged file paths.
+   - **continue** (option 1): EXCLUDES = empty list.
+   - **recover-selective** (option 2): for each flagged file, prompt:
+     ```
+     Apply <file> from shadow (lose customization) or keep live (preserve customization)? [keep/apply]
+     ```
+     Default is `keep`. Build EXCLUDES from files where operator kept live.
+   - **abort** (option 3): `python3 .forge/lib/stoke.py cleanup "$SHADOW"`, exit early. Skip Step 3c.6 and 3d. Print: `Aborted. Live tree unchanged. No commit made.`
+
+### [mechanical] Step 3c.6 — Apply shadow → live (Spec 381)
+
+If Step 3c.5 did not abort, apply the shadow tree to live with operator-determined exclusions:
+
+```bash
+EXCLUDE_ARGS=""
+for f in "${EXCLUDES[@]}"; do
+    EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude $f"
+done
+python3 .forge/lib/stoke.py apply "$SHADOW" $EXCLUDE_ARGS
+```
+
+The helper uses two-phase atomic apply per Spec 381 R7: writes to `<path>.new`, fsyncs, then `os.replace` (atomic on POSIX, MoveFileEx with REPLACE on Windows via Python's `os.replace`). No rsync dependency — pure Python `shutil.copy2` + `os.replace`.
+
+Untracked files in live are NEVER touched (they never entered shadow per R1). Tracked files listed in EXCLUDES are skipped (live versions preserved).
+
+After apply: proceed to Step 3d (auto-commit) which now runs against the updated live tree.
+
 ### [mechanical] Step 3d — Auto-commit (Spec 069)
 
 After file restoration (Step 0b), copier update (Step 3), conflict resolution (Step 3b), and deprecated file cleanup (Step 3c), commit all changes so the project is in a clean state.
@@ -561,23 +659,40 @@ latest FORGE commands.
 
 7. **Session auto-capture** (Spec 164): Before printing the reload checklist, run `/session` inline to capture any accumulated session context (decisions, insights, errors) from this conversation. This is best-effort — if `/session` fails or there is no meaningful content, continue without blocking. Add a note to the session log: "Session auto-captured before /forge stoke reload."
 
-8. Print post-upgrade checklist:
+8. **Shadow tree cleanup (Spec 381 R9)**: regardless of outcome (success, abort, error), remove the shadow directory:
+   ```bash
+   if [ -n "${SHADOW:-}" ]; then
+       python3 .forge/lib/stoke.py cleanup "$SHADOW"
+   fi
    ```
-   ## /forge stoke — Complete
-   Upstream update applied: YYYY-MM-DD
-   Sync mechanism: Copier
-   Files changed: <count>
-   Conflicts resolved: <count>
-   Signal logged: SIG-NNN
-   Session captured: yes (auto-captured before reload)
+   No retention. The next stoke creates a fresh shadow at Step 0a.5.
 
-   ## Post-upgrade steps (human action required)
-   1. Reload your VS Code window (Ctrl+Shift+P → "Developer: Reload Window")
-      — picks up new/changed .claude/commands/ and .mcp.json
-   2. Start a new chat session (updated CLAUDE.md and commands need fresh context)
-   3. Run /now to orient and check project state
+9. **Post-stoke note (Spec 381 R10)**: emit:
+   ```
+   No stash was created — uncommitted work was preserved in your working tree throughout.
+   Recovery if needed: git diff / git log -p / git reflog.
+   ```
+   This documents the operator-habit change from prior stoke (which used git-stash for dirty-tree handling). Spec 381's shadow-tree approach mirrors only TRACKED files into shadow; untracked files stay in live and are never touched, so no stash is needed.
 
-   If new FORGE commands were added, review them in .claude/commands/
+10. Print post-upgrade checklist:
+    ```
+    ## /forge stoke — Complete
+    Upstream update applied: YYYY-MM-DD
+    Sync mechanism: Copier (transactional via shadow-tree per Spec 381)
+    Files changed: <count>
+    Conflicts resolved: <count>
+    Audit fired: <yes/no>
+    Decision: <continue/recover-all/recover-selective/abort/(none — clean)>
+    Signal logged: SIG-NNN
+    Session captured: yes (auto-captured before reload)
+
+    ## Post-upgrade steps (human action required)
+    1. Reload your VS Code window (Ctrl+Shift+P → "Developer: Reload Window")
+       — picks up new/changed .claude/commands/ and .mcp.json
+    2. Start a new chat session (updated CLAUDE.md and commands need fresh context)
+    3. Run /now to orient and check project state
+
+    If new FORGE commands were added, review them in .claude/commands/
    ```
 
 ---

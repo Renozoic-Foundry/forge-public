@@ -298,7 +298,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 376 specs across 95 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 382 specs across 96 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

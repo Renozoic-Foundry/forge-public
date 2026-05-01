@@ -273,6 +273,60 @@ Set `features`:
 
 `.forge/onboarding.yaml` is the only file modified before the commit prompt — it is the persistence record of the onboarding session itself, not a "real" working-tree write. All other writes are staged.
 
+## [decision] Interaction 1b — Strategic scope (Spec 382)
+
+**Skip condition**: If `project.strategic_scope` is already populated in `.forge/onboarding.yaml` with any non-empty value (including the literal `SKIP-FOR-NOW`), skip to Step B silently. Re-running /onboarding does NOT re-prompt for an already-set scope — operators wanting to update it run `/configure` or edit AGENTS.md directly.
+
+The `forge.strategic_scope:` field in AGENTS.md is read by `/matrix` Step 8 to classify draft specs as on-mission / borderline / scope-creep. If this value is left as a template default, /matrix Step 8 silently misclassifies project work — the bug captured in Spec 382 (SmileyOne 2026-05-01 bug report). This prompt forces an explicit answer at onboarding time.
+
+Present:
+```
+## Strategic scope — what is this project FOR?
+
+This will be used by /matrix Step 8 to evaluate whether each draft spec is
+on-mission for your project. A short paragraph (3–6 lines) is the right length:
+project name + one-sentence description, then "In scope:" + "Out of scope:" lines.
+
+Enter your strategic scope below (multiline). Terminate entry with a blank
+line OR a line containing only `END`. To defer customization, type the literal
+`SKIP-FOR-NOW` on its own line — /matrix Step 8 will warn and skip scope-fit
+eval until you fill it in.
+
+> _
+```
+
+**STOP — wait for the user's response.**
+
+After capturing input:
+- If the input was the single literal `SKIP-FOR-NOW`: scope value is `SKIP-FOR-NOW`. Skip the echo-back step (the literal is short enough that confirmation is unnecessary). Append a scratchpad entry: `[onboarding] Strategic scope deferred (SKIP-FOR-NOW) — fill in AGENTS.md when project is better understood.`
+- Otherwise: echo the captured paragraph back with the confirmation prompt:
+   ```
+   You entered:
+   ---
+   <captured text>
+   ---
+   Is this correct? (y / n / edit)
+   ```
+  - **y**: accept and proceed to Step A persistence below.
+  - **n**: discard and re-prompt from the top of Interaction 1b.
+  - **edit**: re-open the multiline entry pre-populated with the captured text — operator can adjust and re-submit (terminates same way).
+- If the input was empty (operator pressed Enter on a blank line without entering content or `SKIP-FOR-NOW`): re-prompt. The flow does NOT advance on empty input.
+
+### [mechanical] Step A1b — Persist strategic scope
+
+After confirmation, write to `.forge/onboarding.yaml` under the existing `project:` block:
+```yaml
+project:
+  name: <existing>
+  description: <existing>
+  strategic_scope: |
+    <captured text>           # OR a single line: strategic_scope: SKIP-FOR-NOW
+```
+
+For SKIP-FOR-NOW: write as `strategic_scope: SKIP-FOR-NOW` (plain scalar, not block-scalar). For multiline content: write as block-scalar `strategic_scope: |` with two-space indent.
+
+If the operator chose SKIP-FOR-NOW, also append the scratchpad note (see above).
+
 ### [mechanical] Step B — Compute staged writes (Spec 315)
 
 **This step computes intended file changes into a staging directory. NO file outside `.forge/onboarding.yaml` is written to its live location until the operator confirms at Interaction 2.**
@@ -284,7 +338,13 @@ Set `features`:
    **Targets**:
    - `CLAUDE.md` — find the first `# ` heading. If it matches a placeholder (`{{ project_name }}`, `My Project`, `PROJECT_NAME`, or a Copier default), replace with `project.name`. Same for the first paragraph after the H1 vs. `project.description`. Do not overwrite customized content.
    - `.claude/settings.json` — start from `{}` if absent, otherwise the existing content. Set `"defaultMode": "default"` (L1 autonomy default).
-   - `AGENTS.md` — find the `forge:` config block. Set `forge.methodology: none` (preserve other fields).
+   - `AGENTS.md` — find the `forge:` config block. Set `forge.methodology: none` (preserve other fields). **Strategic scope (Spec 382)**: if `project.strategic_scope` is populated in `.forge/onboarding.yaml`, write it to AGENTS.md's `forge.strategic_scope:` block via the yaml-aware helper:
+      ```bash
+      python3 .forge/lib/strategic-scope.py write \
+        .forge/state/onboarding-staging/AGENTS.md \
+        "$(yq '.project.strategic_scope' .forge/onboarding.yaml)"
+      ```
+      (Or pipe via stdin: `echo "$value" | python3 .forge/lib/strategic-scope.py write <path> -`. Regex-replace on raw markdown is NOT acceptable per Spec 382 AC9 — fragile against block-scalar variants.)
    - `.copier-answers.yml` — if present, set `project_name`, `project_slug` (lowercase+hyphen), `project_description`, `test_command`, `lint_command`. Preserve `_commit` and `_src_path`. (Note: `_src_path` determines where `/forge stoke` pulls updates from — `gh:Renozoic-Foundry/forge-public` works from any machine; a local path only works on that machine.)
    - **Agent wrappers** (output of `.forge/bin/forge-sync-commands.sh`) — generate the wrappers into the staging directory's `.claude/commands/` and similar subdirs, NOT into the live tree. Reproducing the script's output deterministically into staging keeps Step B's contract: nothing goes live until "yes".
 

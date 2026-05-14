@@ -35,11 +35,12 @@ If $ARGUMENTS starts with `close`:
 1. Read `docs/sessions/registry.md`.
 2. Find the row for the current session (match by today's date and context — ask if ambiguous; if `.forge/state/active-tab-*.json` marker exists, use the `registry_row_pointer` from the most recent marker for an exact match).
 3. Update that row's Status to `closed` and add a `Closed` timestamp.
-3b. **Delete the active-tab marker (Spec 353)**: remove any `.forge/state/active-tab-*.json` files matching this session. Use:
+3b. **Delete the active-tab marker (Spec 353) and EA/CI scan-timestamp files (Spec 371)**: remove session-local ephemeral state files matching this session. Use:
    ```bash
    rm -f .forge/state/active-tab-*.json
+   rm -f .forge/state/last-eaci-scan-*.json
    ```
-   Skip silently if no marker exists (fallback path: operator opened a tab without /tab register, or marker was manually cleaned up).
+   Skip silently if no markers exist (fallback path: operator opened a tab without /tab register, or markers were manually cleaned up). Both removals are local-only; the registry row in `docs/sessions/registry.md` remains the persisted truth for claim history.
 4. List all files modified during this session (from git status or session context).
 5. Report: "Tab '<label>' closed. Claims released. Marker deleted. Modified files: <list>."
 6. Stop.

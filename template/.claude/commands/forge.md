@@ -16,6 +16,7 @@ If $ARGUMENTS is empty, `?`, or `help`:
     init [path]   Bootstrap FORGE into a new or existing project
     stoke         Pull upstream FORGE updates and integrate safely
     status        Show FORGE project status overview (validation queue, backlog summary, active work)
+    baselines     List available Copier baselines from ~/.forge/baselines/ (Spec 090)
     help          List all available FORGE commands grouped by workflow stage
 
   Examples:
@@ -23,6 +24,7 @@ If $ARGUMENTS is empty, `?`, or `help`:
     /forge init d:\new-proj   — Create new project with full FORGE scaffold
     /forge stoke              — Check for and apply upstream FORGE updates
     /forge status             — Show current project status
+    /forge baselines          — List baseline YAMLs in ~/.forge/baselines/ (or %USERPROFILE%\.forge\baselines\ on Windows)
     /forge help               — List all commands
 
   To contribute improvements: open a GitHub issue or PR at the FORGE repo.
@@ -39,6 +41,16 @@ Dispatch on the first word of $ARGUMENTS:
 - `init`       → Read `.forge/commands/forge-init.md` and execute it. Pass remaining arguments. This is the merged entry point for onboarding + bootstrap — it detects greenfield vs brownfield and runs the appropriate flow including first-session configuration.
 - `stoke`      → Read `.forge/commands/forge-stoke.md` and execute it. Pass remaining arguments.
 - `status`     → Run a condensed version of `/now`: read docs/specs/README.md for validation queue, docs/backlog.md for top-3 ranked specs, and the latest session log for active work summary. Present in a compact format without the full session brief or choice block. This is the "current forge overview" for quick status checks.
+- `baselines`  → List Copier baselines available for `--data-file` use. Spec 090 baselines convention. Implementation:
+   1. Resolve baselines directory: `$HOME/.forge/baselines/` on POSIX; `$env:USERPROFILE\.forge\baselines\` on Windows. Use platform-appropriate variable.
+   2. If the directory does not exist: print `No baselines installed. See docs/process-kit/baseline-format.md for the format and docs/process-kit/baselines/python-fastapi.yaml for an example.` and exit 0 (graceful empty-state, AC 5).
+   3. For each `*.yaml` file in the directory:
+      a. Parse the YAML.
+      b. Read `forge_baseline_name`, `forge_baseline_description`, `forge_baseline_version` (Spec 090 Req 3).
+      c. If any required key is missing: print `<filename> — MALFORMED: missing <key>` (AC 6).
+      d. Otherwise: print `<forge_baseline_name> (v<forge_baseline_version>) — <forge_baseline_description>`.
+   4. After listing, print the invocation pattern reminder: `Apply with: copier copy <forge-template> <target> --data-file ~/.forge/baselines/<name>.yaml`
+   5. Implementation MUST work in both bash (`$HOME`) and PowerShell (`$env:USERPROFILE`) — when running this subcommand, detect platform via `$IsWindows` (PowerShell) or `[ "$OSTYPE" =~ msys|cygwin ]` (bash), and use the platform-appropriate path. See `docs/process-kit/baseline-format.md` for full format + invocation + security model.
 - `help`       → Print the full command listing from `docs/QUICK-REFERENCE.md` (Command Reference section): all FORGE commands grouped by workflow stage with descriptions. Include the typical workflow paths and quick start guidance.
 - anything else → print the help block above and stop
 

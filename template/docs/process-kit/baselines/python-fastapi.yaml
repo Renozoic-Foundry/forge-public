@@ -1,0 +1,27 @@
+# Spec 090 example baseline — Python FastAPI starter.
+#
+# To use: copy this file to ~/.forge/baselines/ (POSIX) or
+# %USERPROFILE%\.forge\baselines\ (Windows), then apply with:
+#
+#   copier copy <forge-template> <target> --data-file ~/.forge/baselines/python-fastapi.yaml --defaults
+#
+# This baseline does NOT override any security-relevant Copier answers, so
+# accept_security_overrides is not required. If you customize this baseline
+# to set test_command, lint_command, harness_command, or any include_* flag,
+# you MUST also set `accept_security_overrides: true` (the validators in
+# copier.yml will reject the render otherwise — that is the point).
+#
+# See: docs/process-kit/baseline-format.md for the full format spec and
+#      security model.
+
+# --- Provenance keys (Spec 090 Req 3) — read by /forge baselines for discovery ---
+forge_baseline_name: python-fastapi
+forge_baseline_description: Python FastAPI + PostgreSQL starter (no security overrides)
+forge_baseline_version: "1.0.0"
+
+# --- Pre-filled Copier answers ---
+project_description: A FastAPI service backed by PostgreSQL.
+default_owner: backend-team
+# test_command, lint_command, harness_command left at defaults (no security override).
+# Set use_wsl2: false explicitly even though that is the default — documents intent.
+use_wsl2: false

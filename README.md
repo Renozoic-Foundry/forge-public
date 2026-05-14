@@ -43,6 +43,7 @@ Recent changes since the last published refresh — split by audience. Each item
 - **Score-prediction audit loop** — every `/matrix` run logs predicted-vs-recomputed deltas to `.forge/state/score-audit.jsonl` for cross-session calibration (Spec 368).
 - **CI parity gate for spec-integrity sentinels** — the `lane-gate` block in `/implement` and `/close` is now hash-checked at PR time so silent drift between mirrors becomes impossible (Spec 367).
 - **Approved-SHA recompute step** — `/implement` Step 6c rewrites the spec-integrity hash after DA dispositions edit protected sections, closing the recurring SHA-pingpong defect class (Spec 365).
+- **DA-Encoded-Via convention** — when a spec converges through `/consensus` rounds 1+2 with aligned-approve, `/implement` Step 2b can verify the encoded path (round value + SHA reachability + drift check) and skip a fresh DA subagent spawn, saving one role invocation per qualifying spec (Spec 389).
 - **AGENTS.md prose↔YAML drift detector** — sibling check to the auth-rule lint gate that catches prose bullets not yet reflected in the structured authorization block (Spec 330).
 - **Authorization-rule lint gate** — `/implement` Step 7c scans command bodies for sensitive actions (`git push`, `gh pr create`, `rm -rf`) that lack a confirmation token within proximity (Spec 327).
 - **Two-pass adversarial DA review** — when the first DA pass finds zero issues, a deeper second pass confirms or surfaces hidden risk (Spec 181).
@@ -298,7 +299,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 382 specs across 96 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 414 specs across 108 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

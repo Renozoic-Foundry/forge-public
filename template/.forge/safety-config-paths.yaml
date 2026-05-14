@@ -1,0 +1,17 @@
+# FORGE safety-config registry — Spec 387
+#
+# Paths whose new entries trigger the /close safety-property prompt.
+# Adding/removing entries: this file is self-included (see entry below);
+# modifications to this file trigger the same prompt path.
+#
+# Pattern syntax: shell-glob (matched against `git diff --name-only` output).
+# Self-reference is intentional — see Spec 387 R1b.
+patterns:
+  - AGENTS.md
+  - CLAUDE.md
+  - .forge/onboarding.yaml
+  - .mcp.json
+  - .forge/safety-config-paths.yaml
+  - template/AGENTS.md.jinja
+  - template/CLAUDE.md.jinja
+  - "template/**/*.yaml"

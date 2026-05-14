@@ -1,0 +1,85 @@
+# FORGE adjacency-scan stopwords (Spec 388)
+# One token per line, lowercase. Lines starting with # are comments and ignored.
+# Format consumed by docs/process-kit/stopwords.txt readers (split on whitespace, trim, lowercase).
+#
+# Curation: common English stopwords + FORGE-vocabulary terms that appear in nearly
+# every spec title/objective and would otherwise dominate keyword overlap (false positives).
+
+# --- Common English stopwords ---
+a
+an
+and
+are
+as
+at
+be
+been
+but
+by
+do
+does
+for
+from
+has
+have
+i
+if
+in
+into
+is
+it
+its
+not
+of
+on
+or
+that
+the
+their
+then
+there
+this
+to
+was
+were
+which
+will
+with
+without
+
+# --- FORGE-vocabulary stopwords (per Spec 388 Requirement #6) ---
+spec
+specs
+command
+commands
+matrix
+implement
+close
+evolve
+forge
+backlog
+step
+steps
+via
+new
+add
+adds
+addition
+update
+updates
+change
+changes
+fix
+fixes
+gate
+gates
+script
+scripts
+file
+files
+path
+paths
+test
+tests
+support
+supports

@@ -6,32 +6,38 @@
 framework:
   description: "FORGE-owned files — always overwrite during upgrade"
   # Note: .claude/commands/ files require conflict detection before overwriting.
-  # If an existing file does NOT contain "# Framework: FORGE" in its first 5 lines,
-  # it is a project-specific command and must go through conflict resolution (Step L2b)
-  # rather than being silently overwritten.
+  # If an existing file does NOT carry the "# Framework: FORGE" or "## Subcommand:"
+  # marker within the first 10 lines after its YAML frontmatter (Spec 385 — structural
+  # skip-past-`---` detection), it is a project-specific command and must go through
+  # conflict resolution (Step L2b) rather than being silently overwritten.
   paths:
     - ".forge/"
+    - ".claude/commands/approve.md"
+    - ".claude/commands/bootstrap.md"
     - ".claude/commands/brainstorm.md"
     - ".claude/commands/bug.md"
     - ".claude/commands/close.md"
     - ".claude/commands/config-change.md"
-    - ".claude/commands/dependency-audit.md"
+    - ".claude/commands/configure-nanoclaw.md"
+    - ".claude/commands/configure.md"  # Spec 266 — new: post-onboarding advanced settings menu
+    - ".claude/commands/consensus.md"  # Spec 395 — classification added during final-draft consensus convention work (gap closure)
     - ".claude/commands/forge.md"
-    - ".claude/commands/forge-stoke.md"
     - ".claude/commands/handoff.md"
     - ".claude/commands/harvest.md"
     - ".claude/commands/implement.md"
     - ".claude/commands/insights.md"
     - ".claude/commands/matrix.md"
+    - ".claude/commands/nanoclaw.md"
     - ".claude/commands/note.md"
     - ".claude/commands/now.md"
     - ".claude/commands/onboarding.md"  # Spec 266 — classification added during onboarding simplification
-    - ".claude/commands/configure.md"  # Spec 266 — new: post-onboarding advanced settings menu
     - ".claude/commands/evolve.md"
+    - ".claude/commands/explore.md"  # Spec 392 — classification added during topic-overlap pre-check work
     - ".claude/commands/parallel.md"
     - ".claude/commands/retro.md"
     - ".claude/commands/revise.md"
     - ".claude/commands/scheduler.md"
+    - ".claude/commands/score.md"
     - ".claude/commands/session.md"
     - ".claude/commands/skills.md"
     - ".claude/commands/spec-gate.md"
@@ -40,24 +46,38 @@ framework:
     - ".claude/commands/tab.md"
     - ".claude/commands/test.md"
     - ".claude/commands/trace.md"
+    - ".claude/commands/validate.md"
     - ".claude/commands/configure-nanoclaw.md"
     - ".claude/commands/nanoclaw.md"
     - ".claude/commands/forge-init.md"
     - "docs/process-kit/"
+    - "docs/process-kit/prompt-caching-consumer-guide.md"  # Spec 271 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/command-authoring-guide.md"  # Spec 265 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/permissions-team-policy.md"  # Spec 275 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/signal-quality-guide.md"  # Spec 267 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/onboarding-recovery.md"  # Spec 315 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/advisory-to-strict-flip-plan.md"  # Spec 332 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/consensus-protocol.md"  # Spec 395 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/final-draft-consensus-guide.md"  # Spec 395 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/lane-b-audit-conventions.md"  # Spec 395 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "docs/publications/"
     - "docs/compliance/"
     - ".devcontainer/"
     - ".claude/settings.json.template"
     - "docker-compose.nanoclaw.yml"
+    - "docs/decisions/ADR-028-spec-status-source-of-truth.md"
     - "scripts/validate-authorization-rules.sh"  # Spec 327 — FORGE-shipped framework linter
-    - "scripts/validate-authorization-rules.ps1"  # Spec 327 — PS parity
+    - "scripts/validate-authorization-rules.ps1"  # Spec 327 — PS parity (overrides *.ps1 project-default below)
     - "scripts/auth-rules-whitelist.yaml"  # Spec 327 — operator-curated; framework-shipped stub
     - "scripts/validate-agents-md-drift.sh"  # Spec 330 — FORGE-shipped prose↔YAML drift detector
-    - "scripts/validate-agents-md-drift.ps1"  # Spec 330 — PS parity
+    - "scripts/validate-agents-md-drift.ps1"  # Spec 330 — PS parity (overrides *.ps1 project-default below)
     - "scripts/agents-md-action-aliases.yaml"  # Spec 330 — operator-curated alias map; framework-shipped stub
     - "scripts/tests/test-close-commit-ordering.sh"  # Spec 348 — FORGE-shipped /close commit-ordering regression test
-    - "scripts/tests/test-close-commit-ordering.ps1"  # Spec 348 — PS parity
+    - "scripts/tests/test-close-commit-ordering.ps1"  # Spec 348 — PS parity (overrides *.ps1 project-default below)
     - "scripts/tests/test-bodies-equal-crlf.sh"  # Spec 350 — bodies_equal CRLF normalization regression test
+    - "scripts/safety-backfill-audit.sh"  # Spec 387 — Component C one-time audit (FORGE-shipped)
+    - "scripts/safety-backfill-audit.ps1"  # Spec 387 — PS parity (overrides *.ps1 project-default below)
+    - "scripts/migrate-to-derived-view.py"  # Spec 254 — Approach D one-shot migration; FORGE-shipped
 
 project:
   description: "Project-owned files — never touch during upgrade"
@@ -67,11 +87,12 @@ project:
     - "docs/specs/CHANGELOG.md"
     - "docs/sessions/"
     - "docs/backlog.md"
-    - "docs/decisions/*.md"
+    - "docs/decisions/*.md"       # except ADRs shipped with FORGE
     - "MEMORY.md"
     - ".claude/session-state.json"
     - ".claude/checkpoints/"
     - ".claude/session-inputs/"
+    - ".forge/state/events/"           # Spec 254 — Approach D per-spec event streams (project-scoped state, never overwritten on upgrade)
     - ".env"
     - ".env.*"
     - "src/"
@@ -99,7 +120,7 @@ obsolete:
     ".claude/commands/status.md": "replaced by now.md"
     ".claude/commands/infer.md": "replaced by insights.md"
     ".claude/commands/sync.md": "replaced by /forge stoke"
-    ".claude/commands/triage.md": "replaced by bug.md"
+    ".claude/commands/triage.md": "replaced by bug.md + score.md"
     ".claude/commands/housekeeping.md": "functionality merged into /close and /session"
     ".claude/commands/audit.md": "replaced by config-change.md"
     "docs/workflow/egid-flowchart.md": "replaced by docs/process-kit/spec-driven-harness-loop.md"
@@ -110,21 +131,8 @@ obsolete:
     "docs/workflow/evaluation-validity.md": "replaced by docs/process-kit/scoring-rubric.md"
 
 removed:
-  description: "Files deleted from the FORGE template — remove from consumer projects during /forge stoke (Spec 166)"
+  description: "Files deleted from the FORGE template — remove from consumer projects during /forge stoke"
   paths:
-    - ".claude/commands/contribute.md"
-    - ".forge/commands/contribute.md"
-    - ".claude/commands/approve.md"
-    - ".forge/commands/approve.md"
-    - ".claude/commands/validate.md"
-    - ".forge/commands/validate.md"
-    - ".claude/commands/bootstrap.md"
-    - ".forge/commands/bootstrap.md"
-    - ".claude/commands/score.md"
-    - ".forge/commands/score.md"
     - ".claude/commands/forge-light.md"
     - ".forge/commands/forge-light.md"
     - "docs/workflow/spec-driven-harness-loop.md"
-    - "docs/decisions/ADR-028-spec-status-source-of-truth.md"
-    - "docs/decisions/ADR-nanoclaw-forge-extraction.md"
-    - "docs/decisions/ADR-pal-extraction.md"

@@ -12,12 +12,34 @@ _templates_suffix: ".jinja"  # only files ending in .jinja are Jinja-processed; 
 # value matches a legacy placeholder AND copier.yml's default for that field is the
 # same placeholder — i.e., the value is provably inherited from a legacy default,
 # not operator-typed. See scripts/copier-hooks/scrub_answers.py for logic.
+#
+# Spec 400 — Auto-migration on `copier update` for split-file rendering.
+# Fires when the consumer is missing `.forge/migrations/spec-398.applied`
+# (sentinel written by scripts/migrate-to-derived-view.py on successful migration).
+# Aborts loudly if the working tree is dirty. Idempotent re-runs are no-ops.
+# Sentinel-file gate replaces the original Jinja2 SHA-comparison approach
+# (DA round-1 critical: git SHAs aren't lexically ordered).
+# Cross-platform: requires POSIX `sh` on PATH — enforced upstream by Spec 401's
+# forge-init Step 0 prereq check (Git for Windows option 3 OR Git Bash terminal).
+# See: docs/process-kit/derived-view-rendering-guide.md § Auto-migration on `copier update`.
 _tasks:
   - command:
       - "{{ _copier_python }}"
       - "{{ _copier_conf.src_path }}/scripts/copier-hooks/scrub_answers.py"
       - "scrub"
       - "{{ _copier_conf.src_path }}"
+  - command:
+      - sh
+      - -c
+      - |-
+        command -v sh >/dev/null 2>&1 || { echo "ERROR: POSIX sh required on PATH. Install Git for Windows option 3 (Unix tools on PATH) OR launch from Git Bash. See docs/process-kit/cross-platform-python-guide.md § Windows prerequisite detail." >&2; exit 2; }
+        test -f .forge/migrations/spec-398.applied && exit 0
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+          echo "ERROR: working tree is dirty; stash or commit before copier update" >&2
+          git status --porcelain >&2
+          exit 2
+        fi
+        .forge/bin/forge-py scripts/migrate-to-derived-view.py --mode=split-file
 
 # Spec 294 — one-shot heal for pre-294 consumers. Copier only runs migrations
 # when crossing the pinned version upward during `copier update`. The `before`
@@ -32,6 +54,76 @@ _migrations:
       - "migrate"
       - "{{ _copier_conf.src_path }}"
     when: "{{ _stage == 'before' }}"
+
+  # Spec 090 Req 11 was REMOVED in v3.2. The original auto-`_migrations:` design
+  # for non-breaking `copier update` was empirically proven incompatible with
+  # Copier 9.14.0's phase ordering: `_migrations:` runs at `before` stage but does
+  # NOT refresh the in-memory answer state, so the script's disk-mutation
+  # (appending `accept_security_overrides: true`) is invisible to the validator
+  # phase that follows, which then aborts the entire `copier update` exit 1.
+  # Per /consensus 090 round 4 (4-of-5 Option A vote), the migration is dropped
+  # and replaced with a manual one-line fix documented in
+  # `docs/process-kit/baseline-format.md § Migration`. Existing consumers with
+  # customized command keys must add `accept_security_overrides: true` to
+  # `.copier-answers.yml` before next `copier update`.
+
+# Spec 090 Req 7 — CI-log-visible enumeration of overridden security-relevant keys.
+# Renders AFTER copy (DA round-3 disposition C2: empirical verification proved
+# _message_before_copy runs before --data-file answers are applied; _message_after_copy
+# runs after answers are fully applied and produces correct values). The validator
+# entries above already block bad renders BEFORE they happen; this message provides
+# post-render audit visibility for accepted overrides (accept_security_overrides=true).
+#
+# Redaction allowlist for free-text shell-string keys (Req 7 disposition W4):
+# [A-Za-z0-9_./= +:,@~ -] expanded to literal allowlist_chars below.
+# Values containing any out-of-allowlist character are replaced with `<redacted: N chars>`.
+# Booleans echo literally (no shell-injection surface).
+#
+# Spec 090 W4/W5 — DO NOT REFACTOR without re-reading docs/specs/090-shared-team-baselines.md
+# § Devil's Advocate Findings (W4 redaction allowlist + W5 default-pinning) AND the round-4
+# post-implementation /consensus CTO finding (release_defaults extraction). The redaction +
+# default-pinning are load-bearing audit primitives, not optional cleverness. The release_defaults
+# Jinja dict below is the single source of truth for the message's default-comparison values.
+# (v3.2 historical: was conceptually linked to RELEASE_DEFAULTS in scripts/copier-hooks/migrate-spec-090-overrides.py;
+# that script + the linked `_migrations:` entry were removed in v3.2 per validator AC 9 FAIL + design /consensus
+# round 4 — manual one-line fix in baseline-format.md § Migration replaced the auto-migration. The release_defaults
+# dict here is now the sole source of pinned defaults.)
+_message_after_copy: |-
+  {%- set allowlist_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./=+:,@~ -' -%}
+  {%- set release_defaults = {
+    'test_command': 'pytest -q',
+    'lint_command': 'ruff check .',
+    'harness_command': '',
+  } -%}
+  {%- set ns = namespace(lines=[]) -%}
+  {%- if test_command != release_defaults.test_command -%}
+  {%-   if test_command | reject('in', allowlist_chars) | list | length > 0 -%}
+  {%-     set _ = ns.lines.append('  test_command = <redacted: ' ~ test_command|length ~ ' chars>') -%}
+  {%-   else -%}
+  {%-     set _ = ns.lines.append('  test_command = ' ~ test_command) -%}
+  {%-   endif -%}
+  {%- endif -%}
+  {%- if lint_command != release_defaults.lint_command -%}
+  {%-   if lint_command | reject('in', allowlist_chars) | list | length > 0 -%}
+  {%-     set _ = ns.lines.append('  lint_command = <redacted: ' ~ lint_command|length ~ ' chars>') -%}
+  {%-   else -%}
+  {%-     set _ = ns.lines.append('  lint_command = ' ~ lint_command) -%}
+  {%-   endif -%}
+  {%- endif -%}
+  {%- if harness_command != release_defaults.harness_command -%}
+  {%-   if harness_command | reject('in', allowlist_chars) | list | length > 0 -%}
+  {%-     set _ = ns.lines.append('  harness_command = <redacted: ' ~ harness_command|length ~ ' chars>') -%}
+  {%-   else -%}
+  {%-     set _ = ns.lines.append('  harness_command = ' ~ harness_command) -%}
+  {%-   endif -%}
+  {%- endif -%}
+  {%- if include_nanoclaw -%}{%- set _ = ns.lines.append('  include_nanoclaw = true') -%}{%- endif -%}
+  {%- if include_advanced_autonomy -%}{%- set _ = ns.lines.append('  include_advanced_autonomy = true') -%}{%- endif -%}
+  {%- if include_two_stage_review -%}{%- set _ = ns.lines.append('  include_two_stage_review = true') -%}{%- endif -%}
+  {%- if ns.lines -%}
+  Spec 090 — security-relevant overrides recorded (accept_security_overrides={{ accept_security_overrides }}):
+  {{ ns.lines | join('\n') }}
+  {%- endif -%}
 
 # ---
 
@@ -64,11 +156,26 @@ test_command:
   type: str
   help: "Test command (e.g. 'pytest -q', 'npm test', 'cargo test')"
   default: "pytest -q"
+  # Spec 090 Req 5 — security-relevant: free-text shell-string accepted into rendered scripts.
+  # Override requires explicit accept_security_overrides=true (Req 6).
+  validator: >-
+    {%- if test_command != 'pytest -q' and not accept_security_overrides -%}
+    Spec 090 security gate: test_command override ('{{ test_command }}') requires
+    accept_security_overrides=true in your baseline. test_command accepts arbitrary
+    shell strings that flow into rendered scripts.
+    {%- endif -%}
 
 lint_command:
   type: str
   help: "Lint command (e.g. 'ruff check .', 'eslint src/', 'cargo clippy')"
   default: "ruff check ."
+  # Spec 090 Req 5 — security-relevant: free-text shell-string accepted into rendered scripts.
+  validator: >-
+    {%- if lint_command != 'ruff check .' and not accept_security_overrides -%}
+    Spec 090 security gate: lint_command override ('{{ lint_command }}') requires
+    accept_security_overrides=true in your baseline. lint_command accepts arbitrary
+    shell strings that flow into rendered scripts.
+    {%- endif -%}
 
 use_wsl2:
   type: bool
@@ -79,6 +186,13 @@ harness_command:
   type: str
   help: "Optional harness command (integration/end-to-end test runner; leave blank if none)"
   default: ""
+  # Spec 090 Req 5 — security-relevant: free-text shell-string accepted into rendered scripts.
+  validator: >-
+    {%- if harness_command != '' and not accept_security_overrides -%}
+    Spec 090 security gate: harness_command override ('{{ harness_command }}') requires
+    accept_security_overrides=true in your baseline. harness_command accepts arbitrary
+    shell strings that flow into rendered scripts.
+    {%- endif -%}
 
 # compliance_profile removed (Spec 205 — Lane B deferred from public release)
 # Hardcoded to "none" in all template conditionals until Lane B is ready.
@@ -87,16 +201,80 @@ include_nanoclaw:
   type: bool
   help: "Include NanoClaw messaging integration in AGENTS.md"
   default: false
+  # Spec 090 Req 5 — security-relevant: enables messaging integration (network surface).
+  validator: >-
+    {%- if include_nanoclaw and not accept_security_overrides -%}
+    Spec 090 security gate: include_nanoclaw override (true) requires
+    accept_security_overrides=true in your baseline. NanoClaw adds messaging integration
+    (network surface) to the rendered project.
+    {%- endif -%}
 
 include_advanced_autonomy:
   type: bool
   help: "Include L3/L4 autonomy examples, swarm budgets, and auto-progression config in AGENTS.md"
   default: false
+  # Spec 090 Req 5 — security-relevant: relaxes autonomy posture (operator review threshold).
+  validator: >-
+    {%- if include_advanced_autonomy and not accept_security_overrides -%}
+    Spec 090 security gate: include_advanced_autonomy override (true) requires
+    accept_security_overrides=true in your baseline. Advanced autonomy lowers the
+    operator-review threshold for agent actions.
+    {%- endif -%}
 
 include_two_stage_review:
   type: bool
   help: "Include two-stage review protocol in AGENTS.md"
   default: false
+  # Spec 090 Req 5 — security-relevant: changes review posture for implementation gating.
+  validator: >-
+    {%- if include_two_stage_review and not accept_security_overrides -%}
+    Spec 090 security gate: include_two_stage_review override (true) requires
+    accept_security_overrides=true in your baseline. Two-stage review changes the
+    implementation-gating posture from default.
+    {%- endif -%}
+
+# Spec 090 Req 6 — explicit operator consent for security-relevant overrides.
+# Default false; never prompts interactively (when: false). Set in baseline YAMLs
+# via --data-file when a baseline overrides any security-relevant question.
+accept_security_overrides:
+  type: bool
+  default: false
+  when: false
+  help: "Spec 090: explicit consent that this baseline overrides one or more security-relevant Copier answers (test_command, lint_command, harness_command, include_nanoclaw, include_advanced_autonomy, include_two_stage_review). Set true in the baseline YAML to acknowledge the override."
+
+# Spec 090 — provenance keys (set by baseline YAMLs; persisted to .copier-answers.yml).
+# These are normal Copier answers — when a baseline declares them, Copier records them
+# automatically. /forge baselines reads them from baseline files for discovery.
+#
+# v3.2 naming note: original v3 spec used `_baseline_*` underscore-prefixed names.
+# Empirical test on Copier 9.14.0 proved Copier strips all underscore-prefixed answer
+# keys from the persisted .copier-answers.yml (filter `if not k.startswith("_")`).
+# Renamed to `forge_baseline_*` so persistence works as designed.
+#
+# v3.3 self-referential `when:` (P2f pattern, empirically verified on Copier 9.14.0):
+# v3.2 used `when: false` to suppress interactive prompts — this worked for prompts but
+# Copier ALSO strips `when: false` keys from .copier-answers.yml even when --data-file
+# supplies them (DA gate FAIL on v3.2). The self-referential `when:` below evaluates
+# against the supplied value: when --data-file provides a non-empty forge_baseline_name,
+# all 3 questions activate (no prompt because value already present, persists to answers);
+# when no --data-file is supplied, name defaults to '' so when=false on all 3 (no prompt,
+# no entries in .copier-answers.yml). See docs/specs/090-shared-team-baselines.md
+# Devil's Advocate Findings table for the P2f empirical-verification provenance.
+forge_baseline_name:
+  type: str
+  default: ""
+  when: "{{ forge_baseline_name|default('') != '' }}"
+  help: "Spec 090 baseline provenance: name of the applied baseline (matches baseline YAML filename stem)"
+forge_baseline_description:
+  type: str
+  default: ""
+  when: "{{ forge_baseline_name|default('') != '' }}"
+  help: "Spec 090 baseline provenance: single-line description of the applied baseline"
+forge_baseline_version:
+  type: str
+  default: ""
+  when: "{{ forge_baseline_name|default('') != '' }}"
+  help: "Spec 090 baseline provenance: semver of the applied baseline"
 
 agent_sdk:
   type: bool

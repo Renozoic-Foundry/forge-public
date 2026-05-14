@@ -289,3 +289,73 @@ Claude Code's Agent tool can run multiple independent tasks in parallel, reducin
 #### `/matrix`
 - **Parallel (step 3-4):** Read all draft spec files for frontmatter comparison (independent reads)
 - **Sequential:** Score verification and correction (depends on read results)
+
+---
+
+## Dry-run hermeticity AC pattern
+
+Version: 1.0 (Spec 404, 2026-05-08)
+
+### Purpose
+
+Any command or script that accepts a `--dry-run` (or `--check`, `--no-act`) flag has a hidden contract: **the flag MUST NOT mutate any persistent state**. A dry-run that quietly writes a temp file, modifies a target dir, or appends to a log violates this contract — and the violation is invisible to ordinary tests, because tests typically only assert on stdout/exit code, not on filesystem state before vs after.
+
+### The pattern
+
+Every command/script accepting `--dry-run` MUST have an acceptance criterion of this shape:
+
+> Given a staging directory `D` containing a fixed reference set of files (typically empty), running `<command> --dry-run` (with all other flags) leaves `D` byte-identical to its pre-run state. Verified by computing a SHA-256 manifest of `D` before and after the run and asserting the two manifests match.
+
+### Canonical structure
+
+| Element | Specification |
+|---------|---------------|
+| **Setup** | Create an empty (or fixed-content) staging directory `D`. Compute pre-run manifest `H_before`. |
+| **Invocation** | Run the command with `--dry-run` and any other flags representative of normal use. Capture exit code. |
+| **Byte-identity assertion** | Compute post-run manifest `H_after`. Assert `H_before == H_after`. |
+| **Exit code** | Assert exit code is 0 (success) — a `--dry-run` that errors out is also a defect. |
+| **Negative test (paired)** | Same setup, but invoke a command that DOES mutate `D`. Assert manifest differs. Without this paired negative, the helper itself is unverified. |
+
+### Definition of byte-identity
+
+Byte-identity is computed via the helper `assert-hermetic-dry-run.{sh,ps1}` as:
+
+```
+SHA-256( sorted lines of "<sha256-of-file>  <relative-path>" for every file under D )
+```
+
+This deliberately **excludes** mtime, atime, ownership, uid/gid, and inode. It includes file contents and the set of paths. Symlinks are followed (their target's contents count). Empty directories are not represented in the manifest.
+
+### Helper
+
+`assert-hermetic-dry-run.sh` (and `.ps1`) at `.forge/bin/tests/lib/`. Calling convention:
+
+```bash
+# bash
+source .forge/bin/tests/lib/assert-hermetic-dry-run.sh
+assert_hermetic_dry_run "<staging-dir>" -- <command> [args...]
+# Returns 0 if hermetic, non-zero if the command mutated the dir.
+```
+
+```powershell
+# PowerShell
+. .forge/bin/tests/lib/assert-hermetic-dry-run.ps1
+Assert-HermeticDryRun -StagingDir <path> -Command { <scriptblock> }
+```
+
+### Worked example
+
+```bash
+TMPDIR=$(mktemp -d)
+source .forge/bin/tests/lib/assert-hermetic-dry-run.sh
+if assert_hermetic_dry_run "$TMPDIR" -- bash scripts/some-script.sh --dry-run --target "$TMPDIR"; then
+    echo "PASS: --dry-run is hermetic"
+else
+    echo "FAIL: --dry-run mutated staging dir"
+    exit 1
+fi
+```
+
+### When to apply
+
+Apply this pattern's AC to a spec whenever the spec adds, modifies, or audits a command/script that exposes a `--dry-run` flag.

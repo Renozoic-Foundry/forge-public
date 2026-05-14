@@ -650,6 +650,11 @@ isolation:
 
 multi_agent:                     # Spec 134 — concurrent session model
   activity_log: docs/sessions/activity-log.jsonl
+  # Canonical activity-log event_type schemas (Spec 387 R4c — frozen at spec time):
+  #   safety-prompt-yes:  {event_type, spec, paths, timestamp}
+  #   safety-prompt-no:   {event_type, spec, paths, timestamp}
+  #   safety-override:    {event_type, spec, paths, reason, timestamp}
+  # See docs/process-kit/safety-property-gate-guide.md.
   agent_tier_rules:              # behavioral rules for agents in parallel execution (Spec 134, 237)
     write_activity_log: true     # agents append events to JSONL log
     write_session_logs: false    # agents must NOT write to session logs (operator synthesizes)

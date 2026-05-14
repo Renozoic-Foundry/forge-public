@@ -163,3 +163,86 @@ Spec 324's own DA Pass 1 returned CONDITIONAL_PASS with 7 findings (4 warning + 
 - Pattern origin: Spec 294 round-3 DA (signal SIG-294-03, see `docs/sessions/signals.md`).
 - Documentation spec: Spec 324 (this section's source spec; the spec itself uses the pattern recursively).
 - Step 2b in `/implement`: the gate that produces CONDITIONAL_PASS and supports the inline-disposition path.
+
+---
+
+## DA-Encoded-Via convention (Spec 389)
+
+When a spec's design phase already absorbed DA-class concerns through `/consensus` rounds 1+2 (e.g., the round-1 DA participant raised a concern, the round-2 reframe addressed it, and the convergent round closed at aligned-approve ≥ 4/5), the `/implement` Step 2b fresh-DA subagent spawn becomes redundant. Spec 389 formalizes this with two opt-in frontmatter fields and a verification step.
+
+### When to use
+
+The convention applies when **all** of the following hold:
+
+- The spec has been through `/consensus` rounds 1 and/or 2 (NOT round 3+).
+- The latest convergent round closed with **aligned-approve** ≥ 4/5 (per Spec 301 vote-tally semantics).
+- DA was a participant in those rounds and DA's concerns were absorbed into the spec text via reframes or amendments.
+- Implementation has not yet started — the encoding is invalidated by any commit touching files in the spec's `## Implementation Summary` after the convergent round closes.
+
+If any condition fails, do NOT add `DA-Encoded-Via:` — let `/implement` Step 2b spawn a fresh DA subagent via the normal path.
+
+### Frontmatter fields
+
+Two fields work together:
+
+- **`DA-Encoded-Via: consensus-round-N`** — written by the operator or spec author when the conditions above hold. `N ∈ {1, 2}`. Round 3+ values fail validation at `/implement`.
+- **`Consensus-Close-SHA: <40-char-git-sha>`** — written automatically by `/consensus` Step 4c at convergent-round close. `/implement` reads this; it MUST NOT be hand-edited or written by `/implement` itself.
+
+After successful encoded-DA verification, `/implement` adds a third field:
+
+- **`DA-Verification: consensus-round-N (SHA <8-char-prefix> + drift-clean)`** — annotation recording that the encoded path verified cleanly without a fresh subagent spawn.
+
+### What `/consensus` does (Step 4c)
+
+When invoked on a spec topic with `--round N`:
+
+1. Skip silently if topic is ADR or freeform (mechanism is spec-only).
+2. Skip silently if `--round` not provided (avoids fragile Consensus-Record parsing — operator opts in explicitly).
+3. Skip silently if `N > 2`.
+4. Skip silently unless Step 4 divergence signal is `Aligned-approve` with ≥ 4 approve votes.
+5. Skip silently on operator-decision exit at the 3-round cap (Step 4b).
+6. Otherwise: write `Consensus-Close-SHA: $(git rev-parse HEAD)` to spec frontmatter and report it.
+
+### What `/implement` does (Step 2b.0)
+
+When `DA-Encoded-Via:` is present in spec frontmatter:
+
+1. **Value validation** — exact match `consensus-round-1` or `consensus-round-2`.
+2. **SHA presence** — `Consensus-Close-SHA:` populated.
+3. **SHA format** — 40-char lowercase hex.
+4. **Reachability** — `git cat-file -e <SHA>^{commit}` succeeds. Catches rebased/force-pushed SHAs.
+5. **Drift check** — `git log <SHA>..HEAD --name-only -- <Implementation-Summary-files>` returns empty. Implementation-Summary paths are passed as **git pathspecs**, not shell globs (operators may use git-pathspec patterns like `tests/fixtures/389/*.md`).
+
+All-PASS → skip subagent spawn, record `DA-Verification` annotation, proceed.
+Any-FAIL → log the failure mode and fall through to fresh DA subagent (existing path). The encoding does not "fail closed" by halting — it falls back to the safe default.
+
+When `DA-Encoded-Via:` is absent → fast-path no-op, normal Step 2b flow runs unchanged. Pre-389 specs see no behavioral change.
+
+### Failure modes (operator-visible diagnostics)
+
+| Failure | Message | Resolution |
+|---------|---------|------------|
+| Value not in {round-1, round-2} | `DA-Encoded-Via must be consensus-round-1 or consensus-round-2 (got: <value>)` | Set to a valid round, OR remove the field to fall back to fresh DA |
+| Missing SHA | `Consensus-Close-SHA required when DA-Encoded-Via is set` | Re-run `/consensus --round N`, OR remove `DA-Encoded-Via:` |
+| Bad SHA format | `Consensus-Close-SHA must be 40-char hex (got: <value>)` | Re-run `/consensus --round N` to refresh |
+| Unreachable SHA | `Consensus-Close-SHA <prefix> not reachable from HEAD (rebased or force-pushed?)` | Re-run `/consensus --round N` on the current branch |
+| Drift detected | `drift detected: <files>` | Re-run `/consensus --round N` to refresh, OR remove `DA-Encoded-Via:` and accept fresh DA |
+
+### Trust model
+
+The encoding relies on operator integrity. A malicious or careless operator could hand-edit `Consensus-Close-SHA` to point at a side-branch commit with no diff to Implementation-Summary files, bypassing the drift check. This is a documented trust gap — not a security vulnerability, since the FORGE process trusts the operator to author specs honestly. A future enhancement could HMAC the SHA via Spec 89's integrity mechanism (out of scope for Spec 389).
+
+### Anti-patterns to avoid
+
+- ❌ Adding `DA-Encoded-Via:` to a spec that did NOT go through `/consensus` rounds 1+2.
+- ❌ Adding `DA-Encoded-Via: consensus-round-3` (or higher) — round 3+ implies unresolved divergence.
+- ❌ Hand-editing `Consensus-Close-SHA:` to silence a drift-check failure.
+- ❌ Running `/implement` immediately after `/consensus --round N` when the spec's Implementation-Summary files have been touched in the interim. The drift check will catch this, but it wastes a verifier pass — fix the file scope first.
+
+### Reference (Spec 389)
+
+- Specs 385 + 386 (precedent): inline DA-Decision: PASS with consensus-rationale annotation, before Spec 389 formalized the convention.
+- Spec 389 docs: `docs/specs/389-da-encoded-via-consensus.md`.
+- `/consensus` Step 4c — SHA writer.
+- `/implement` Step 2b.0 — encoded-DA verifier (this section's mechanical counterpart).
+- Trust-model rationale: `forge` operates on operator-authored specs; the encoding extends but does not change that trust boundary.

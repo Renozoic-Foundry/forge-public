@@ -613,6 +613,184 @@ If /consensus was invoked during this /close session (via the "consensus" choice
 ```
 If no /consensus was invoked: skip silently.
 
+## [mechanical] Step 2g — Safety-property gate (Spec 387)
+
+After the validator subagent (Step 2-2c) and before the close-completion (Step 3), check whether this spec touches a registered safety-config path. The gate has three branches: registry-content match (R2a), bootstrap fallback (R1c), and no-match (silent pass). It also enforces the backfill SLA (R6b).
+
+Source the helper library:
+```bash
+# shellcheck source=/dev/null
+source .forge/lib/safety-config.sh
+```
+
+**Step 2g.1 — Detection**:
+
+Determine the baseline commit. If the spec's frontmatter contains `Approved-SHA:`, use the commit at which the spec was last `/revise`'d (recovered from git history of the spec file). If `Approved-SHA:` is absent or the lookup fails, use the parent of the spec branch's first commit:
+
+```bash
+baseline="$(git log --pretty=format:%H -- "docs/specs/NNN-*.md" | tail -1)^"
+if ! git rev-parse -q --verify "$baseline" >/dev/null; then
+  baseline="$(git rev-list --max-parents=0 HEAD | tail -1)"
+fi
+```
+
+Run the path-match check:
+```bash
+matched=$(git diff "$baseline"..HEAD --name-only | safety_config_match_diff .forge/safety-config-paths.yaml)
+```
+
+Run the bootstrap-fallback check (R1c):
+```bash
+bootstrap=0
+if git diff "$baseline"..HEAD --name-status | safety_config_bootstrap_fallback; then
+  bootstrap=1
+fi
+```
+
+If `matched` is empty AND `bootstrap` is 0: skip silently. Mark `[x] Safety-property gate — no registered paths in diff`. Proceed to Step 3.
+
+**Step 2g.2 — Override-path short-circuit**:
+
+If the spec's frontmatter contains a `Safety-Override:` field, validate it via `safety_config_validate_override`. If valid: append the canonical event record to `docs/sessions/activity-log.jsonl`:
+```bash
+override_reason="$(grep -E '^- Safety-Override:' docs/specs/NNN-*.md | sed -E 's/^- Safety-Override:\s*//')"
+if safety_config_validate_override "$override_reason"; then
+  paths_json=$(printf '%s\n' "$matched" | awk 'BEGIN{ORS=""; print "["} NR>1{print ","} {printf "\"%s\"", $0} END{print "]"}')
+  printf '{"event_type":"safety-override","spec":"NNN","paths":%s,"reason":%s,"timestamp":"%s"}\n' \
+    "$paths_json" "$(printf '%s' "$override_reason" | jq -Rs .)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    >> docs/sessions/activity-log.jsonl
+  echo "GATE [safety-property]: PASS — Safety-Override accepted (logged to activity-log.jsonl)"
+else
+  # safety_config_validate_override printed the reject reason to stderr.
+  echo "GATE [safety-property]: FAIL — Safety-Override invalid. Remediation: provide a non-trivial reason ≥50 chars."
+  exit 2
+fi
+```
+Then skip the prompt and section validation; proceed to Step 2g.5 (backfill SLA check) then Step 3.
+
+**Step 2g.3 — HARD-gate prompt** (R2b):
+
+If `matched` is non-empty OR `bootstrap` is 1, emit verbatim:
+```
+This spec touched <N> file(s) matching the safety-config registry: <comma-separated paths>.
+Does this introduce a safety property — a behavior the system relies on for correctness, security, or concurrency?
+[y/N]
+```
+Read the operator's answer.
+
+**No-answer path (R2c)**: If answer is `n`, `no`, or empty, append to `docs/sessions/activity-log.jsonl`:
+```json
+{"event_type":"safety-prompt-no","spec":"NNN","paths":[<matched paths>],"timestamp":"<ISO 8601>"}
+```
+Mark `[x] Safety-property gate — operator answered no`. Skip Step 2g.4. Proceed to Step 2g.5.
+
+**Step 2g.4 — Yes-answer section validation** (R2d):
+
+If answer is `y` or `yes`, the spec body MUST contain a `## Safety Enforcement` section (case-sensitive header, top-level only, not nested) with all three of:
+
+- A line matching `Enforcement code path: <file>::<symbol>` — file must exist; symbol may be `<placeholder>` only when paired with `# UNENFORCED — see Spec NNN` per R3.
+- A line matching `Negative-path test: <file>::<test-name>` — test file must exist; test name must match a function/test-block in that file.
+- A `Validates`-prefixed prose line of ≥10 characters.
+
+Validation algorithm:
+
+```bash
+spec_file="docs/specs/NNN-*.md"
+section=$(awk '/^## Safety Enforcement$/{p=1; next} /^## /{p=0} p' "$spec_file")
+
+if [[ -z "$section" ]]; then
+  echo "GATE [safety-property]: FAIL — Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md."
+  exit 2
+fi
+
+ep_line=$(echo "$section" | grep -E '^Enforcement code path: ' || true)
+np_line=$(echo "$section" | grep -E '^Negative-path test: ' || true)
+val_line=$(echo "$section" | grep -E '^Validates' || true)
+
+if [[ -z "$ep_line" || -z "$np_line" || -z "$val_line" ]]; then
+  echo "GATE [safety-property]: FAIL — Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md."
+  exit 2
+fi
+
+# Validates line ≥10 chars after the prefix
+val_text="${val_line#Validates}"
+if (( ${#val_text} < 10 )); then
+  echo "GATE [safety-property]: FAIL — Validates description too short (<10 chars). Remediation: expand the description."
+  exit 2
+fi
+
+# File existence checks for code-path and test
+ep_file=$(echo "$ep_line" | sed -E 's/^Enforcement code path: ([^:]+)::.*/\1/')
+np_file=$(echo "$np_line" | sed -E 's/^Negative-path test: ([^:]+)::.*/\1/')
+ep_sym=$(echo  "$ep_line" | sed -E 's/^Enforcement code path: [^:]+::(.*)$/\1/')
+
+# UNENFORCED deferral path (R3): if any line carries "<placeholder>" or "<deferred to Spec NNN>",
+# the spec must reference an existing Spec NNN with valid status.
+if [[ "$ep_sym" == "<placeholder>" || "$np_line" == *"<deferred to Spec"* ]]; then
+  ref=$(echo "$section" | grep -oE 'Spec [0-9]{3}' | head -1)
+  if [[ -z "$ref" ]]; then
+    echo "GATE [safety-property]: FAIL — placeholder used without 'Spec NNN' reference. Per R3, placeholders require an UNENFORCED-pointer."
+    exit 2
+  fi
+  ref_num=$(echo "$ref" | awk '{print $2}')
+  ref_file=$(ls docs/specs/${ref_num}-*.md 2>/dev/null | head -1)
+  if [[ -z "$ref_file" ]]; then
+    echo "GATE [safety-property]: FAIL — referenced ${ref} does not exist."
+    exit 2
+  fi
+  ref_status=$(grep -E '^- Status: ' "$ref_file" | sed -E 's/^- Status: //')
+  case "$ref_status" in
+    draft|in-progress|implemented|closed) : ;;  # OK; draft is allowed but flagged in R5
+    *)
+      echo "GATE [safety-property]: FAIL — referenced ${ref} has invalid status ($ref_status). Per R3c, must be draft/in-progress/implemented/closed."
+      exit 2
+      ;;
+  esac
+else
+  # Non-placeholder paths must resolve.
+  if [[ ! -f "$ep_file" ]]; then
+    echo "GATE [safety-property]: FAIL — Enforcement code path file not found: $ep_file"
+    exit 2
+  fi
+  if [[ ! -f "$np_file" ]]; then
+    echo "GATE [safety-property]: FAIL — Negative-path test file not found: $np_file"
+    exit 2
+  fi
+fi
+
+# Append yes-answer event
+paths_json=$(printf '%s\n' "$matched" | awk 'BEGIN{ORS=""; print "["} NR>1{print ","} {printf "\"%s\"", $0} END{print "]"}')
+printf '{"event_type":"safety-prompt-yes","spec":"NNN","paths":%s,"timestamp":"%s"}\n' \
+  "$paths_json" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> docs/sessions/activity-log.jsonl
+
+echo "GATE [safety-property]: PASS — Safety Enforcement section validated"
+```
+
+**Step 2g.5 — Backfill SLA check** (R6b):
+
+After the prompt path completes (yes/no/override/skip), check the backfill deadline marker:
+
+```bash
+deadline_file=".forge/state/safety-backfill-deadline.txt"
+if [[ -f "$deadline_file" ]]; then
+  deadline=$(cat "$deadline_file")
+  now_epoch=$(date -u +%s)
+  deadline_epoch=$(date -u -d "$deadline" +%s 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$deadline" +%s 2>/dev/null || echo 0)
+  if (( now_epoch > deadline_epoch && deadline_epoch > 0 )); then
+    # Re-run audit and check list (ii)
+    audit_output=$(scripts/safety-backfill-audit.sh --check-only 2>/dev/null || true)
+    unenforced_count=$(echo "$audit_output" | grep -cE '^MISSING:' || true)
+    if (( unenforced_count > 0 )); then
+      echo "GATE [safety-backfill-sla]: FAIL — Safety-backfill SLA expired. ${unenforced_count} declaration(s) still without enforcement or UNENFORCED annotation. Disposition required."
+      exit 2
+    fi
+  fi
+fi
+echo "GATE [safety-backfill-sla]: PASS — within SLA or audit clean"
+```
+
+Mark `[x] Safety-property gate (Spec 387) — completed`. Proceed to Step 3.
+
 ## [mechanical] Step 3 — Status transition
 Perform the `closed` status transition:
 
@@ -659,13 +837,20 @@ a. Set `Status: closed` and add `Closed: YYYY-MM-DD` in the spec file.
 b. Add a dated revision entry based on enforcement mode:
    - Chat/PAL: `YYYY-MM-DD: Closed via /close (Chat mode). Human confirmed all deliverables.`
    - Delegated: `YYYY-MM-DD: Closed via /close (Delegated mode). All ACs machine-verified at L<N>. Evidence hash: sha256:<first 16 chars>...`
-c. **README sync (Spec 086)**: Read the spec file's `Status:` field (authoritative source). Find the spec's row in `docs/specs/README.md` and update the status to match exactly. If no row exists, add one.
-d. **Backlog sync (Spec 086)**: Find the spec's row in `docs/backlog.md`.
+b1. **Write-side mode check (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --skip-canonical-write`. Read stdout. If `skip` (split-file mode), the canonical README/backlog/CHANGELOG writes in c, d, e below are SUPPRESSED — the spec frontmatter edit in (a) is the source of truth and the renderer-owned `.generated/` artifacts pick up the new status on next render. The event-stream write in `e1` proceeds unchanged. If stdout is `proceed`, perform c/d/e (Phase 1 dual-write). If the helper exits nonzero, abort the canonical-write block and surface stderr — do NOT default to either behavior.
+c. **README sync (Spec 086)** [proceed mode only]: Read the spec file's `Status:` field (authoritative source). Find the spec's row in `docs/specs/README.md` and update the status to match exactly. If no row exists, add one.
+d. **Backlog sync (Spec 086)** [proceed mode only]: Find the spec's row in `docs/backlog.md`.
    - Update the status column to match the spec file (e.g., `closed`).
    - Change the Rank column to `✅` for closed specs.
    - **Duplicate detection**: If the spec appears in multiple rows, warn: "Duplicate backlog row detected for Spec NNN — consolidating." Remove all but the most recent row (highest rank or most recent status). Log the duplicate as a process defect.
    - If no row exists, add one at the bottom with ✅ status.
-e. Add a CHANGELOG entry: `- YYYY-MM-DD: Spec NNN closed via /close.`
+e. **CHANGELOG entry** [proceed mode only]: Add a CHANGELOG entry: `- YYYY-MM-DD: Spec NNN closed via /close.`
+e1. **Append spec-closed event (Spec 254 — Approach D)**: Append to the per-spec event stream:
+   ```bash
+   mkdir -p .forge/state/events/NNN
+   echo '{"timestamp":"<ISO 8601>","event_type":"spec-closed","payload":{"mode":"<chat|delegated|pal>","message":"<one-line close note>"}}' >> .forge/state/events/NNN/spec-closed.jsonl
+   ```
+   Append-only; conflict-free. Consumed by `render_changelog.py` to emit the canonical close event in the chronological log. Continues to coexist with the CHANGELOG.md edit above during Phase 1; Phase 2 spec will retire the duplicate canonical write once events have burned in.
 e2. **Score-Audit observed record (Spec 368)**: Append an `observed` record to the score-audit log via the shared helper. Do NOT inline JSON here. The helper computes `wallclock_days`, `session_count`, `revise_rounds`, `validator_outcome`, `da_outcome`, `tc_overrun_derived`, and `creation_ts_source` from artifacts (git timestamps, session JSON sidecars, spec body) — Claude does NOT compute or transcribe duration values.
 
    ```bash
@@ -1033,13 +1218,65 @@ Emit: `GATE [retro-completion]: PASS/CONDITIONAL_PASS — <signal count> signals
 
 ## [mechanical] Step 7 — Auto-chain /matrix (Evolve Loop fast path)
 a. **AC spot-check**: Pick one acceptance criterion from the just-closed spec. Check the corresponding file/function. State the criterion, file, and whether it satisfies. Flag drift as a process defect.
-b. **Backlog confirmation**: **Re-read `docs/backlog.md` now** (Spec 123 — context overflow guard). Confirm the closed spec's row is marked ✅ `closed` and `Last updated` is current. Check if any backlog items are now unblocked.
+a2. **Trivial-doc exemption audit (Spec 395 AC 6)**: If the just-closed spec's frontmatter contained `Consensus-Exempt: trivial-doc — ...`:
+   - Compare actual closed diff size to the trivial-doc claim:
+     - File count: `git diff --name-only HEAD~1 HEAD | grep -v '^docs/sessions/\|^docs/specs/[0-9]\|^.forge/state/' | wc -l` (count source/test/doc files; exclude session log + the spec file + ephemeral state).
+     - LOC count: total insertions+deletions from `git diff --shortstat HEAD~1 HEAD` for the same scope.
+   - If actual file count > 2 OR LOC > 30: emit `GATE [trivial-doc-audit]: CONDITIONAL_PASS — Trivial-doc exemption was overstated: claimed ≤30 LOC across ≤2 files; actual diff was N LOC across M files. Pattern observed; no /close block (trust-at-gate-verify-at-close design).`
+   - If actual within bounds: emit `GATE [trivial-doc-audit]: PASS — trivial-doc claim within bounds (M files, N LOC).`
+   - If frontmatter does NOT have `Consensus-Exempt: trivial-doc`: skip silently. Most specs skip.
+   - This audit is **informational/CONDITIONAL_PASS only — never blocks /close**. The pattern is "trust at gate; verify at close" per Spec 395 Req 2 + AC 6. Repeated overstatements feed the Spec 395 Req 9 sunset review (`/evolve` decision data).
+b. **Backlog confirmation (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` and confirm the closed spec's row in the parsed JSON shows status `closed` (the helper reads frontmatter directly, so the edit from step (a) is reflected immediately regardless of rendering mode). Check if any backlog items are now unblocked.
 c. Present the current top-3 ranked items from the backlog.
 
 Emit: `GATE [matrix-completion]: PASS/FAIL — <AC spot-check result, backlog confirmation>`. FAIL if AC spot-check finds drift.
 
-## [mechanical] Step 8 — Session log update
+## [mechanical] Step 8 — Session log update (Spec 157, augmented by Spec 371)
 Check `docs/sessions/` for a log file matching today's date. If none exists, create one from `docs/sessions/_template.md`. **Re-read the session log file now** before editing (Spec 123 — context overflow guard). Record the just-closed spec.
+
+**Spec 371 — Summary line append (unconditional)**: After recording the structured "spec closed" entry, append exactly one line to today's session log `## Summary` section in this format:
+
+`<HH:MM> Closed Spec NNN — N PASS / M FAIL <gate-summary>`
+
+Where:
+- `<HH:MM>`: current local time (24-hour)
+- `<NNN>`: the spec just closed
+- `N PASS / M FAIL`: count of GATE outcomes from this /close run (Steps 2, 4, 6, 7) classified as PASS vs FAIL. Count `CONDITIONAL_PASS` as PASS.
+- `<gate-summary>`: comma-joined list of up to 3 most informative non-trivial gate-name→outcome pairs (e.g., `spec-integrity:PASS, retro-completion:CONDITIONAL_PASS, matrix-completion:PASS`). Use `—` if no gates ran (unusual).
+
+If the session log has no `## Summary` section, create one immediately after the file's H1/title block. The append is unconditional — even when N=0 and M=0, still append (`0 PASS / 0 FAIL —`) as a presence record. Do NOT rewrite earlier Summary lines from this session — append only.
+
+This Summary line is the structured trace `/session` Step 1c reads when synthesizing the day's narrative summary.
+
+## [mechanical] Step 8b — EA/CI Window Scan (Spec 371)
+
+Port `/implement` Step 8's chat-window EA/CI retrospective pattern to `/close`, with window-bounded dedup so a candidate captured at `/implement` is not double-captured here.
+
+1. **Resolve session id**: read `.forge/state/active-tab-*.json` markers; pick the marker whose `spec_id` matches NNN (or whose `last_command_at` is most recent if no spec match). Use that marker's `session_id` as `<sid>`. If no marker exists, derive `<sid>` from the active tab registry row, or fall back to a deterministic hash of (today's date + spec NNN). Never abort on missing marker — fall back silently.
+2. **Determine scan-window start**: read `.forge/state/last-eaci-scan-<sid>.json` if it exists. Use its `timestamp` field as the window start. If absent, use the time `/close` command started.
+3. **Run scanner heuristics** against the chat window since the start time, plus structured entries appended since command start. Heuristics (mirrors `/implement` Step 8):
+   - Operator corrections: "no, do X instead", "stop", "don't"
+   - Implementation friction: "had to revert", "didn't work", "broke"
+   - Surprising outcomes: "didn't expect", "turns out", "actually …"
+   - Architectural insights: "pattern: …", "principle …", "rule …"
+   - Gate-skips: `--no-verify`, `--force`, "skip the gate"
+   - Wrong-assumption disclosures: "turns out X is …", "I was wrong about …"
+4. **Output zero or more SIG-NNN drafts**, each with all three Spec 267 classification fields populated (root-cause category, wrong assumption, evidence-gate coverage). Empty/sentinel values permitted per Spec 267 (`other`, empty string, `no-applicable-gate`). Use the same draft format as Step 6.
+5. **Zero-candidate path — unconditional attestation**: if scanner returns zero drafts, emit verbatim:
+   `No EA/CI candidates detected since <HH:MM>. Confirm 'nothing to capture'? [Y/n]`
+   Default `y` on bare Enter. Operator confirms with one keypress. Do NOT skip this prompt — it is a forcing function for the operator's read of the chat window. Per Spec 371 Constraint, no conditional-suppression heuristic is permitted here.
+6. **Non-zero path**: present each SIG draft (numbered) and auto-append to `docs/sessions/signals.md` inline (no per-draft confirmation prompt — same low-ceremony pattern as Step 6).
+7. **Window-bounded dedup write**: regardless of candidate count, write/update the timestamp file:
+   ```bash
+   mkdir -p .forge/state
+   cat > ".forge/state/last-eaci-scan-${sid}.json" <<EOF
+   {"timestamp":"<ISO 8601 now>","command":"/close","spec":"NNN"}
+   EOF
+   ```
+   This caps the next /implement-or-/close window at this command's completion time, preventing the same chat range from being scanned twice in one session (Spec 371 Constraint).
+8. **Watchlist linkage**: a follow-up spec is gated on `docs/sessions/watchlist.md` 4-week telemetry of attestation-y rate. No action here beyond the timestamp write — the watchlist row is checked at `/evolve`, not `/close`.
+
+Skip silently if `forge.roles.devils_advocate.enabled: false` AND `forge.review.enabled: false` (no retrospective surface enabled at all). Otherwise this step runs unconditionally.
 
 ## [mechanical] Step 8a — Auto-commit and push (Spec 348)
 

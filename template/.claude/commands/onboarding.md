@@ -340,11 +340,11 @@ If the operator chose SKIP-FOR-NOW, also append the scratchpad note (see above).
    - `.claude/settings.json` — start from `{}` if absent, otherwise the existing content. Set `"defaultMode": "default"` (L1 autonomy default).
    - `AGENTS.md` — find the `forge:` config block. Set `forge.methodology: none` (preserve other fields). **Strategic scope (Spec 382)**: if `project.strategic_scope` is populated in `.forge/onboarding.yaml`, write it to AGENTS.md's `forge.strategic_scope:` block via the yaml-aware helper:
       ```bash
-      python3 .forge/lib/strategic-scope.py write \
+      .forge/bin/forge-py .forge/lib/strategic-scope.py write \
         .forge/state/onboarding-staging/AGENTS.md \
         "$(yq '.project.strategic_scope' .forge/onboarding.yaml)"
       ```
-      (Or pipe via stdin: `echo "$value" | python3 .forge/lib/strategic-scope.py write <path> -`. Regex-replace on raw markdown is NOT acceptable per Spec 382 AC9 — fragile against block-scalar variants.)
+      (Or pipe via stdin: `echo "$value" | .forge/bin/forge-py .forge/lib/strategic-scope.py write <path> -`. Regex-replace on raw markdown is NOT acceptable per Spec 382 AC9 — fragile against block-scalar variants.)
    - `.copier-answers.yml` — if present, set `project_name`, `project_slug` (lowercase+hyphen), `project_description`, `test_command`, `lint_command`. Preserve `_commit` and `_src_path`. (Note: `_src_path` determines where `/forge stoke` pulls updates from — `gh:Renozoic-Foundry/forge-public` works from any machine; a local path only works on that machine.)
    - **Agent wrappers** (output of `.forge/bin/forge-sync-commands.sh`) — generate the wrappers into the staging directory's `.claude/commands/` and similar subdirs, NOT into the live tree. Reproducing the script's output deterministically into staging keeps Step B's contract: nothing goes live until "yes".
 

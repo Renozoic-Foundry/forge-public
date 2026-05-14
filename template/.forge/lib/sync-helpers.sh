@@ -65,24 +65,58 @@ extract_frontmatter() {
 }
 
 # --- Check if file is a FORGE-managed command (frontmatter-aware) ---
-# Returns 0 (true) if the body of the file (after any leading YAML frontmatter)
-# starts with "# Framework: FORGE" or "## Subcommand:" within the first 5 body lines.
+# Returns 0 (true) if the body of the file (after any leading YAML frontmatter
+# delimited by `---` on the first line and a closing `---`) contains
+# "# Framework: FORGE" or "## Subcommand:" within the first 10 body lines.
 # Returns 1 (false) otherwise. Files that do not exist return 1.
 #
-# Spec 329: head-5 scan after frontmatter strip (fixed mirrors-with-frontmatter detection).
-# Spec 364: pipeline runs in a subshell with `set +o pipefail` to isolate SIGPIPE from the
-# caller's pipefail state. Without this, when grep -q matches early and head -5 closes its
-# stdin, strip_frontmatter (subshell, large file) gets SIGPIPE and exits 141; pipefail in
-# forge-sync-commands.sh then propagates 141 as the pipeline's status, producing a false
-# "not a FORGE command" CONFLICT on the largest mirrors (close.md / implement.md).
+# Spec 385: structural skip-past-`---` detection — locate the closing `---` of the
+# frontmatter and scan ≤10 lines after it. This replaces the prior fixed-line-window
+# (`head -5`) approach, which broke when Spec 316 dropped `model_tier:` from wrapper
+# frontmatter and shifted the marker line position. Three /consensus reviewers (DA,
+# CTO, COO) flagged that any fixed N re-creates the regression class on the next
+# frontmatter expansion, so the fix is structural rather than an N-bump.
+#
+# Pure-bash implementation (no pipes) — also resolves the Spec 364 SIGPIPE class by
+# eliminating the strip_frontmatter | head | grep pipeline. CRLF-tolerant.
 is_forge_command() {
   local file="$1"
   if [[ ! -f "$file" ]]; then
     return 1
   fi
-  ( set +o pipefail
-    strip_frontmatter < "$file" | head -5 | grep -qE "(# Framework: FORGE|## Subcommand:)"
-  ) 2>/dev/null
+  local in_frontmatter=false
+  local past_frontmatter=false
+  local first_line=true
+  local body_count=0
+  local line line_stripped
+  while IFS= read -r line; do
+    line_stripped="${line%$'\r'}"
+    if $first_line; then
+      first_line=false
+      if [[ "$line_stripped" == "---" ]]; then
+        in_frontmatter=true
+        continue
+      fi
+      # No opening `---`: scan from line 1 (file has no frontmatter at all).
+      past_frontmatter=true
+    elif $in_frontmatter; then
+      if [[ "$line_stripped" == "---" ]]; then
+        in_frontmatter=false
+        past_frontmatter=true
+      fi
+      continue
+    fi
+    if $past_frontmatter; then
+      if [[ "$line_stripped" == "# Framework: FORGE"* ]] || [[ "$line_stripped" == "## Subcommand:"* ]]; then
+        return 0
+      fi
+      body_count=$((body_count + 1))
+      if [[ $body_count -ge 10 ]]; then
+        return 1
+      fi
+    fi
+  done < "$file"
+  return 1
 }
 
 # --- Compare two files body-to-body (frontmatter stripped from both) ---

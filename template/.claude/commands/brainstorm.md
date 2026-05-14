@@ -98,7 +98,7 @@ Present recommendations as a numbered list:
    Source: scratchpad | Est. score: ~NN | Lane: <lane>
 ```
 
-**Empty-signal check:** Before presenting recommendations, check: does `docs/backlog.md` have zero draft specs AND `docs/sessions/signals.md` have zero entries AND `docs/sessions/scratchpad.md` have zero open items? If all three are empty (new project with no history to mine), prepend this note to the output:
+**Empty-signal check (Spec 399):** Before presenting recommendations, check: run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` and verify zero rows have status `draft`, AND `docs/sessions/signals.md` has zero entries AND `docs/sessions/scratchpad.md` has zero open items? If all three are empty (new project with no history to mine), prepend this note to the output:
 
 > **No signals to mine yet.** This project is too new for pattern analysis. If requirements are still forming, consider running `/interview` first to surface assumptions and define scope before generating spec candidates.
 

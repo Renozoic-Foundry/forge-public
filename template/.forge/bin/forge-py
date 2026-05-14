@@ -1,0 +1,82 @@
+#!/usr/bin/env sh
+# forge-py — FORGE cross-platform Python invocation wrapper (POSIX)
+# Spec 401. Resolves the first Python ≥3.10 from `python3 → python → py -3`,
+# falls through on version-floor mismatch, execs the script passed as $1
+# with remaining args. POSIX `/bin/sh` only — no bash-isms.
+#
+# Usage: forge-py <script-path> [args...]
+# Exits >=1 if no candidate satisfies the floor; preserves the script's exit code otherwise.
+
+set -u
+
+FORGE_PY_FLOOR_MAJOR=3
+FORGE_PY_FLOOR_MINOR=10
+
+# Check whether a candidate's --version output meets the floor.
+# Args: $1 = invocation string (may include args, e.g. "py -3"), prints nothing,
+# returns 0 if floor met, 1 if found-but-too-old, 2 if --version unparseable.
+forge_py_check_floor() {
+  _ver=$( $1 --version 2>&1 )
+  case "$_ver" in
+    "Python "*)
+      _ver=${_ver#Python }
+      _major=${_ver%%.*}
+      _rest=${_ver#*.}
+      _minor=${_rest%%.*}
+      # Strip trailing non-digit run (alpha/beta/rc/+/whitespace) via POSIX parameter expansion.
+      _minor=${_minor%%[!0-9]*}
+      [ -z "$_major" ] && return 2
+      [ -z "$_minor" ] && return 2
+      if [ "$_major" -gt "$FORGE_PY_FLOOR_MAJOR" ]; then
+        return 0
+      fi
+      if [ "$_major" -eq "$FORGE_PY_FLOOR_MAJOR" ] && [ "$_minor" -ge "$FORGE_PY_FLOOR_MINOR" ]; then
+        return 0
+      fi
+      printf 'forge-py: candidate %s reports Python %s.%s (need %s.%s+)\n' \
+        "$1" "$_major" "$_minor" "$FORGE_PY_FLOOR_MAJOR" "$FORGE_PY_FLOOR_MINOR" >&2
+      return 1
+      ;;
+    *)
+      return 2
+      ;;
+  esac
+}
+
+# Build candidate list in order. Skip any not-on-PATH.
+forge_py_resolve() {
+  for _c in python3 python py; do
+    if command -v "$_c" >/dev/null 2>&1; then
+      if [ "$_c" = "py" ]; then
+        _invoke="py -3"
+      else
+        _invoke="$_c"
+      fi
+      if forge_py_check_floor "$_invoke"; then
+        FORGE_PY_RESOLVED="$_invoke"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+if [ $# -lt 1 ]; then
+  printf 'forge-py: usage: forge-py <script-path> [args...]\n' >&2
+  exit 2
+fi
+
+# Spec 417: force utf-8 stdout/stderr so non-ASCII helper output (em-dashes,
+# arrows, smart quotes) does not crash on Windows where Python defaults to cp1252.
+PYTHONIOENCODING=utf-8
+export PYTHONIOENCODING
+
+if forge_py_resolve; then
+  # Word-split intentionally so "py -3" expands to two argv elements.
+  # shellcheck disable=SC2086
+  exec $FORGE_PY_RESOLVED -X utf8 "$@"
+fi
+
+printf 'error: no Python interpreter >= %s.%s found on PATH. Install Python 3.10+ from https://www.python.org/downloads/ or via your platform package manager.\n' \
+  "$FORGE_PY_FLOOR_MAJOR" "$FORGE_PY_FLOOR_MINOR" >&2
+exit 1

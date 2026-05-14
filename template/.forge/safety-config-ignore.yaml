@@ -1,0 +1,19 @@
+# Operator-curated list of tokens that match the safety-config audit regex
+# (atomic|enforce|require|validate|guard|prevent|reject)_[a-zA-Z_]+
+# but are NOT safety properties — workflow-config keys, feature toggles, etc.
+#
+# Adding/removing entries: requires explicit operator judgment per case.
+# This file is NOT a registered safety-config path (Spec 397 Out-of-scope:
+# avoiding circular self-monitoring).
+#
+# Threat model: Lane A FORGE-internal single-operator. Mutations are tracked
+# via git history (which serves as the immutable audit log — author/date/
+# reason in commit message + diff). Multi-tenant or Lane B adoption would
+# require additional controls (cryptographic signing, peer-review gate,
+# separate audit log) — filed as deferred follow-up (see Spec 397 Out of scope).
+version: 1
+ignore:
+  - token: require_confirmation_at
+    reason: "Autonomy-level chain-control config (AGENTS.md:415-436); the require_X framing is workflow, not safety. L2 lists confirm-points; L3/L4 use empty list."
+    added: 2026-05-04
+    spec: 397

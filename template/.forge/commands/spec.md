@@ -101,7 +101,7 @@ If $ARGUMENTS does not contain `--guided`: continue with Step 1 below.
 
 1b. **Authorization scope check (Spec 165)**: If the description or spec title names a new command file (e.g., a new `/push-release`, `/deploy-all`, or similar slash command): prompt — "Does this command name imply modification of external/shared systems? If so, declare explicit scope limits in the opening line of the command file."
 
-2. Read docs/specs/README.md to find the next available spec number.
+2. **Next spec number (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as JSON; the next available spec number is one greater than the maximum `spec_id` in the array (treat IDs as zero-padded integers).
 3. Select template based on lane:
    - If Change-Lane is `process-only` or `small-change`: read `docs/specs/_template-light.md`.
    - Otherwise: read `docs/specs/_template.md`.
@@ -241,11 +241,80 @@ See: [docs/process-kit/score-calibration-loop.md](../../docs/process-kit/score-c
 
 ---
 
+<!-- spec-388-adjacency-scan:start -->
+### [mechanical] Step 6f — Adjacency scan (Spec 388)
+
+After the spec file is written and scored (Step 6e complete), scan in-flight drafts for scope adjacency. Surface adjacent drafts as **data**, not as a recommendation; offer fold-via-`/revise` as one option in the spec-creation choice block.
+
+**Inputs**
+- The new spec file just written (`docs/specs/NNN-<slug>.md`) — its frontmatter and `## Implementation Summary` `Changed files` list.
+- All in-flight drafts: scan `docs/specs/*.md` directly. Do NOT read `docs/backlog.md` for the `Consensus-Review:` field — that field lives in per-spec frontmatter, not in the rendered backlog table (split-file mode, Spec 399).
+- Optional thresholds in AGENTS.md (under `forge.spec.adjacency`):
+  - `file_overlap_threshold` (default `0.5`)
+  - `keyword_threshold` (default `2`)
+- Stopword list at `docs/process-kit/stopwords.txt` (lowercase tokens, lines starting with `#` are comments).
+
+**Filter**: include candidate spec when ALL hold:
+- `Status: draft` in frontmatter
+- One or both of:
+  - `Consensus-Review: true` or `Consensus-Review: auto` in frontmatter
+  - Revision Log contains a line matching `^- \d{4}-\d{2}-\d{2}: Revised via /revise` (post-/revise marker — the durable signal that survives a future deprecation of the `Consensus-Review:` field per Spec 387's deferred scope)
+
+**Overlap computation** for each candidate:
+1. **File overlap** — intersect new-spec `Changed files` with candidate's `Changed files`.
+   `ratio = |intersection| / min(|new_files|, |candidate_files|)`. If either side is empty, set `ratio = 0` (skip without erroring).
+2. **Keyword overlap** — tokenize Title (first `# Spec NNN — <title>` heading, drop the `Spec NNN —` prefix) plus first paragraph of `## Objective`. Lowercase, split on whitespace and `[/_,.;:()\[\]"'!?]`, strip stopwords, dedupe to a set. `match_count = |new_tokens ∩ candidate_tokens|`.
+3. Hit when `ratio ≥ file_overlap_threshold` OR `match_count ≥ keyword_threshold`.
+
+**Ranking**: combined score `ratio × 4 + min(match_count, 3)`. Cap on keyword contribution preserves file-primary intent (max keyword = 3, max file = 4). Sort hits by combined score descending; surface only the top 3.
+
+**Surface**
+
+If 0 hits: proceed silently to Step 7. Choice block emitted by Step 7+ remains unchanged.
+
+If ≥1 hit: emit a data block before the spec-creation choice block:
+
+```
+## Adjacent in-flight specs (Spec 388)
+The following draft specs overlap the proposed scope. This is data, not a recommendation — you decide.
+
+| Rank | Spec | Title | Files | Keywords | Combined |
+|------|------|-------|-------|----------|----------|
+| 1 | NNN | <title> | N/M | K | <score> |
+| 2 | NNN | <title> | N/M | K | <score> |
+| 3 | NNN | <title> | N/M | K | <score> |
+```
+
+Then extend the spec-creation choice block to include `fold-via-/revise <NNN>` rows (one per surfaced hit, max 3) alongside `spec-it`, `defer`, `drop`, and `dismiss-overlap`.
+
+**Operator response handling**
+- `spec-it` → proceed normally to Step 7.
+- `fold N` (N is the row number in the choice block, NOT the spec ID) → resolve N to the corresponding adjacency hit's spec-id, invoke `/revise <spec-id> "Folded from proposed Spec NNN: <one-line summary of new spec objective>"`, and roll back the just-written new spec file (delete it; renderers re-derive on next run).
+- `defer` → mark new spec `Status: deferred` and proceed.
+- `drop` → delete the just-written new spec file and exit.
+- `dismiss-overlap` → suppression scope is **single-invocation only** (the rest of this /spec run); proceed to Step 7 with normal spec-creation. No cross-invocation state.
+
+**Fail-soft**: if ANY of the following errors occur during Step 6f, emit `WARN: adjacency scan skipped — <reason>` and proceed to Step 7 with normal spec-creation. The scan MUST NEVER block /spec on its own failure:
+- `docs/process-kit/stopwords.txt` missing or unreadable
+- AGENTS.md threshold value present but non-numeric or out of `[0.0, 1.0]` (file ratio) / `[0, 50]` (keyword count)
+- Frontmatter parse error on any candidate spec (skip that spec, continue scan unless ≥3 candidates fail in a row → bail)
+- Total scan wall time exceeds 5 seconds
+
+Detection: active.
+
+See: docs/specs/388-spec-adjacency-scan.md for rationale, /consensus loop-17 framing, and full AC set.
+
+<!-- spec-388-adjacency-scan:end -->
+
+---
+
 ## [mechanical] Steps 7–10
 
-7. Update docs/specs/README.md — add a row for the new spec (sorted by number).
-8. Update docs/specs/CHANGELOG.md — add an entry for the new spec.
-9. Update docs/backlog.md — insert at the correct rank based on score.
+7. **Write-side mode check (Spec 399)**: Before any canonical-table-row write, run `.forge/bin/forge-py .forge/lib/derived_state.py --skip-canonical-write`. Read stdout: if `skip`, the project is in split-file mode — skip steps 7-9 below entirely. The new spec's frontmatter is already on disk; renderers (which the operator runs via `/matrix` or stoke) will reflect the new spec on next render. Event-stream writes (`.forge/state/events/<spec-id>/`) proceed unchanged. If stdout is `proceed`, run steps 7-9 (Phase 1 dual-write). If the helper exits nonzero, abort the canonical-write step and surface stderr — do NOT default to either behavior.
+   - In `proceed` mode only:
+     7a. Update docs/specs/README.md — add a row for the new spec (sorted by number).
+     8. Update docs/specs/CHANGELOG.md — add an entry for the new spec.
+     9. Update docs/backlog.md — insert at the correct rank based on score.
 10. Report: "Spec NNN saved. Review and run `/implement NNN`, or `/revise NNN <edits>`."
 
 ---
@@ -289,7 +358,7 @@ Fill any unmapped sections (Change-Lane, Trigger, Priority-Score, Evidence) usin
 
 Read `docs/process-kit/scoring-rubric.md` and score the spec.
 **Input validation (Spec 148)**: Validate that each BV, E, R, SR value is an integer between 1 and 5 inclusive. If any value is outside this range, STOP and report the error: "[dimension] must be 1-5 (got [value])". Do not compute the score with invalid inputs.
-Read `docs/specs/README.md` for the next spec number.
+**Next spec number (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=count` (or `--format=json` if you also need IDs). The count + scan of existing IDs tells you the next available number.
 Write the spec file at `docs/specs/NNN-<slug>.md` with:
 - Status: `draft`
 - All sections populated from Spec Kit mapping + FORGE defaults

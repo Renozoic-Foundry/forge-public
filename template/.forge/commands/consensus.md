@@ -103,7 +103,7 @@ Run all role assessments in **parallel** where possible.
    - Majority concern → "Revise — address concerns before proceeding"
    - Majority reject / aligned-reject → "Do not proceed — significant opposition"
 
-## [policy] Step 4b — Round cap and stop rule (Spec 301)
+## [policy] Step 4b — Round cap and stop rule (Spec 301; extended by Spec 395)
 
 Consensus rounds show diminishing returns after round 3. Round 4+ tends to surface spec-bloat divergence rather than new root-cause analysis (see pattern-analysis signals CI-173, CI-175). Round ordering matters — architectural reframes surface best in round 1 (CI-174).
 
@@ -113,9 +113,52 @@ Operator options at the 3-round cap:
 - **Accept current state** — remaining divergence is implementation-notes, not spec changes. Proceed.
 - **Revise out of scope** — reviewed content needs a `/revise` cycle. Stop consensus; revise; re-enter.
 - **Defer to follow-up spec** — reviewer concern is valid but orthogonal to this spec's scope. Record it as a follow-up spec candidate; proceed with the current spec.
-- **Continue to round 4** — operator authority override. Record the rationale in the session log.
+- **Continue to round 4** — operator authority override (gated; see extension criteria below). Record the rationale in the session log.
 
 This is a policy guideline, not a mechanical gate — round 4+ remains supported via operator choice. Cross-session invocations of `/consensus` on the same topic count toward the round cap (the policy is topic-level, not session-level).
+
+### [mechanical] Round-cap extension prompt (Spec 395, Req 4)
+
+When the round-3 cap is reached and the operator considers `Continue to round 4`, /consensus emits an explicit extension prompt that gates the override on two operator-declarative criteria:
+
+```
+Round 3 reached — extend? (R=<n>; does this spec span ≥ 3 distinct subsystems
+where concerns differ per subsystem? [y/N])
+```
+
+**Extension is allowed when ANY hold**:
+- `R ≥ 4` (high-risk specs warrant additional alignment effort), OR
+- Operator answers `y` (the spec spans ≥ 3 distinct subsystems where reviewer concerns cluster differently per subsystem).
+
+**Extension is denied otherwise** — operator's `n` (or empty answer; the default is `N`) ends consensus at round 3 per Spec 301 default. The operator must select one of the other three options (Accept / Revise / Defer).
+
+**Why operator-declarative rather than algorithmic**: a prior draft of Spec 395 used `awk '{split($0, parts, "/"); print parts[1]"/"parts[2]}'` to count subsystems by file-path-prefix. This was fragile — it conflated `template/.claude/...` with `tests/...` with root-level files; counted 3 sibling directories as 3 subsystems even when they were one logical concern; and broke entirely on root-level files. Operators know subsystem boundaries better than path-prefix heuristics do, so the criterion is operator-declarative.
+
+The `Round 4` rationale (whichever criterion was met) is recorded in the session log alongside the operator's choice.
+
+When extending past round 3, **Spec 389's Consensus-Close-SHA encoding is no longer applicable** — Step 4c skips SHA writing for `N > 2` because rounds 3+ indicate unresolved divergence. A fresh DA pass is warranted at `/implement` for any spec that required round 4+ to converge.
+
+The maximum extension is to round 5 — operator may extend round 3→4 then 4→5 (each gated by the same criteria), but rounds 6+ are not supported. If round 5 still does not converge, the spec needs `/revise` rather than further consensus.
+
+## [mechanical] Step 4c — Consensus-Close-SHA recording (Spec 389)
+
+When the consensus topic is a spec AND the current round converges (round ≤ 2 with aligned-approve ≥ 4/5), record `Consensus-Close-SHA: $(git rev-parse HEAD)` to the spec's frontmatter. This SHA is the reference point that `/implement` Step 2b's encoded-DA verifier uses to skip a fresh DA subagent spawn for specs annotated with `DA-Encoded-Via: consensus-round-N`.
+
+1. **Topic check**: skip silently if Step 1 resolved input as ADR or freeform topic. The mechanism is spec-only.
+
+2. **Round detection**: parse `$ARGUMENTS` for `--round N` or `round=N`. If absent, **skip silently** with note `Consensus-Close-SHA write skipped: no round number provided. Re-invoke with --round N to enable encoded-DA path on this spec.` This avoids fragile parsing of the Consensus Record. Operators opt in by passing the round explicitly.
+
+3. **Round-cap check**: if `N > 2`, skip silently. Spec 389 limits encoding to rounds 1 and 2 — rounds 3+ indicate unresolved divergence, so a fresh DA pass is warranted at /implement.
+
+4. **Convergence check**: skip silently unless Step 4's divergence signal is `Aligned-approve` with ≥ 4 approve votes.
+
+5. **Operator-exit check**: if Step 4b's 3-round-cap path fired and the operator chose `Accept current state`, `Revise out of scope`, or `Defer to follow-up spec`, do NOT write the SHA. Only convergent (≤ 2 + aligned-approve) rounds write.
+
+6. **Write**: set `Consensus-Close-SHA: <40-char-sha>` in the spec's frontmatter (replace if present from a prior round). Use `git rev-parse HEAD` to obtain the SHA.
+
+7. **Report**: emit `Consensus-Close-SHA recorded: <8-char-prefix> (round N, aligned-approve M/M). /implement Step 2b can now verify DA-Encoded-Via: consensus-round-N for this spec.`
+
+This step is purely additive — specs without `Consensus-Close-SHA` (legacy + non-convergent + opt-out) continue to use fresh DA at `/implement` Step 2b. **/implement MUST NOT write `Consensus-Close-SHA`**; the SHA is exclusively written here at convergent close. See `docs/process-kit/devils-advocate-checklist.md` § DA-Encoded-Via convention for the end-to-end picture.
 
 ## [mechanical] Step 5 — Present consensus summary
 

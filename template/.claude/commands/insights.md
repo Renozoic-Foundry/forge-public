@@ -87,20 +87,20 @@ Read `docs/sessions/scratchpad.md`.
 Extract all open notes: their tag (`[spec-trigger]`, `[validate]`, `[evolve]`, untagged), content, and age (date added if present).
 If file does not exist: skip silently.
 
-## [mechanical] Step 6 — Read backlog.md
+## [mechanical] Step 6 — Backlog state (Spec 399)
 
-Read `docs/backlog.md`.
+Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as a JSON array; each row has keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`.
 Extract:
-- All specs with their status, score, and `Last updated` date (from the backlog header fields or row data)
-- The `Last evolve loop review:` date
-- Any stalled specs: status = `draft` or `in-progress` with no movement in > 14 days
+- All specs with their status and score (cross-reference per-spec frontmatter for `Last updated:` if needed for aging)
+- Any stalled specs: status = `draft` or `in-progress` with no movement in > 14 days (read individual spec frontmatter for the `Last updated:` timestamp; helper does not surface that field)
+- The `Last evolve loop review:` date is read separately from `docs/sessions/context-snapshot.md` (or the most recent `/evolve` session log) — not surfaced by the helper.
 
 ---
 
-## [mechanical] Step 7 — Load existing tracking context
+## [mechanical] Step 7 — Spec index for cross-reference (Spec 399)
 
-Read `docs/specs/README.md`. Collect all spec IDs and their titles for cross-referencing.
-Build a set: `TRACKED` = all spec titles/descriptions visible in backlog.md + scratchpad.md open notes.
+Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as a JSON array; each row has keys `spec_id, slug, status, title`. Collect all spec IDs and titles for cross-referencing.
+Build a set: `TRACKED` = all spec titles/descriptions visible in the spec index + scratchpad.md open notes.
 This is used in Step 8 to avoid recommending what's already tracked.
 
 ---

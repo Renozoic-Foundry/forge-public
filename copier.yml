@@ -4,8 +4,26 @@
 #        copier update  (from within a consumer project to pull upstream changes)
 
 _subdirectory: "template"
-_min_copier_version: "9.3.0"  # Spec 294 — _migrations: flat format + _stage Jinja variable require 9.3.0+
+_min_copier_version: "9.4.0"  # Spec 430 — bumped from 9.3.0 (Spec 294) to force pre-Spec-427 consumers to update copier before pulling post-Spec-427 templates. Without the bump, stale-clone consumers on copier 9.3.x would still hit the old shadow-tree pipeline if their FORGE checkout predated Spec 427. The bump produces a hard "min version not met" error from copier itself, which the stoke-recovery-runbook § Stale-clone advisory documents as the operator-action signal.
 _templates_suffix: ".jinja"  # only files ending in .jinja are Jinja-processed; others copied verbatim
+
+# Spec 427 — unified project-data exclusion (single source of truth).
+# These paths are operator-curated and must NEVER be overwritten by `copier update`.
+# Step 0b classification in /forge stoke is the documented surface of this list;
+# stoke's backup-snapshot helper reads these patterns at runtime to select
+# files for backup (programmatic derivation — DA + MT convergent concern from
+# /consensus 427 round 1). Adding a path here is the ONLY place to declare
+# "this is project-data, not template-data" — no parallel apply-exclude list exists.
+_exclude:
+  - "docs/backlog.md"
+  - "docs/specs/README.md"
+  - "docs/specs/CHANGELOG.md"
+  - "docs/sessions/**"
+  - "docs/specs/[0-9]*-*.md"
+  - "AGENTS.md"
+  - "CLAUDE.md"
+  - ".copier-answers.yml"
+  - ".mcp.json"
 
 # Spec 294 — Copier-native placeholder scrub (runs on every copy AND update).
 # The helper applies a guarded scrub: only blanks a field when the field's current
@@ -34,7 +52,45 @@ _tasks:
       - |-
         command -v sh >/dev/null 2>&1 || { echo "ERROR: POSIX sh required on PATH. Install Git for Windows option 3 (Unix tools on PATH) OR launch from Git Bash. See docs/process-kit/cross-platform-python-guide.md § Windows prerequisite detail." >&2; exit 2; }
         test -f .forge/migrations/spec-398.applied && exit 0
-        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        # Spec 427 Req 10 / AC 9: skip the dirty-tree guard when running inside
+        # /forge stoke's copier-direct invocation. Stoke runs its OWN dirty-tree
+        # guard pre-apply (Req 4); duplicating the check here causes false
+        # positives because stoke's pre-apply backup mutates state copier-relative.
+        #
+        # /consensus 427 round 3 fix (MT + CISO concern on env-var back-channel):
+        # check for a PID-stamped sentinel file written by the parent stoke
+        # process, NOT an inheritable env-var. This binds the disarm to a
+        # specific stoke invocation — a CI script that exports a stray env-var
+        # cannot accidentally disarm the guard. Non-stoke `copier update`
+        # invocations have no sentinel; the safety net remains in place.
+        _stoke_sentinel_active=0
+        # Spec 430 tightening: TTL reduced from Spec 427's 5min to 60s.
+        # Liveness (kill -0) added so a crashed-stoke stale sentinel cannot
+        # disarm the guard for a concurrent unrelated copier invocation.
+        # Linux PID-ancestry (the strict check) is enforced in stoke.py's
+        # _detect_copier_post_task; this shell-side check is the lighter
+        # variant copier.yml _tasks runs (POSIX-portable; ancestry skipped).
+        if [ -d .forge/state ]; then
+          for _sentinel in .forge/state/stoke-in-progress-*; do
+            [ -f "$_sentinel" ] || continue
+            _pid=$(basename "$_sentinel" | sed 's/^stoke-in-progress-//')
+            # Liveness check (kill -0 returns 0 if process exists)
+            if ! kill -0 "$_pid" 2>/dev/null; then
+              continue
+            fi
+            if command -v stat >/dev/null 2>&1; then
+              _age=$(($(date +%s) - $(stat -c %Y "$_sentinel" 2>/dev/null || stat -f %m "$_sentinel" 2>/dev/null || echo 0)))
+              if [ "$_age" -lt 60 ] 2>/dev/null; then
+                _stoke_sentinel_active=1
+                break
+              fi
+            else
+              _stoke_sentinel_active=1
+              break
+            fi
+          done
+        fi
+        if [ "$_stoke_sentinel_active" -eq 0 ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; then
           echo "ERROR: working tree is dirty; stash or commit before copier update" >&2
           git status --porcelain >&2
           exit 2

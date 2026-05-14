@@ -75,6 +75,30 @@ Out of scope:
 - Changed files:
   - `<path>`
 
+<!-- ## Safety Enforcement (Spec 387 — optional)
+  Required if /close prompts "Does this introduce a safety property?" with a YES answer.
+  All three lines must be present and resolvable:
+  Enforcement code path: <file>::<symbol>
+  Negative-path test: <file>::<test-name>
+  Validates <prose, ≥10 chars> describing what unsafe condition is rejected.
+
+  Deferred-enforcement form (R3) — pair with `# UNENFORCED — see Spec NNN` annotation
+  in the affected config file:
+  Enforcement code path: <file>::<placeholder>
+  Negative-path test: <file>::<deferred to Spec NNN>
+  Validates <prose>.
+
+  See docs/process-kit/safety-property-gate-guide.md.
+
+  This section is excluded from the Approved-SHA hash input (R2f) — code-path corrections
+  via /revise do not trigger Spec 365 recompute. -->
+
+<!-- Spec 387 — Safety-Override frontmatter convention (optional)
+  Add to frontmatter (above) when the diff matched the registry but you assert the change
+  is not a safety property:
+  - Safety-Override: <reason text, ≥50 chars, non-trivial — see safety-property-gate-guide.md>
+  Frequent overrides (>2/quarter) trigger a /evolve warning. -->
+
 ## Reproduction Commands
 
 Commands needed to reproduce the verified state from scratch:

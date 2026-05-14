@@ -56,13 +56,13 @@ Procedure:
 
 1. Orphan-cleanup of stale shadows from prior runs (Spec 381 R9):
    ```bash
-   python3 .forge/lib/stoke.py orphan-gc --max-age-hours 24
+   .forge/bin/forge-py .forge/lib/stoke.py orphan-gc --max-age-hours 24
    ```
    Removes any `$TMPDIR/forge-stoke-shadow-*` directory older than 24h.
 
 2. Create shadow:
    ```bash
-   SHADOW=$(python3 .forge/lib/stoke.py shadow-create)
+   SHADOW=$(.forge/bin/forge-py .forge/lib/stoke.py shadow-create)
    echo "Shadow tree: $SHADOW"
    ```
    The helper copies all tracked files (`git ls-files`) into `$SHADOW` and captures an mtime baseline at `$SHADOW/.mtime-baseline.tsv`. Untracked files in the live tree NEVER enter the shadow — Step 0b restoration in shadow cannot collide with operator's untracked working-tree content (eliminates the Spec 379 "already exists" stash-pop bug as a side-effect).
@@ -342,6 +342,28 @@ Before checking for updates, detect and restore files that exist in the FORGE te
 
 **Notes for operators — shared tenancy**: For remote `_src_path` forms only, Step 0b creates a shallow bare clone under `${TMPDIR:-${TEMP:-/tmp}}`. The directory is created with `chmod 700` and removed at exit. On shared-tenancy systems (CI runners with shared `/tmp`, multi-user dev boxes), export `TMPDIR` to a per-user path before running `/forge stoke`. See [docs/process-kit/shared-tenancy-guidance.md](../../docs/process-kit/shared-tenancy-guidance.md) for concrete examples (GitHub Actions, generic Unix multi-user, CI container). Single-operator workstations and projects with local `_src_path` need no action — Step 0b creates no temp directory in that case.
 
+### [mechanical] Step 0c — Split-file migration advisory (Spec 399)
+
+After Step 0b's manifest-diff completes (or is skipped), surface a one-line advisory recommending split-file migration when ALL of the following hold:
+
+1. Run `.forge/bin/forge-py .forge/lib/derived_state.py --detect-mode`. The stdout is the rendering mode (`split-file`, `generated`, or `skip-canonical`). If stdout is `split-file`, skip this Step entirely — consumer is already migrated. If the helper exits nonzero, surface stderr and skip this advisory (do NOT block stoke; degenerate-state diagnosis is a separate concern).
+2. `.copier-answers.yml` exists AND its `_commit:` field indicates the consumer's template version is at-or-past the Spec-398-shipping commit. Determine "at-or-past" by checking whether the consumer's `_commit` is reachable from the merge commit that closed Spec 398. If `.copier-answers.yml` is missing or `_commit` is empty, skip this advisory.
+3. The most recent operation on the project was NOT `copier update` — if it was, Spec 400's auto-migration hook would have already run, so re-emitting the advisory is noise. Detection: a fresh `.copier-answers.yml` modified within the current stoke invocation's parent process tree (or a `_commit` that matches the upstream HEAD exactly with no local edits between) suggests `copier update`. Conservative default: if uncertain, proceed to step 4.
+4. `.forge/state/migration-advisory-shown.flag` does NOT exist.
+
+If all four conditions hold, emit exactly:
+```
+SPLIT-FILE MIGRATION AVAILABLE — Run `python scripts/migrate-to-derived-view.py --mode=split-file` to adopt split-file rendering. See Spec 398.
+```
+
+After emission, create the suppression flag:
+```bash
+mkdir -p .forge/state
+: > .forge/state/migration-advisory-shown.flag
+```
+
+The advisory MUST NOT re-emit on subsequent stoke runs unless the operator removes the flag (`rm .forge/state/migration-advisory-shown.flag`). The flag's existence is the suppression signal.
+
 ### [mechanical] Step 1 — Detect sync mechanism
 
 1. Check the current working directory for sync files:
@@ -519,7 +541,7 @@ Before applying shadow → live (Step 3c.6) and committing (Step 3d), audit the 
 
 1. Run mtime drift check (Spec 381 R8/AC9):
    ```bash
-   python3 .forge/lib/stoke.py mtime-check "$SHADOW" 2>/tmp/stoke-drift.txt
+   .forge/bin/forge-py .forge/lib/stoke.py mtime-check "$SHADOW" 2>/tmp/stoke-drift.txt
    if [ $? -ne 0 ]; then
        echo "⚠ The following live-tree files were modified during stoke:"
        cat /tmp/stoke-drift.txt
@@ -530,7 +552,7 @@ Before applying shadow → live (Step 3c.6) and committing (Step 3d), audit the 
 
 2. Run audit:
    ```bash
-   python3 .forge/lib/stoke.py audit "$SHADOW" > /tmp/stoke-audit.json
+   .forge/bin/forge-py .forge/lib/stoke.py audit "$SHADOW" > /tmp/stoke-audit.json
    fired=$(python3 -c "import json; print(json.load(open('/tmp/stoke-audit.json'))['fired'])")
    ```
 
@@ -566,7 +588,7 @@ Before applying shadow → live (Step 3c.6) and committing (Step 3d), audit the 
      Apply <file> from shadow (lose customization) or keep live (preserve customization)? [keep/apply]
      ```
      Default is `keep`. Build EXCLUDES from files where operator kept live.
-   - **abort** (option 3): `python3 .forge/lib/stoke.py cleanup "$SHADOW"`, exit early. Skip Step 3c.6 and 3d. Print: `Aborted. Live tree unchanged. No commit made.`
+   - **abort** (option 3): `.forge/bin/forge-py .forge/lib/stoke.py cleanup "$SHADOW"`, exit early. Skip Step 3c.6 and 3d. Print: `Aborted. Live tree unchanged. No commit made.`
 
 ### [mechanical] Step 3c.6 — Apply shadow → live (Spec 381)
 
@@ -577,7 +599,7 @@ EXCLUDE_ARGS=""
 for f in "${EXCLUDES[@]}"; do
     EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude $f"
 done
-python3 .forge/lib/stoke.py apply "$SHADOW" $EXCLUDE_ARGS
+.forge/bin/forge-py .forge/lib/stoke.py apply "$SHADOW" $EXCLUDE_ARGS
 ```
 
 The helper uses two-phase atomic apply per Spec 381 R7: writes to `<path>.new`, fsyncs, then `os.replace` (atomic on POSIX, MoveFileEx with REPLACE on Windows via Python's `os.replace`). No rsync dependency — pure Python `shutil.copy2` + `os.replace`.
@@ -662,7 +684,7 @@ latest FORGE commands.
 8. **Shadow tree cleanup (Spec 381 R9)**: regardless of outcome (success, abort, error), remove the shadow directory:
    ```bash
    if [ -n "${SHADOW:-}" ]; then
-       python3 .forge/lib/stoke.py cleanup "$SHADOW"
+       .forge/bin/forge-py .forge/lib/stoke.py cleanup "$SHADOW"
    fi
    ```
    No retention. The next stoke creates a fresh shadow at Step 0a.5.

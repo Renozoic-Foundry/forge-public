@@ -81,7 +81,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
 3. Open the just-completed spec and check one acceptance criterion against the code:
    - State the criterion, the file/function it maps to, and whether the code satisfies it
    - Flag any drift as a process defect requiring a new spec
-4. Read docs/backlog.md — confirm the completed spec's row is updated to `implemented` and the `Last updated` date is current.
+4. **Backlog state (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` — confirm the completed spec's row reflects `implemented` (the helper reads frontmatter directly, so freshness is immediate; mode-detection is internal).
 5. Check if any other backlog items are now unblocked by this completion and note them.
 
 **If periodic review (full F1–F4):**
@@ -283,7 +283,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
 
     h. **Multi-role vetting**: For high-impact proposals (severity `high` or BV >= 4), recommend running `/consensus <proposal>` to gather structured feedback from all registry roles before approving.
 After either path:
-- **Deferred scope aging (Spec 199):** Read `docs/backlog.md` for any items tagged as deferred scope. For each deferred item, check its origination date. Flag items older than 14 days without disposition:
+- **Deferred scope aging (Spec 199):** Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` and scan for any items tagged as deferred scope (status `deferred` or content with deferred-scope markers). For each deferred item, check its origination date. Flag items older than 14 days without disposition:
   ```
   DEFERRED SCOPE AGING — The following items are >14 days old without disposition:
   - <date> from Spec NNN: <item summary> (<age> days)
@@ -298,6 +298,154 @@ After either path:
   > | **2** | 2 | `batch dispose` | Faster path; AI proposes, operator confirms | Recommend dispositions for all, approve/modify in bulk |
   > | **3** | — | `carry forward` | Defer; fine if items are still ripening | Carry all items forward to next cycle |
 - Remind me to update the `Last evolve loop review:` field in today's session log.
+
+## [mechanical] Step S — Safety-config sweep (Spec 387 Component B)
+
+A quarterly deprecation sweep that verifies safety-property enforcement persistence and runs a wide-net grep over non-registered files. Runs on the existing /evolve cadence — no new schedule. Gated by 90-day dormancy threshold.
+
+```bash
+# shellcheck source=/dev/null
+source .forge/lib/safety-config.sh
+
+sweep_log=".forge/state/safety-sweep.jsonl"
+mkdir -p .forge/state
+last_sweep_epoch=0
+if [[ -f "$sweep_log" ]]; then
+  last_ts=$(tail -1 "$sweep_log" | grep -oE '"timestamp":"[^"]+"' | head -1 | sed -E 's/.*"timestamp":"([^"]+)".*/\1/')
+  if [[ -n "$last_ts" ]]; then
+    last_sweep_epoch=$(date -u -d "$last_ts" +%s 2>/dev/null || echo 0)
+  fi
+fi
+now_epoch=$(date -u +%s)
+ninety_days=$((90*24*60*60))
+age=$((now_epoch - last_sweep_epoch))
+
+if (( last_sweep_epoch > 0 && age < ninety_days )); then
+  days_until=$(( (ninety_days - age) / 86400 ))
+  echo "Safety-config sweep: skipped (last sweep ${days_until} day(s) inside 90-day window)"
+else
+  echo "Safety-config sweep: running (last sweep > 90 days or absent)"
+
+  # R5b — Enforcement-path verification across closed/implemented specs.
+  ep_dormant=0
+  for spec_file in docs/specs/[0-9][0-9][0-9]-*.md; do
+    [[ -f "$spec_file" ]] || continue
+    status=$(grep -E '^- Status: ' "$spec_file" | head -1 | sed -E 's/^- Status: //')
+    case "$status" in implemented|closed) : ;; *) continue ;; esac
+    sec=$(awk '/^## Safety Enforcement$/{p=1; next} /^## /{p=0} p' "$spec_file")
+    [[ -z "$sec" ]] && continue
+    ep_file=$(echo "$sec" | grep -E '^Enforcement code path: ' | sed -E 's/^Enforcement code path: ([^:]+)::.*/\1/')
+    ep_sym=$(echo  "$sec" | grep -E '^Enforcement code path: ' | sed -E 's/^Enforcement code path: [^:]+::(.*)$/\1/')
+    [[ -z "$ep_file" || ! -f "$ep_file" || "$ep_sym" == "<placeholder>" ]] && continue
+    if ! grep -qE "(function[[:space:]]+${ep_sym}|^${ep_sym}\(\)|def[[:space:]]+${ep_sym}|^${ep_sym}[[:space:]]*=)" "$ep_file" 2>/dev/null; then
+      echo "DORMANT-ENFORCEMENT: ${spec_file##*/} -> ${ep_file}::${ep_sym} (symbol unresolved)"
+      ep_dormant=$((ep_dormant+1))
+    fi
+  done
+
+  # R5c — UNENFORCED-pointer status check.
+  ptr_dormant=0
+  while IFS=: read -r f line text; do
+    [[ -z "$f" ]] && continue
+    if [[ "$text" =~ UNENFORCED.*Spec[[:space:]]+([0-9]{3}) ]]; then
+      ref="${BASH_REMATCH[1]}"
+      ref_file=$(ls "docs/specs/${ref}-"*.md 2>/dev/null | head -1)
+      if [[ -z "$ref_file" ]]; then
+        echo "DORMANT-POINTER: ${f}:${line} -> Spec ${ref} (does not exist)"
+        ptr_dormant=$((ptr_dormant+1))
+      else
+        ref_status=$(grep -E '^- Status: ' "$ref_file" | head -1 | sed -E 's/^- Status: //')
+        if [[ "$ref_status" != "in-progress" && "$ref_status" != "implemented" ]]; then
+          echo "DORMANT-POINTER: ${f}:${line} -> Spec ${ref} (status=${ref_status})"
+          ptr_dormant=$((ptr_dormant+1))
+        fi
+      fi
+    fi
+  done < <(grep -rnE '# UNENFORCED' --include='*.md' --include='*.yaml' --include='*.jinja' . 2>/dev/null || true)
+
+  # R5d — Wide-net grep on non-registered files.
+  registered_patterns=$(safety_config_load .forge/safety-config-paths.yaml | tr '\n' '|' | sed 's/|$//; s/|/\\|/g')
+  wide_flagged=0
+  while IFS=: read -r f line text; do
+    [[ -z "$f" ]] && continue
+    # Skip if file matches any registered pattern.
+    skip=0
+    while IFS= read -r pat; do
+      bp="${pat//\*\*/\*}"
+      # shellcheck disable=SC2053
+      if [[ "${f#./}" == $bp ]]; then skip=1; break; fi
+    done < <(safety_config_load .forge/safety-config-paths.yaml)
+    (( skip )) && continue
+    # Skip vendored content
+    case "$f" in *node_modules*|*.git/*|*.venv/*|*tmp/*) continue ;; esac
+    # Check whether the matched token is referenced in any spec's Safety Enforcement section.
+    if ! grep -lE 'Enforcement code path: '"${f#./}"'::' docs/specs/*.md >/dev/null 2>&1; then
+      echo "WIDE-NET: ${f}:${line}: ${text}"
+      wide_flagged=$((wide_flagged+1))
+    fi
+  done < <(grep -rnE '(safe|safety|enforce|require|validate|guard|prevent|reject)_[a-zA-Z_]+' \
+    --include='*.sh' --include='*.ps1' --include='*.py' --include='*.md' \
+    --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.venv \
+    . 2>/dev/null | head -50 || true)
+
+  # R5e — Registry-curation drift check.
+  prior=".forge/state/safety-config-paths-prior.yaml"
+  if [[ -f "$prior" ]]; then
+    if ! diff -q .forge/safety-config-paths.yaml "$prior" >/dev/null 2>&1; then
+      removed=$(comm -23 <(sort "$prior") <(sort .forge/safety-config-paths.yaml) || true)
+      if [[ -n "$removed" ]]; then
+        echo "REGISTRY-DRIFT: pattern(s) removed since last sweep:"
+        printf '  %s\n' "$removed"
+      fi
+    fi
+  fi
+  cp .forge/safety-config-paths.yaml "$prior"
+
+  # R5f — 7-metric output.
+  log="docs/sessions/activity-log.jsonl"
+  if [[ -f "$log" ]]; then
+    quarter_ago=$(date -u -d "90 days ago" +%Y-%m-%d 2>/dev/null || date -u -v-90d +%Y-%m-%d)
+    quarter_log=$(awk -v cutoff="$quarter_ago" 'index($0, "\"timestamp\":\"" cutoff) > 0 || $0 > cutoff' "$log" || true)
+    specs_prompted=$(echo "$quarter_log" | grep -cE '"event_type":"safety-prompt-(yes|no)"' || true)
+    yes_answers=$(echo "$quarter_log" | grep -cE '"event_type":"safety-prompt-yes"' || true)
+    overrides_used=$(echo "$quarter_log" | grep -cE '"event_type":"safety-override"' || true)
+  else
+    specs_prompted=0; yes_answers=0; overrides_used=0
+  fi
+  no_rate="0.0"
+  if (( specs_prompted > 0 )); then
+    no_rate=$(awk -v y="$yes_answers" -v p="$specs_prompted" 'BEGIN{printf "%.3f", (p-y)/p}')
+  fi
+  deferred_unenforced=$(grep -l '# UNENFORCED' docs/specs/*.md 2>/dev/null | wc -l)
+
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  printf '{"timestamp":"%s","specs_prompted":%d,"yes_answers":%d,"no_rate":%s,"deferred_with_unenforced":%d,"overrides_used":%d,"dormant_found":%d,"wide_net_flagged":%d}\n' \
+    "$ts" "$specs_prompted" "$yes_answers" "$no_rate" "$deferred_unenforced" "$overrides_used" \
+    "$((ep_dormant + ptr_dormant))" "$wide_flagged" >> "$sweep_log"
+
+  # R5g — Threshold-to-action mappings.
+  if awk -v r="$no_rate" 'BEGIN{exit !(r > 0.5)}'; then
+    echo "WARNING: Registry over-firing (no_rate=$no_rate > 0.5) — consider tightening pattern set or operator habituation review"
+  fi
+  if (( overrides_used > 2 )); then
+    echo "WARNING: Override frequency above threshold (overrides_used=$overrides_used > 2 this quarter) — pattern audit recommended"
+  fi
+  if (( ep_dormant + ptr_dormant > 0 )); then
+    echo "WARNING: $((ep_dormant + ptr_dormant)) dormant declaration(s) — per-item disposition required (delete, annotate UNENFORCED, or file enforcement spec)"
+  fi
+  if (( wide_flagged > 0 )); then
+    echo "WARNING: ${wide_flagged} new safety-named token(s) outside registry — consider expanding .forge/safety-config-paths.yaml"
+  fi
+  if (( specs_prompted > 0 )); then
+    sn_ratio=$(awk -v y="$yes_answers" -v p="$specs_prompted" 'BEGIN{printf "%.3f", y/p}')
+    if awk -v r="$sn_ratio" 'BEGIN{exit !(r < 0.05)}'; then
+      echo "WARNING: Prompt firing without yields (signal-to-noise=$sn_ratio < 0.05) — recheck registry coverage"
+    fi
+  fi
+
+  echo "Safety-config sweep: complete. Metrics appended to $sweep_log."
+fi
+```
 
 ## [decision] Evolve Loop Exit Gate (Spec 191)
 

@@ -77,6 +77,28 @@ If you find yourself confused about which file holds the source of truth, the ru
 
 ---
 
+## Dispatch mode comparison
+
+When `/parallel` runs, it creates worktrees and a branch per spec — but the **dispatch mechanism** (how agents actually fan out into the worktrees) is a separate decision. There are three plausible modes. The multi-tab pattern is the canonical recommendation; `EnterWorktree` is a solo-session alternative; the `Agent + isolation: "worktree"` variant is evaluated but not yet shipped.
+
+| Mode | Concurrency | Mechanism | When to use | Status |
+|------|-------------|-----------|-------------|--------|
+| **Multi-tab** | True parallel (N tabs run independently) | Operator opens N Claude Code tabs, one per worktree. Each tab `cd`s into its worktree, runs `/tab <label> feature NNN`, then `/implement NNN`. Tabs coordinate through the registry (Specs 351/352/353). | Genuine concurrent execution across 2+ specs — the common case for `/parallel`. | **Canonical.** Recommended default. |
+| **`EnterWorktree`** | Serialized (one worktree at a time per session) | The `EnterWorktree` tool switches the current session into a worktree; `ExitWorktree` returns to the parent. One worktree per session at any moment. | Solo session that needs to dip into one worktree, do focused work, then return. Single-spec dispatch. Not parallel-dispatch. | **Alternative** for solo-session work. |
+| **`Agent` + `isolation: "worktree"`** | True parallel (N sub-agents from one parent) | Would spawn the `Agent` tool with `isolation: "worktree"` per worktree, fanning out from one parent session. | Hypothetical — would let a single tab orchestrate a parallel run without operator-launched tabs. | **Evaluated, not shipped.** Requires a sub-agent dispatch path that does not exist in `/parallel` Step 6 today. File a separate spec if you need it (see Spec 405 Origin § option (b)). |
+
+The earlier prose in `/parallel` Step 6 referencing `EnterWorktree` as the fan-out mechanism was inaccurate — `EnterWorktree` is single-session by design and never performed multi-agent fan-out. Spec 405 corrected the docs without changing operational semantics.
+
+**Choosing between multi-tab and `EnterWorktree`**:
+
+- Have 2+ specs that need to run truly in parallel? → multi-tab.
+- Have one spec, want to enter its worktree from your current session for focused work? → `EnterWorktree`.
+- Wish you could fan out from a single tab without opening more? → no shipped path today; file a spec.
+
+The multi-tab decision tree (when to open a second tab, lane choice, sync points) lives earlier in this guide. The mode-comparison table above answers the orthogonal question: **given that you're running `/parallel`, how does dispatch happen?**
+
+---
+
 ## Acknowledged structural limitations
 
 The markdown registry (`docs/sessions/registry.md`) is hand-edited by `/tab` and is read by lifecycle commands as text. This is structurally limited compared to a JSON file or a small daemon process maintaining a SQLite registry across tabs. Spec 353 acknowledges this and ships the marker primitive on top of the markdown registry — leaving the substrate-replacement decision to a future `/evolve` loop after at least 6 months of real multi-tab usage data.

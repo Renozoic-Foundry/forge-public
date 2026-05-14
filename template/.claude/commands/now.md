@@ -143,7 +143,7 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
 
 ---
 
-1. **Validation queue (priority check)**: Read docs/specs/README.md and scan for any specs with status `implemented` (not yet `closed`). For each one found, list it as needing human validation.
+1. **Validation queue (priority check, Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json` and scan the parsed JSON for any specs with status `implemented` (not yet `closed`). For each one found, list it as needing human validation.
    - If any `implemented` specs exist, present them as the **priority recommended action**:
      ```
      ## Validation queue
@@ -194,10 +194,10 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    - This takes priority over recommending new implementation work.
 
 <!-- parallel: steps 2-5 are independent reads — run them simultaneously -->
-2. Read docs/backlog.md and identify the highest-ranked spec with status `draft` or `approved`.
+2. **Backlog top-of-queue (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as JSON; the array contains one row per backlog entry with keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`. Identify the highest-ranked spec with status `draft` or `approved`. (Helper internalizes mode-detection + parsing — Spec 399 helper-as-contract; do NOT open canonical files directly in any rendering mode.)
 3. Read docs/sessions/ and find the most recent session log. Check its "Spec triggers" and "Process improvement items" sections for any open items (unchecked boxes).
 4. Read CLAUDE.md post-implementation checklist and identify any items that appear outstanding based on recent session context.
-5. Check docs/specs/README.md for any spec listed as `draft` that has been sitting without movement.
+5. **Spec index — stale drafts (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as JSON; identify any spec listed as `draft` that has been sitting without movement.
 6. **Session log auto-create**: Check `docs/sessions/` for a log file matching today's date. If none exists, create a stub from `docs/sessions/_template.md` with today's date and the next session number (scan existing files to determine NNN). Report: "Created session log: `docs/sessions/YYYY-MM-DD-NNN.md`."
 7. **Scratchpad review**: Read `docs/sessions/scratchpad.md` for any open notes — list all unresolved items grouped by tag (`[validate]`, `[session]`, `[evolve]`, untagged).
 7b. **Pending explorations**: Scan `docs/research/` for files matching `explore-*.md`. For each file, check the `Status:` field. If any have `Status: proposed`, report:
@@ -229,6 +229,13 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    - If count `N >= 1`: emit one line `Aging drafts: N past validity — run /matrix to triage via strategic-fit flow.`
    - If count `N == 0` (zero populated-and-expired) OR no drafts have `valid-until:` populated yet: emit nothing.
    This surface is read-only and additive. `/now` does not modify any spec frontmatter. Renewal happens via `/revise NNN` (refreshes `valid-until:`) or operator direct edit. Triage of expired drafts happens via `/matrix` Step 8 strategic-fit flow.
+
+8d2. **Vet-pending advisory (Spec 395 AC 12)**: Scan `docs/specs/[0-9][0-9][0-9]-*.md` files for frontmatter containing `Consensus-Status: vet-pending`. Compare today's date against the universal SLA date `2026-06-02` (set by Spec 395 Backfill section).
+   - If today is **on or after 2026-06-02** AND `N >= 1` vet-pending drafts exist: emit one line `N drafts vet-pending past 2026-06-02 SLA — vet-now-or-set-Consensus-Exempt at /implement.`
+   - Pre-SLA (before 2026-06-02): silent regardless of count.
+   - Zero vet-pending drafts: silent.
+   - **Sunset reminder**: read Spec 395 frontmatter for `Provisional-Until: <date>`. Starting D-7 (date − 7 ≤ today ≤ date), emit `Spec 395 sunset review due in <N> days — see /evolve.` Past the date, the review is overdue; emit `Spec 395 sunset review overdue (<N> days) — run /evolve to evaluate the gate.`
+   This advisory is read-only and additive — it does not modify any spec frontmatter or block subsequent commands.
 
 8c. **Process-kit external-source freshness check** (Spec 278): Read `forge.process_kit.freshness_threshold_days` from AGENTS.md (default: **180** if absent or unset). Scan `.md` files under `docs/process-kit/` AND `template/docs/process-kit/` for a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker within the first 10 lines.
    - For each file carrying the marker: compare the date to today. If the date is older than the threshold, flag the guide as stale.
@@ -334,6 +341,22 @@ Check `docs/sessions/` for the most recent session log. Compare its date to the 
   → **Draft session log?** — `/session` will generate a pre-populated draft for your review.
   ```
 - If stale but no accumulated entries: fall back to "Session log is stale — run `/session` to update."
+
+## [mechanical] Step 11b — Spec 254 Phase 2 #3 burn-in counter (Spec 398)
+
+If `docs/.generated/` directory exists (project has migrated to split-file mode per Spec 398), surface the Phase 2 #3 dual-write retirement burn-in status:
+
+1. Locate the close date for Spec 398 in `docs/specs/CHANGELOG.md` (line `- YYYY-MM-DD: Spec 398 closed.`). If absent, skip silently — burn-in starts after close.
+2. Count `closed (YYYY-MM-DD …)` entries in `docs/specs/CHANGELOG.md` whose date is strictly after the Spec 398 close date. Cap at 10. Call this `N`.
+3. Count operator-reported renderer-output bugs:
+   - Session-log `## Error autopsies` entries tagged `renderer-output` across all `docs/sessions/*.md`.
+   - Specs with `Trigger: error found in chat` whose body references a renderer or assembler bug (string match: `render_backlog`, `render_changelog`, `render_spec_index`, `assemble_view`).
+   Sum is `M`.
+4. Emit a one-line status:
+   - If `N < 10` OR `M > 0`: `Spec 254 Phase 2 #3 burn-in: N/10 closes accrued, M operator-reported renderer bugs (see docs/specs/398-*.md).`
+   - If `N >= 10` AND `M == 0`: `Phase 2 #3 burn-in: COMPLETE — eligible for /spec.`
+
+Skip silently if `docs/.generated/` is absent.
 
 ## [mechanical] Step 12 — Evolve loop trigger detection (Spec 131, enhanced by Specs 157, 193)
 

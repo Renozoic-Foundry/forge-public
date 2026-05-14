@@ -9,12 +9,15 @@ PROJECT_DIR="$(cd "${FORGE_DIR}/.." && pwd)"
 source "${FORGE_DIR}/lib/logging.sh"
 # Spec 329: frontmatter-aware helpers (strip_frontmatter, is_forge_command, extract_frontmatter, bodies_equal)
 source "${FORGE_DIR}/lib/sync-helpers.sh"
-forge_log_init "forge-sync-commands"
+# Spec 416: defer forge_log_init until after arg parse so --dry-run and --check
+# remain hermetic (logging.sh writes a session separator + per-call lines into
+# .forge/logs/ which mutates the staging dir and breaks Spec 404 byte-identity).
 
 # --- Defaults ---
 DRY_RUN=false
 CHECK_MODE=false
 FORCE=false
+FORCE_JINJA=false  # Spec 390: opt-in override to overwrite .jinja Copier-time variations
 AGENTS_OVERRIDE=""
 SCOPE="project"
 TEMPLATE_SIDE=false  # Spec 281: process template/.forge/commands -> template/.claude/commands instead
@@ -41,6 +44,11 @@ while [[ $# -gt 0 ]]; do
       FORCE=true
       shift
       ;;
+    --force-jinja)
+      # Spec 390: opt-in override to overwrite .jinja Copier-time variations
+      FORCE_JINJA=true
+      shift
+      ;;
     --template-side)
       # Spec 281: process template/.forge/commands -> template/.claude/commands (the 4th-edge sync)
       TEMPLATE_SIDE=true
@@ -62,6 +70,8 @@ while [[ $# -gt 0 ]]; do
       echo "Options:"
       echo "  --check         Check if .claude/commands/ is in sync (body-to-body; exits non-zero if drifted)"
       echo "  --force         Overwrite mirror files even when body diverges from canonical (Spec 329 safety)"
+      echo "  --force-jinja   Override .jinja skip — overwrite Copier-time variations (Spec 390)"
+      echo "                  Use only when intentionally collapsing a Copier-time variation."
       echo "  --template-side Process template/.forge/commands -> template/.claude/commands (Spec 281 4th-edge sync)"
       echo "  --agents LIST   Comma-separated agent list (default: read from onboarding.yaml)"
       echo "  --scope SCOPE   Installation scope: project (default), user, or both"
@@ -96,6 +106,12 @@ if $TEMPLATE_SIDE; then
     forge_log_error "--template-side is incompatible with --scope user|both (template processing is project-side only)"
     exit 1
   fi
+fi
+
+# --- Spec 416: initialize logging only for write-paths ---
+# Skip in --dry-run (Spec 404 hermeticity) and --check (read-only comparison).
+if ! $DRY_RUN && ! $CHECK_MODE; then
+  forge_log_init "forge-sync-commands"
 fi
 
 # --- Determine which agents to generate for ---
@@ -444,8 +460,7 @@ fi
 
 # --- Counters ---
 GENERATED=0
-# shellcheck disable=SC2034
-SKIPPED=0
+SKIPPED=0  # Spec 390: incremented when .jinja file is preserved
 CONFLICTS=0
 
 # --- User-level installation ---
@@ -475,6 +490,15 @@ for agent in "${AGENTS[@]}"; do
 
     src_base="$(basename "$src_file")"
     dst_file="${target_dir}/${src_base}"
+
+    # Spec 390: skip .jinja Copier-time variations by default. They are intentional
+    # template-time substitution sites, not regen mirrors. Overwriting strips
+    # {% if %} blocks and {{ var }} substitutions. Opt-in override via --force-jinja.
+    if [[ "$src_base" == *.jinja ]] && ! $FORCE_JINJA; then
+      echo "preserved Copier-time variation: $dst_file" >&2
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
 
     # Check for conflicts: existing non-FORGE file with same name
     if [[ -f "$dst_file" ]] && ! is_forge_command "$dst_file"; then
@@ -571,6 +595,7 @@ echo ""
 echo "## forge-sync-commands — Complete"
 echo "Agents: ${AGENTS[*]}"
 echo "Commands generated: $GENERATED"
+echo "Jinja preserved: $SKIPPED"
 echo "Conflicts (skipped): $CONFLICTS"
 if $DRY_RUN; then
   echo "Mode: dry-run (no files written)"

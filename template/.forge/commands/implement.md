@@ -76,7 +76,7 @@ After resolving the spec number (Step 0 or Step 1), check for an existing checkp
 
 **Step 0 — Resolve `next` argument**:
 If $ARGUMENTS is `next` (case-insensitive):
-  a. Read `docs/backlog.md`.
+  a. **Backlog rows (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as JSON; the array contains all backlog rows.
   b. Find the highest-ranked row with status `draft`. If multiple rows share the same rank/score, pick the one listed first.
   c. If no `draft` specs exist: report "No draft specs in the backlog. Create one with `/spec <description>`." Stop.
   d. Display the selected spec using a Choice Block (Spec 025, see `docs/process-kit/implementation-patterns.md`):
@@ -122,6 +122,57 @@ Before starting implementation, ensure today's session log exists and append a "
    ```
 3. Report: "Session log updated: spec NNN started."
 
+### [mechanical] Step 0d — Final-Draft Consensus Gate (Spec 395)
+
+Before reading the full spec body in Step 1, this gate verifies the spec has either passed final-draft `/consensus` (recorded as `Consensus-Close-SHA:` per Spec 389) or carries an explicit operator exemption. The gate enforces the convention that high-value, non-trivial drafts must be vetted at final-draft stage — not just at proposal stage — before /implement begins.
+
+**Posture**: this gate is **fail-closed** (ENFORCEMENT). Step 2b.0 (Spec 389 encoded-DA verification) is **fail-soft** (OPTIMIZATION). The asymmetry is intentional and load-bearing — optimizers fail soft, enforcers fail closed. See `docs/process-kit/consensus-protocol.md` § Posture asymmetry.
+
+1. **Read spec frontmatter only** (lightweight read; full Step 1 read still happens). Extract:
+   - `Status:`
+   - `Change-Lane:`
+   - `Priority-Score:` HTML comment (BV, E, R, SR)
+   - `Consensus-Close-SHA:` (optional — written by `/consensus` per Spec 389)
+   - `Consensus-Exempt:` (optional — operator-set)
+   - `Consensus-Status:` (optional — e.g., `vet-pending`)
+
+2. **Classification (Req 1)** — spec is `consensus-required` when ALL hold:
+   - `Status:` = `draft`
+   - `Change-Lane:` ∈ {`standard-feature`, `small-change`}
+   - `BV ≥ 4 AND (R ≥ 3 OR E ≥ 3)` — compound rule eliminates the BV=4/E=1/R=1 theater case where /consensus is heavier than the spec.
+
+3. **Exemptions (Req 2)** — consensus NOT required when ANY hold:
+   - `Change-Lane:` = `hotfix` (urgency exemption; already excluded by step 2's lane set, restated for operator clarity).
+   - `Consensus-Exempt: <reason>` is set with reason ≥ 30 chars.
+   - **Trivial-doc fast-path** (operator-attested): `Consensus-Exempt: trivial-doc — <30+ char justification>` AND `Change-Lane:` = `small-change`. /implement does NOT runtime-verify file count or LOC at gate time. `/close` Step 7 audits the closed diff and emits CONDITIONAL_PASS if the trivial-doc claim was overstated (>30 LOC OR >2 files). Pattern: trust-at-gate; verify-at-close.
+
+4. **Lane B counter-sign rule (Req 8)** — when `docs/compliance/profile.yaml` is present:
+   - If spec is `consensus-required` AND `BV ≥ 4` AND `R ≥ 3` (high-stakes range): the `Consensus-Exempt: <reason>` value MUST contain a `[reviewed-by: <second-operator-identity>]` token.
+   - Parse the value for the `[reviewed-by: ...]` token. If absent under these conditions, FAIL with: "Lane B Consensus-Exempt requires [reviewed-by: <identity>] counter-sign for BV≥4 + R≥3 specs (forensic anchor; prevents audit-laundering composition with vet-pending + Spec 052 sealing)."
+   - Lane A (no compliance profile present): single 30-char operator-authored reason remains the trust root; counter-sign rule does NOT apply.
+
+5. **Verify presence**: if `consensus-required` and no exemption applies, verify either `Consensus-Close-SHA:` (40-char hex) OR `Consensus-Exempt:` (≥ 30 chars; Lane B counter-sign per step 4) is present.
+
+6. **Gate outcome**:
+   - PASS via SHA: `GATE [final-draft-consensus]: PASS — Consensus-Close-SHA <8-char prefix> present.` Proceed.
+   - PASS via exemption: `GATE [final-draft-consensus]: PASS — Consensus-Exempt: <reason snippet>.` Proceed.
+   - SKIP not-qualifying (low-priority spec): `GATE [final-draft-consensus]: SKIP — spec does not require consensus (lane=<lane>, BV=<n>, E=<n>, R=<n>).` Proceed silently.
+   - SKIP hotfix: `GATE [final-draft-consensus]: SKIP — hotfix lane.` Proceed.
+   - FAIL (no SHA, no Exempt): `GATE [final-draft-consensus]: FAIL — Spec NNN requires final-draft consensus before /implement. Run /consensus NNN, or set Consensus-Exempt: <reason ≥ 30 chars> in frontmatter.` HALT — do not proceed to Step 1.
+   - FAIL (Exempt reason too short, AC 5): `GATE [final-draft-consensus]: FAIL — Consensus-Exempt reason must be ≥ 30 chars (got: N).` HALT — operator must extend the reason to ≥ 30 characters.
+
+7. **Activity log (Req 3)** — append a single JSONL line to `docs/sessions/activity-log.jsonl` (the canonical activity-log path established by Spec 134; Spec 052 immutability sealing reads from this file):
+   - Lane A (no compliance profile):
+     ```json
+     {"timestamp":"<ISO 8601>","event_type":"consensus-gate-check","spec_id":"NNN","decision":"PASS|FAIL|SKIP","gate_path":"SHA|exempt|exempt-trivial-doc|skip-not-qualifying|skip-hotfix|missing","agent_id":"<id>","consensus_status":"<vet-pending|absent>"}
+     ```
+     The `consensus_status` field is `vet-pending` when frontmatter contains `Consensus-Status: vet-pending`, `absent` otherwise (Req 5 + AC 11).
+   - Lane B (`docs/compliance/profile.yaml` present): include the Lane A fields PLUS `operator_identity` (from `forge.identity` config), `spec_file_sha` (sha256 of spec file), and the applicable provenance field — `consensus_close_sha` (when gate_path=SHA), or `consensus_exempt_reason` + `reviewed_by_identity` (when gate_path=exempt).
+
+8. **Vet-pending advisory passthrough (Req 5)** — if frontmatter contains `Consensus-Status: vet-pending`, the gate behaves identically to the rules above (it is **prompt-not-block**: the gate fires only if `Consensus-Close-SHA` AND `Consensus-Exempt` are both absent). Vet-pending is surfaced as a one-line advisory in `/now` and `/matrix` after the 30-day SLA, not at /implement.
+
+9. **Provisional sunset (Req 9)** — this gate ships PROVISIONAL for 90 days post-Spec-395 close. At sunset, `/evolve` presents trigger-rate, drift recurrence, and operator-friction data; operator decides whether to make permanent, tighten the qualifier, loosen to advisory, or remove. The `Provisional-Until:` field on Spec 395 records the sunset date; `/now` surfaces a reminder starting D-7.
+
 ---
 
 1. Read `docs/specs/NNN-*.md` for the given spec number. <!-- parallel: also read README.md + CHANGELOG.md if needed for approval trail -->
@@ -140,8 +191,10 @@ Continue regardless — this is a warning, not a gate.
         - Missing sections → `GATE [completeness]: FAIL — missing: <sections>. Remediation: fill required sections before approval.` Stop.
      b. Update `Status: in-progress` in the spec file.
      c. Add a dated revision entry: `YYYY-MM-DD: Approved inline via /implement. Status → in-progress.`
-     d. Update the spec's row in `docs/specs/README.md` to `in-progress`.
-     e. Add a CHANGELOG entry: `- YYYY-MM-DD: Spec NNN approved inline via /implement.`
+     d. **Write-side mode check (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --skip-canonical-write`. If stdout is `skip` (split-file mode), skip steps 2d-2e — the spec frontmatter edit in 2b is the source of truth and the renderers will reflect the new status on next render. If stdout is `proceed`, perform 2d and 2e (Phase 1 dual-write):
+       2d-i. Update the spec's row in `docs/specs/README.md` to `in-progress`.
+       2e-i. Add a CHANGELOG entry: `- YYYY-MM-DD: Spec NNN approved inline via /implement.`
+       If the helper exits nonzero, abort the canonical-write step and surface stderr — do NOT default to either skip or proceed.
      f. Then proceed to step 3.
    - If `implemented` or `deprecated` (or legacy `superseded`): stop and report — "Spec NNN is already `<status>` and cannot be re-implemented. Create a new spec or add a revision entry to the existing one."
    - After approval (whether inline or pre-existing), create the edit-gate sentinel:
@@ -192,7 +245,38 @@ After approval (status is now `in-progress`), compute a SHA-256 integrity hash:
 
 Before writing any code, check if this spec has been reviewed by the devil's advocate.
 
-1. Read the spec frontmatter for `DA-Reviewed:` and `DA-Decision:` fields.
+1. Read the spec frontmatter for `DA-Reviewed:`, `DA-Decision:`, `DA-Encoded-Via:`, and `Consensus-Close-SHA:` fields.
+
+### Step 2b.0 — Encoded-DA verification (Spec 389)
+
+**Fast-path no-op**: if `DA-Encoded-Via:` is absent, skip this entire sub-step and proceed to step 2 (existing flow). No parser overhead, no behavioral change for legacy specs.
+
+**Verifier path**: when `DA-Encoded-Via:` is present, run these checks in order. Any FAIL logs the failure mode and falls through to step 2 (fresh DA subagent path); all-PASS skips steps 2–5 entirely.
+
+a. **Value validation**: assert the field value is exactly `consensus-round-1` or `consensus-round-2`. Otherwise FAIL with: `DA-Encoded-Via must be consensus-round-1 or consensus-round-2 (got: <value>)`. Round 3+ encodings are rejected by design — rounds 3+ indicate unresolved divergence.
+
+b. **Consensus-Close-SHA presence**: if `Consensus-Close-SHA:` is absent or empty, FAIL with: `Consensus-Close-SHA required when DA-Encoded-Via is set`.
+
+c. **SHA format validation**: assert 40-character lowercase hex. Otherwise FAIL with: `Consensus-Close-SHA must be 40-char hex (got: <value>)`.
+
+d. **SHA reachability**: run `git cat-file -e <SHA>^{commit}`. If exit non-zero, FAIL with: `Consensus-Close-SHA <8-char-prefix> not reachable from HEAD (rebased or force-pushed?)`. Operator must re-run `/consensus --round N` to refresh the SHA.
+
+e. **Drift check**: run `git log <SHA>..HEAD --name-only -- <Implementation-Summary-files>`. Paths from the spec's `## Implementation Summary` `Changed files` list are passed verbatim as **git pathspecs** (not shell globs) — operators may use git-pathspec patterns like `tests/fixtures/389/*.md` and git interprets them natively. If the output is non-empty, FAIL with: `drift detected: <files>`. Drifted Implementation-Summary files invalidate the encoding because the spec's claimed scope changed since consensus close.
+
+f. **All-PASS** (a–e all clean): skip the fresh DA subagent spawn. Add to spec frontmatter:
+   - `DA-Reviewed: YYYY-MM-DD`
+   - `DA-Decision: PASS`
+   - `DA-Verification: consensus-round-N (SHA <8-char-prefix> + drift-clean)`
+
+   Report: `GATE [devils-advocate]: PASS — encoded via consensus-round-N (verified SHA <prefix> + drift-clean, no subagent spawn).` Skip steps 2–5; proceed to next major step (2b+ Intelligent Role Dispatch).
+
+g. **Any-FAIL** (any of a–e tripped): log the specific failure mode (which check, with values) to operator output AND append to `docs/sessions/agent-file-registry.md`:
+   ```
+   YYYY-MM-DD HH:MM | devils-advocate | spec-NNN | encoded-FAIL | <failure mode> | mode: verifier
+   ```
+   Then continue to step 2 below — fresh DA subagent will be spawned via the existing path.
+
+**Trust-model constraint**: **/implement MUST NOT write `Consensus-Close-SHA`**. The SHA is exclusively written by `/consensus` at convergent-round close (see `consensus.md` Step 4c). /implement reads + verifies; never edits the SHA. Operators MUST NOT hand-edit the SHA either — the encoding relies on operator integrity. See `docs/process-kit/devils-advocate-checklist.md` § DA-Encoded-Via convention.
 
 2. **If DA-Reviewed exists and is within 7 days and spec content unchanged since that date**:
    - Report: "Devil's advocate review is current (DA-Decision: <decision>, reviewed: <date>)."
@@ -502,6 +586,13 @@ b. **Append spec-started event**: Append a single JSONL line to `docs/sessions/a
    {"timestamp":"<ISO 8601>","agent_id":"<operator or agent ID>","event_type":"spec-started","spec_id":"<NNN>","message":"Beginning implementation of Spec NNN — <title>","metadata":{"lane":"<lane>","score":<score>}}
    ```
    Use the Bash tool with a single `echo '...' >> docs/sessions/activity-log.jsonl` command (append-only, no read-modify-write).
+
+c. **Append per-spec event stream (Spec 254 — Approach D)**: In parallel with the activity-log append above, write to the per-spec event stream:
+   ```bash
+   mkdir -p .forge/state/events/NNN
+   echo '{"timestamp":"<ISO 8601>","event_type":"spec-started","payload":{"lane":"<lane>","score":<score>,"agent_id":"<id>"}}' >> .forge/state/events/NNN/spec-started.jsonl
+   ```
+   The activity-log entry is the cross-cutting feed (all events from all agents in chronological order); the per-spec stream is the spec-scoped feed consumed by render_changelog.py. Both are append-only and conflict-free.
 
 ### [mechanical] Context snapshot update (Spec 091)
 Update `docs/sessions/context-snapshot.md` with the current spec under `## Active implementation`:
@@ -822,6 +913,18 @@ The current default mode is `advisory`. Operator flips to `strict` (via `--mode=
    - `GATE [test-execution]: PASS/FAIL — <test results summary>`. On FAIL: `Remediation: fix failing tests before marking implemented.`
    - `GATE [post-implementation]: PASS/FAIL — <checklist summary>`. On FAIL: `Remediation: complete missing checklist items: <items>.`
 8. **Implementation retrospective**: Draft SIG-NNN entries for any errors, user corrections, or insights from this cycle. Show drafts, get confirmation, then append to `docs/sessions/signals.md` and update today's session log.
+
+   **Spec 371 — Window-bounded scan timestamp write**: After the retrospective scanner runs (regardless of candidate count, including zero), write/update the per-session scan-timestamp file so `/close` Step 8b can dedup against this window:
+   ```bash
+   # Resolve session id from active-tab marker; fall back to deterministic hash if absent.
+   sid=$(ls .forge/state/active-tab-*.json 2>/dev/null | head -1 | sed -E 's|.*active-tab-([^.]+)\.json|\1|')
+   sid="${sid:-default-$(date +%Y%m%d)-NNN}"
+   mkdir -p .forge/state
+   cat > ".forge/state/last-eaci-scan-${sid}.json" <<EOF
+   {"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","command":"/implement","spec":"NNN"}
+   EOF
+   ```
+   This file is the dedup primitive shared with `/close` Step 8b; it is GC'd by `/tab close` Step 3b. Skip silently on write failure (the scan still ran; the dedup is a best-effort optimization).
 9. **Implementation summary (Spec 239)**: Present a concise summary of what was implemented. Do NOT present a Review Brief here — the formal Review Brief is generated exclusively at `/close` (Step 2e).
    a. Output the summary:
       ```
@@ -832,6 +935,11 @@ The current default mode is `advisory`. Operator flips to `strict` (via `--mode=
       ```
    b. If no human-judgment items are likely needed at `/close` (all ACs are machine-verifiable): note "This spec appears delegation-eligible at L3+ — all ACs are machine-verifiable."
    c. This summary is informational — the formal gate review happens at `/close`.
+   d. **Append spec-implemented event (Spec 254 — Approach D)**: Append to the per-spec event stream:
+      ```bash
+      echo '{"timestamp":"<ISO 8601>","event_type":"spec-implemented","payload":{"changed_files":<count>,"ac_pass":<N>,"ac_total":<M>}}' >> .forge/state/events/NNN/spec-implemented.jsonl
+      ```
+      Append-only; conflict-free. Consumed by `render_changelog.py` to surface the implementation event in the chronological log.
 
 ### [mechanical] Step 9d — Post-Implementation Value Demo (Spec 261)
 

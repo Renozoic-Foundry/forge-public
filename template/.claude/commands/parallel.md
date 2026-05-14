@@ -59,6 +59,20 @@ Concrete evidence: `docs/sessions/signals.md` SIG-CLOSE-01 (2026-04-24) document
 
 If in doubt, run inline first — /parallel can always be invoked later.
 
+## Choose dispatch mode
+
+`/parallel` orchestrates worktree creation, conflict pre-flight, merge-back, and consolidation — but the **dispatch mechanism** (how agents actually fan out into the worktrees) is not unique. Three modes exist:
+
+| Mode | When to use | Mechanism | Status |
+|------|-------------|-----------|--------|
+| **Multi-tab** (canonical) | Genuine parallel execution — one Claude Code chat tab per worktree, each running `/implement` independently. | Operator opens N tabs (one per worktree), each runs `/tab <label> feature NNN` then `/implement NNN`. Tabs coordinate via the registry per Specs 351/352/353. | **Canonical** — use this for `/parallel`. |
+| **`EnterWorktree`** (alternative) | Solo-session dipping — single tab walks one worktree at a time, runs `/implement`, exits back to the parent session. Serialized, not parallel. | The `EnterWorktree` tool switches the current session into a worktree; `ExitWorktree` returns. One worktree at a time per session. | **Alternative** for solo-session worktree work. Not a parallel-dispatch mechanism. |
+| **`Agent` + `isolation: "worktree"`** | (Hypothetical) Spawning multiple `Agent` sub-agents from a single parent session, each isolated in its own worktree. | Would use the `Agent` tool with `isolation: "worktree"` per spawn. Requires a sub-agent dispatch path that does NOT exist in `/parallel` Step 6 today. | **Evaluated, not yet shipped.** Separate spec required — see Spec 405 Origin § option (b). |
+
+**Default behavior**: Step 6 below creates the worktrees; the agents that fill them are **operator-launched in additional Claude Code tabs** (multi-tab pattern). `/parallel` does NOT auto-spawn sub-agents in the current implementation. Earlier prose referencing `EnterWorktree` as the fan-out mechanism was inaccurate — `EnterWorktree` is single-session by design.
+
+See `docs/process-kit/multi-tab-quickstart.md` § Dispatch mode comparison for the canonical decision table.
+
 ## [mechanical] Step 0z — Lane-mismatch warning (Spec 353)
 
 If `.forge/state/active-tab-*.json` marker exists for this session, read its `lane` field.
@@ -227,12 +241,31 @@ For each spec (in spec-number order):
 2. Create a git worktree: `git worktree add .worktrees/spec-NNN spec-NNN`
 3. Report: "Worktree created: .worktrees/spec-NNN on branch spec-NNN"
 
-Then, for each worktree, launch a Claude Code agent:
-- Use the `EnterWorktree` tool to spawn an isolated agent in each worktree.
-- Each agent receives the instruction: "Run /implement NNN in this worktree. When complete, write a mini session log to docs/sessions/parallel-NNN.md summarizing what was done, decisions made, and any issues encountered. Report your estimated token usage (input + output) in the mini session log."
-- All agents run in parallel — do not wait for one to finish before starting the next.
+**Dispatch (canonical: multi-tab)**: After all worktrees are created, present the operator with the per-worktree launch instructions:
 
-Report: "Launched <N> parallel agents. Waiting for all to complete..."
+```
+Worktrees created. To launch parallel agents, open one Claude Code tab per worktree:
+
+For each worktree:
+  1. Open a new Claude Code tab in the project root.
+  2. cd .worktrees/spec-NNN
+  3. /tab impl_NNN feature NNN
+  4. /implement NNN
+  5. When implementation completes, write a mini session log to
+     docs/sessions/parallel-NNN.md summarizing what was done, decisions
+     made, and issues encountered. Report estimated token usage.
+  6. /tab close
+
+When all tabs report "done", return to this tab and type 'all done' to proceed to merge.
+```
+
+Wait for the operator's "all done" signal. `/parallel` does NOT auto-spawn sub-agents — the multi-tab pattern is operator-launched (see § Choose dispatch mode above).
+
+**Dispatch (alternative: `EnterWorktree`)**: A solo operator may use `EnterWorktree` to enter each worktree one at a time, run `/implement NNN`, then `ExitWorktree`. This **serializes** execution — not parallel. Use this only when multi-tab is unavailable (e.g., single-tab automation contexts).
+
+**Dispatch (not shipped: `Agent` + `isolation: "worktree"`)**: Sub-agent fan-out from this parent session is evaluated but not implemented. File a separate spec if needed.
+
+Report: "Worktrees ready. Awaiting operator launch (multi-tab) or `EnterWorktree` dispatch."
 
 ## [decision] Step 7 — Wait, budget tracking, and completion
 

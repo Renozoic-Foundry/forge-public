@@ -29,8 +29,17 @@ param(
     [string]$Scope = "project",
     [switch]$DryRun,
     [switch]$Force,  # Spec 329: overwrite mirror files even when body diverges from canonical
+    [switch]$ForceJinja,  # Spec 390: opt-in override to overwrite .jinja Copier-time variations
     [switch]$TemplateSide  # Spec 281: process template/.forge/commands -> template/.claude/commands (4th-edge sync)
 )
+
+<#
+.PARAMETER Force
+    Spec 329: overwrite mirror files even when body diverges from canonical.
+.PARAMETER ForceJinja
+    Spec 390: override .jinja skip — overwrite Copier-time variations. Use only
+    when intentionally collapsing a Copier-time variation. Combine with -Force.
+#>
 
 $ErrorActionPreference = "Stop"
 
@@ -362,6 +371,7 @@ if (-not (Test-Path $CanonicalDir)) {
 
 $generated = 0
 $conflicts = 0
+$skipped = 0  # Spec 390: incremented when .jinja file is preserved
 
 # --- User-level installation ---
 if ($Scope -eq "user" -or $Scope -eq "both") {
@@ -383,6 +393,14 @@ foreach ($agent in $agentList) {
 
     foreach ($srcFile in (Get-ChildItem -Path $CanonicalDir -Filter "*.md*")) {
         $dstFile = Join-Path $targetDir $srcFile.Name
+
+        # Spec 390: skip .jinja Copier-time variations by default. Overwriting strips
+        # {% if %} blocks and {{ var }} substitutions. Opt-in override via -ForceJinja.
+        if ($srcFile.Name -like "*.jinja" -and -not $ForceJinja) {
+            [Console]::Error.WriteLine("preserved Copier-time variation: $dstFile")
+            $skipped++
+            continue
+        }
 
         # Check for conflicts
         if ((Test-Path $dstFile) -and -not (Test-ForgeCommand $dstFile)) {
@@ -452,6 +470,7 @@ Write-Host ""
 Write-Host "## forge-sync-commands - Complete"
 Write-Host "Agents: $($agentList -join ', ')"
 Write-Host "Commands generated: $generated"
+Write-Host "Jinja preserved: $skipped"
 Write-Host "Conflicts (skipped): $conflicts"
 if ($DryRun) {
     Write-Host "Mode: dry-run (no files written)"

@@ -300,6 +300,8 @@ Version: 1.0 (Spec 404, 2026-05-08)
 
 Any command or script that accepts a `--dry-run` (or `--check`, `--no-act`) flag has a hidden contract: **the flag MUST NOT mutate any persistent state**. A dry-run that quietly writes a temp file, modifies a target dir, or appends to a log violates this contract — and the violation is invisible to ordinary tests, because tests typically only assert on stdout/exit code, not on filesystem state before vs after.
 
+This pattern was promoted after a latent defect in `scripts/sync-to-public.sh` was caught only because Spec 374 added the first AC of this kind (a byte-identity check across two runs). Generalizing it to every dry-run-bearing script catches the same defect class up front.
+
 ### The pattern
 
 Every command/script accepting `--dry-run` MUST have an acceptance criterion of this shape:
@@ -324,7 +326,7 @@ Byte-identity is computed via the helper `assert-hermetic-dry-run.{sh,ps1}` as:
 SHA-256( sorted lines of "<sha256-of-file>  <relative-path>" for every file under D )
 ```
 
-This deliberately **excludes** mtime, atime, ownership, uid/gid, and inode. It includes file contents and the set of paths. Symlinks are followed (their target's contents count). Empty directories are not represented in the manifest.
+This deliberately **excludes** mtime, atime, ownership, uid/gid, and inode. It includes file contents and the set of paths. Symlinks are followed (their target's contents count). Empty directories are not represented in the manifest — a dry-run that creates an empty subdirectory and removes it back is treated as hermetic by this definition; dry-runs that create a directory and leave it are caught only if the directory contains files (this is an accepted limitation; the alternative — manifesting empty dirs — produces false-positive failures on platform-specific temp-dir behavior).
 
 ### Helper
 
@@ -346,7 +348,10 @@ Assert-HermeticDryRun -StagingDir <path> -Command { <scriptblock> }
 ### Worked example
 
 ```bash
+# Setup: empty staging dir
 TMPDIR=$(mktemp -d)
+
+# Source helper, run assertion
 source .forge/bin/tests/lib/assert-hermetic-dry-run.sh
 if assert_hermetic_dry_run "$TMPDIR" -- bash scripts/some-script.sh --dry-run --target "$TMPDIR"; then
     echo "PASS: --dry-run is hermetic"
@@ -354,8 +359,17 @@ else
     echo "FAIL: --dry-run mutated staging dir"
     exit 1
 fi
+
+# Negative pair: a mutating command MUST trip the helper
+mkdir -p "$TMPDIR-neg"
+if assert_hermetic_dry_run "$TMPDIR-neg" -- bash -c "touch $TMPDIR-neg/leak"; then
+    echo "FAIL: helper did not detect mutation (vacuous test)"
+    exit 1
+else
+    echo "PASS: helper correctly rejects non-hermetic command"
+fi
 ```
 
 ### When to apply
 
-Apply this pattern's AC to a spec whenever the spec adds, modifies, or audits a command/script that exposes a `--dry-run` flag.
+Apply this pattern's AC to a spec whenever the spec adds, modifies, or audits a command/script that exposes a `--dry-run` flag. The audit table in [docs/specs/404-dry-run-hermeticity-ac.md](../specs/404-dry-run-hermeticity-ac.md) tracks which FORGE-shipped scripts are compliant.

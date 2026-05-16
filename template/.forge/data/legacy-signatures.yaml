@@ -1,0 +1,40 @@
+# FORGE legacy signature catalog (Spec 431, ADR-431).
+#
+# This catalog is a bounded migration shim covering pre-manifest legacy
+# artifacts under ~/.claude/. The install manifest at ~/.claude/.forge-installed.json
+# is the long-term provenance mechanism; this catalog only covers files placed
+# under ~/.claude/ before Spec 431 shipped.
+#
+# Maintenance model (ADR-431):
+#   1. Ownership — CODEOWNERS-gated. Adds/edits require @forge-template-owners review.
+#   2. Refresh cadence — opportunistic only; entries added only when a pilot
+#      reports a legacy artifact the manifest cannot detect.
+#   3. Deprecation policy — wall-clock retirement per Req 16; entries with a
+#      deprecation_date in the past are removed by a future retirement spec
+#      regardless of pilot completeness.
+#   4. Supply-chain protection — per-entry hash-pinning, catalog_sha256
+#      self-hash, CODEOWNERS gate (defense in depth).
+#
+# Self-hash policy:
+#   catalog_sha256 holds the sha256 of this file's bytes with the
+#   catalog_sha256 value replaced by 64 zeros. Regenerate by running:
+#     forge-py .forge/lib/stoke.py catalog-self-hash <path> --write
+#
+# Entry schema:
+#   - name:             stable identifier; appears in detection reports
+#                       and in operator --ack arguments.
+#     rel_path:         path under ~/.claude/ (POSIX style).
+#     expected_sha256:  64-char lowercase hex; exact match only, no fuzzy.
+#     deprecation_date: YYYY-MM-DD; emit catalog-entry-deprecated warning
+#                       when this date is in the past. Future retirement spec
+#                       removes the entry on or after this date.
+#     notes:            free-form context; surfaced in detection report detail.
+#
+# Detection contract:
+#   - Self-hash MUST verify before entries are consulted (Req 4, AC 9).
+#   - Per-entry match is exact-sha256 only (Req 3, AC 3, AC 4).
+#   - Mismatches are NOT reported (no fuzzy/partial match).
+
+catalog_sha256: "e6f408fd7b5a06abffe8193c9a44575fd664966762a341e2660f22c4a42b8e57"
+
+entries: []

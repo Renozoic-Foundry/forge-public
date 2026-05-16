@@ -18,11 +18,11 @@ If $ARGUMENTS is `?` or `help`:
   /now — Review project state and recommend the next action.
   Usage: /now
   No arguments accepted.
-  Reads: docs/backlog.md, docs/sessions/ (latest log + JSON sidecar), CLAUDE.md, docs/specs/README.md
+  Reads: .forge/lib/derived_state.py --get-backlog (live frontmatter source), docs/sessions/ (latest log + JSON sidecar), CLAUDE.md, docs/specs/README.md
   Reports: validation queue, active work, next recommended spec, evolve loop status, blockers.
           Also: count of drafts past `valid-until:` (Spec 363) — silent on zero.
   Prefers JSON handoff sidecars for structured context; falls back to markdown parsing.
-  See: CLAUDE.md (operating loop, spec lifecycle), docs/backlog.md
+  See: CLAUDE.md (operating loop, spec lifecycle), .forge/lib/derived_state.py (canonical programmatic source — Spec 439), docs/backlog.md (operator-visible artifact)
   ```
   Stop — do not execute any further steps.
 

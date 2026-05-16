@@ -1,0 +1,95 @@
+# Spec 432 — Stoke project-type build-artifact exclusions
+#
+# Single source of truth for "stoke must never stage these paths".
+# Manifest-file presence at the project root activates the project type.
+# Modifying this file changes behavior on the next stoke; no code change required.
+#
+# Schema:
+#   project_types:
+#     <name>:
+#       manifest_files: [<file>, ...]   # presence of ANY at root activates the type
+#       exclude_paths:  [<glob>, ...]   # gitignore-style patterns (forward slashes)
+#
+# Paths use forward slashes; stoke normalizes for the host OS.
+# Trailing `/` indicates a directory; `**` matches recursively.
+#
+# Adding a project type: append a new entry. No code change needed.
+
+project_types:
+  maven:
+    manifest_files:
+      - pom.xml
+    exclude_paths:
+      - target/**
+      - target/
+
+  gradle:
+    manifest_files:
+      - build.gradle
+      - build.gradle.kts
+      - settings.gradle
+      - settings.gradle.kts
+    exclude_paths:
+      - build/**
+      - build/
+      - .gradle/**
+      - .gradle/
+
+  node:
+    manifest_files:
+      - package.json
+    exclude_paths:
+      - node_modules/**
+      - node_modules/
+      - dist/**
+      - dist/
+      - .next/**
+      - .next/
+
+  python:
+    manifest_files:
+      - pyproject.toml
+      - setup.py
+      - setup.cfg
+    exclude_paths:
+      - __pycache__/**
+      - __pycache__/
+      - "**/__pycache__/**"
+      - "*.pyc"
+      - "*.pyo"
+      - "**/*.egg-info/**"
+      - "*.egg-info/"
+      - .pytest_cache/**
+      - .pytest_cache/
+      - .mypy_cache/**
+      - .mypy_cache/
+      - .ruff_cache/**
+      - .ruff_cache/
+      - .tox/**
+      - .tox/
+
+  go:
+    manifest_files:
+      - go.mod
+    exclude_paths:
+      - vendor/**
+      - vendor/
+
+  rust:
+    manifest_files:
+      - Cargo.toml
+    exclude_paths:
+      - target/**
+      - target/
+
+  dotnet:
+    manifest_files:
+      - "*.csproj"
+      - "*.sln"
+      - "*.fsproj"
+      - "*.vbproj"
+    exclude_paths:
+      - bin/**
+      - bin/
+      - obj/**
+      - obj/

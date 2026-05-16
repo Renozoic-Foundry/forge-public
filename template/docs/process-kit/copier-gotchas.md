@@ -81,7 +81,16 @@ The `--data accept_security_overrides_confirmed=true` flag MUST be on the operat
 - `copier.yml` near `accept_security_overrides:` — primary validator + `_tasks:` wiring.
 - `.forge/tests/test_bootstrap_consent.py` — structural + hook-unit regression tests (13 tests).
 
-## Consent-gate `copier update` old-worker rebuild — Spec 445
+## Consent-gate `copier update` old-worker rebuild — Specs 445 + 447
+
+**Two layers, same defect class.** Spec 437's consent gate has TWO enforcement points and BOTH originally fired during copier-update's old-worker rebuild:
+
+- **Script-level secondary check** (`scripts/copier-hooks/forge_consent_gate.py`, wired via `_tasks:`) — fixed by **Spec 445** (returns early when `argv[4] == "update"`).
+- **Per-question primary validator** (Jinja `validator:` predicate on the `accept_security_overrides` question in `copier.yml`) — fixed by **Spec 447** (predicate gains `and _copier_operation|default('copy') != 'update'`).
+
+Both fire because copier's `update` operation renders TWICE — once for the old-worker rebuild (reconstructs previous state from `.copier-answers.yml` alone for diff computation), then once for the new-worker apply. Runtime `--data` tokens reach only the new-worker apply. Before 445 + 447, the old-worker rebuild tripped both layers and aborted before any diff was computed.
+
+### Consent-gate `copier update` old-worker rebuild — Spec 445
 
 **Status (2026-05-16)**: `scripts/copier-hooks/forge_consent_gate.py` (Spec 437) skips the "consent absent" secondary check during `copier update` operations. The Req 1a poisoned-token check stays active on both copy and update.
 

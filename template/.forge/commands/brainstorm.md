@@ -22,7 +22,7 @@ If $ARGUMENTS is `?` or `help`:
     - docs/roadmap.md — unmet phase prerequisites
     - docs/sessions/signals.md — recurring patterns (2+ entries)
     - docs/sessions/scratchpad.md — open items not yet converted to specs
-    - docs/backlog.md — gaps in coverage
+    - .forge/lib/derived_state.py --get-backlog (live frontmatter source) — gaps in coverage
   See: docs/roadmap.md, docs/process-kit/scoring-rubric.md
   ```
   Stop — do not execute any further steps.
@@ -35,7 +35,7 @@ Read the following files (skip silently if any do not exist):
 - `docs/roadmap.md`
 - `docs/sessions/signals.md`
 - `docs/sessions/scratchpad.md`
-- `docs/backlog.md`
+- **Backlog rows (Spec 439)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse stdout as JSON; the array contains all backlog rows with keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`. Do NOT open `docs/backlog.md` directly — the helper reads per-spec frontmatter live, so any edits in the same session are reflected immediately. (`docs/backlog.md` remains the operator-visible artifact, refreshed by `/matrix`.)
 - `docs/specs/README.md` (to check which specs already exist)
 
 ## [mechanical] Step 2 — Analyze gaps

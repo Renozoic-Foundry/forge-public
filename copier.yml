@@ -351,34 +351,25 @@ accept_security_overrides:
   type: bool
   default: false
   when: "{{ accept_security_overrides|default(false) }}"
-  help: "Spec 090: explicit consent that this baseline overrides one or more security-relevant Copier answers (test_command, lint_command, harness_command, include_nanoclaw, include_advanced_autonomy, include_two_stage_review). Set true in the baseline YAML to acknowledge the override. Spec 437 requires a runtime consent token: re-run with `--data accept_security_overrides_confirmed=true`."
-  validator: >-
-    {%- if accept_security_overrides and not accept_security_overrides_confirmed|default(false) and _copier_operation|default('copy') != 'update' -%}
-    Spec 437 SECURITY GATE: refusing render. accept_security_overrides=true permits
-    these security-gated overrides:
-    {%- if test_command|default('pytest -q') != 'pytest -q' %}
-      test_command = {{ test_command }}
-    {%- endif %}
-    {%- if lint_command|default('ruff check .') != 'ruff check .' %}
-      lint_command = {{ lint_command }}
-    {%- endif %}
-    {%- if harness_command|default('') != '' %}
-      harness_command = {{ harness_command }}
-    {%- endif %}
-    {%- if include_nanoclaw|default(false) %}
-      include_nanoclaw = true
-    {%- endif %}
-    {%- if include_advanced_autonomy|default(false) %}
-      include_advanced_autonomy = true
-    {%- endif %}
-    {%- if include_two_stage_review|default(false) %}
-      include_two_stage_review = true
-    {%- endif %}
-    Runtime consent required. Re-run with:
-      --data accept_security_overrides_confirmed=true
-    Answers-file-supplied consent tokens are REJECTED (Spec 437 Req 1a — see
-    scripts/copier-hooks/forge_consent_gate.py for the secondary check).
-    {%- endif -%}
+  help: "Spec 090: explicit consent that this baseline overrides one or more security-relevant Copier answers (test_command, lint_command, harness_command, include_nanoclaw, include_advanced_autonomy, include_two_stage_review). Set true in the baseline YAML to acknowledge the override. Spec 437/445/448: runtime consent is enforced at the task-level gate (scripts/copier-hooks/forge_consent_gate.py, wired as _tasks[0]) — re-run with `--data accept_security_overrides_confirmed=true` for the runtime token. The per-question validator was REMOVED in Spec 448 because copier does not inject _copier_operation into the validator's Jinja eval context during the old_worker rebuild of copier update, making any update-mode short-circuit at the validator layer ineffective. Enforcement consolidates at the script-level gate, which works correctly in both copy and update modes."
+  # Spec 448 — per-question validator REMOVED. Spec 447 attempted to add an
+  # update-mode skip to the validator predicate, but copier doesn't inject
+  # _copier_operation into the validator's Jinja context during the old_worker
+  # rebuild (validate_answer() inside _apply_update → old_worker.run_copy() →
+  # _ask()). The predicate's |default('copy') clause kicked in, the validator
+  # tripped, and copier update aborted before any diff was computed.
+  #
+  # Enforcement consolidates at scripts/copier-hooks/forge_consent_gate.py,
+  # wired as _tasks[0]. The script gate:
+  #   - Fires BEFORE any persistent state is written
+  #   - Covers Spec 437 Req 1a (poisoned-token check; active on both copy and
+  #     update per Spec 445)
+  #   - Covers Spec 437 Req 1b (literal-command-string display in refusal)
+  #   - Correctly handles update mode via argv[4] == "update" short-circuit
+  #     (Spec 445 — operates at script invocation, not in Jinja eval context,
+  #     so it actually works).
+  # See: docs/specs/448-remove-broken-validator-consolidate-script-gate.md
+  #      docs/process-kit/copier-gotchas.md § 445+447+448
 
 # Spec 437 — runtime-only consent token paired with accept_security_overrides.
 # `secret: true` blocks persistence to .copier-answers.yml (legitimate `--data`

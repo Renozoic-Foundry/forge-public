@@ -81,14 +81,17 @@ The `--data accept_security_overrides_confirmed=true` flag MUST be on the operat
 - `copier.yml` near `accept_security_overrides:` — primary validator + `_tasks:` wiring.
 - `.forge/tests/test_bootstrap_consent.py` — structural + hook-unit regression tests (13 tests).
 
-## Consent-gate `copier update` old-worker rebuild — Specs 445 + 447
+## Consent-gate `copier update` old-worker rebuild — Specs 445 + 447 + 448
 
-**Two layers, same defect class.** Spec 437's consent gate has TWO enforcement points and BOTH originally fired during copier-update's old-worker rebuild:
+**Final state (Spec 448)**: Spec 437 enforcement is a SINGLE layer — the script-level gate (`scripts/copier-hooks/forge_consent_gate.py`, wired as `_tasks[0]`). The per-question Jinja validator that originally backed it was REMOVED in Spec 448 because copier doesn't inject `_copier_operation` into the validator's Jinja eval context during the old_worker rebuild — making any update-mode short-circuit at the validator layer ineffective.
 
-- **Script-level secondary check** (`scripts/copier-hooks/forge_consent_gate.py`, wired via `_tasks:`) — fixed by **Spec 445** (returns early when `argv[4] == "update"`).
-- **Per-question primary validator** (Jinja `validator:` predicate on the `accept_security_overrides` question in `copier.yml`) — fixed by **Spec 447** (predicate gains `and _copier_operation|default('copy') != 'update'`).
+**The chain** (preserved here as a learning record):
 
-Both fire because copier's `update` operation renders TWICE — once for the old-worker rebuild (reconstructs previous state from `.copier-answers.yml` alone for diff computation), then once for the new-worker apply. Runtime `--data` tokens reach only the new-worker apply. Before 445 + 447, the old-worker rebuild tripped both layers and aborted before any diff was computed.
+- **Spec 445** fixed the script-level secondary check: returns early when `argv[4] == "update"`. The script invocation receives `{{ _copier_operation }}` as a positional arg at task time, NOT through Jinja eval context — so the variable IS available there and the fix works.
+- **Spec 447** attempted to fix the per-question validator by extending its Jinja predicate with `and _copier_operation|default('copy') != 'update'`. The fix was **logically correct but mechanically defeated**: empirical retry against the smileyforge consumer (cycle 3) confirmed the validator still trips on `copier update`. Source-read of the rendered consumer-side `copier.yml` showed the predicate is present; the failure mode is copier's missing context injection. `|default('copy')` kicks in, predicate evaluates as copy-mode, validator trips.
+- **Spec 448** removes the per-question validator entirely. The script-level gate (Spec 445) covers all Spec 437 Req 1a + 1b cases and works correctly in both copy and update modes.
+
+**The empirical lesson** (worth re-stating because it's non-obvious): copier exposes `_copier_operation` in `_tasks:` argv but NOT in per-question validator Jinja contexts during the old_worker rebuild. Any consent enforcement that needs to differentiate copy vs update MUST live at the task layer or as a wrapper-level pre-flight — NOT in per-question validators. If a future spec wants to reintroduce a per-question Jinja validator that distinguishes update from copy, it needs an alternate signal (env var read via `lookup_env`, `_old_ref` if available, or similar) — but the script-layer enforcement remains the working canonical path.
 
 ### Consent-gate `copier update` old-worker rebuild — Spec 445
 

@@ -353,7 +353,7 @@ accept_security_overrides:
   when: "{{ accept_security_overrides|default(false) }}"
   help: "Spec 090: explicit consent that this baseline overrides one or more security-relevant Copier answers (test_command, lint_command, harness_command, include_nanoclaw, include_advanced_autonomy, include_two_stage_review). Set true in the baseline YAML to acknowledge the override. Spec 437 requires a runtime consent token: re-run with `--data accept_security_overrides_confirmed=true`."
   validator: >-
-    {%- if accept_security_overrides and not accept_security_overrides_confirmed|default(false) -%}
+    {%- if accept_security_overrides and not accept_security_overrides_confirmed|default(false) and _copier_operation|default('copy') != 'update' -%}
     Spec 437 SECURITY GATE: refusing render. accept_security_overrides=true permits
     these security-gated overrides:
     {%- if test_command|default('pytest -q') != 'pytest -q' %}

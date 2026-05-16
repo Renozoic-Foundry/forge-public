@@ -37,12 +37,14 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from stoke import catalog as catalog_mod  # type: ignore
     from stoke import cleanup as cleanup_mod  # type: ignore
+    from stoke import gates as gates_mod  # type: ignore
     from stoke import legacy_detect as detect_mod  # type: ignore
     from stoke import manifest as manifest_mod  # type: ignore
     from stoke import reporter as reporter_mod  # type: ignore
 else:
     from . import catalog as catalog_mod
     from . import cleanup as cleanup_mod
+    from . import gates as gates_mod
     from . import legacy_detect as detect_mod
     from . import manifest as manifest_mod
     from . import reporter as reporter_mod
@@ -368,6 +370,31 @@ def cmd_manifest_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_preflight_gates(args: argparse.Namespace) -> int:
+    """Spec 444 — emit JSON enumeration of gates that will fire on the next
+    `copier update` in `--project-root` against `--template-src-path`.
+
+    Powers the /forge stoke chat-mediation flow: the command body parses
+    this JSON to construct operator-shaped yes/no questions.
+    """
+    project_root = Path(args.project_root).resolve()
+    src_path = args.src_path or _src_path_from_answers(project_root)
+    if not src_path:
+        print(
+            "ERROR: --src-path required (or .copier-answers.yml must contain _src_path).",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        gates = gates_mod.detect_gates(project_root, src_path)
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+    json.dump([g.to_dict() for g in gates], sys.stdout, indent=2, sort_keys=True)
+    print()
+    return 0
+
+
 def cmd_catalog_self_hash(args: argparse.Namespace) -> int:
     """Compute and optionally write the catalog_sha256 field.
 
@@ -441,6 +468,15 @@ def build_parser() -> argparse.ArgumentParser:
     v = sub.add_parser("manifest-verify", help="Verify manifest schema compatibility")
     v.add_argument("--home", default="")
     v.set_defaults(func=cmd_manifest_verify)
+
+    pg = sub.add_parser(
+        "preflight-gates",
+        help="Spec 444 — emit JSON list of gates that will fire on the next "
+             "copier update. Powers the /forge stoke chat-mediation flow.",
+    )
+    pg.add_argument("--project-root", default=".")
+    pg.add_argument("--src-path", default="")
+    pg.set_defaults(func=cmd_preflight_gates)
 
     s = sub.add_parser(
         "catalog-self-hash",

@@ -494,6 +494,48 @@ After the template/FORGE dual-check passes, verify that any documentation refere
   - Any resolved via `skip`: emit `GATE [consumer-propagation]: CONDITIONAL_PASS — <N> violation(s) skipped with documented reason.` Proceed.
   - Any unresolved (operator abandoned choice): emit `GATE [consumer-propagation]: FAIL — <N> unresolved violation(s). Remediation: mirror the doc under template/docs/, add docs/<path> to PUBLIC_DOC_FILES, or explicitly skip with reason.` Stop close.
 
+### [mechanical] Step 2d++++ — Gate-mediation drift gate (Spec 444 Req 8a/8c)
+
+When a spec touches `copier.yml` to add a new `validator:`, a new `_tasks:` entry, or a new `secret: true` runtime token, the corresponding gate kind MUST be modeled in `template/.forge/lib/stoke/gates.py` so `/forge stoke` can mediate it in chat (Spec 444). Convention statements alone have a sub-6-month half-life (Specs 427/431 violated mirror-sync conventions inside that window), so this gate enforces the convention mechanically.
+
+**Scope**: runs only when the closing spec's committed diff against the spec baseline modifies at least one of:
+- `copier.yml` (or `template/copier.yml`)
+- `template/.forge/lib/stoke/gates.py` (or its `.forge/lib/stoke/gates.py` own-copy mirror)
+
+If neither file is in the diff: mark `[x] Gate-mediation drift gate — no copier.yml / gates.py changes in scope`. Emit `GATE [gate-mediation]: PASS — no surface in scope.` Proceed silently.
+
+**Exemption**: if the closing spec's frontmatter contains `Gate-Mediation-Exempt: <≥30-char rationale>`, skip the gate and emit `GATE [gate-mediation]: SKIP — Gate-Mediation-Exempt: <reason snippet>`. The exemption usage is logged for Spec 444 AC 11 telemetry (CTO: ≥2 specs in a 30-day window escalates as a cultural-drift signal).
+
+**Detection logic** (Req 8a):
+
+1. Compute the diff: `git diff <spec-baseline>..HEAD -- copier.yml template/copier.yml`.
+2. Scan the added lines for tokens that indicate a new gate surface:
+   - `^\+\s*validator\s*:` — new validator declaration
+   - `^\+\s*-` immediately following a `_tasks:` header in the added range — new task entry
+   - `^\+\s*secret\s*:\s*true` — new runtime secret token
+3. Apply the YAML-adversarial fixture set (AC 9a) to the regex during test runs — anchors (`&anchor`), aliases (`*alias`), and folded scalars (`>`) inside `validator:` declarations MUST be detected as additions. Adversarial fixtures live in `.forge/tests/test_stoke_gates.py`.
+4. If ANY new-gate token is found:
+   a. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py .forge/lib/stoke/gates.py`.
+   b. If the diff is empty (gates.py was NOT modified in this spec): emit `GATE [gate-mediation]: FAIL — copier.yml adds a new validator/_tasks/secret surface but template/.forge/lib/stoke/gates.py was not extended. Remediation: extend detect_gates() to model the new gate, OR add 'Gate-Mediation-Exempt: <≥30-char rationale>' to the spec frontmatter.` Stop close.
+   c. If gates.py WAS modified: proceed to the fixture-rotation check (Req 8c).
+
+**Fixture-rotation check** (Req 8c):
+
+When `gates.py` itself is modified by the closing spec, the smoke-test fixture at `template/.forge/tests/test_stoke_mediation_coverage.py` MUST also be updated so the deliberately-unmodeled token rotates. Otherwise the test decays to tautology — it would PASS against a now-modeled gate.
+
+1. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py .forge/lib/stoke/gates.py`.
+2. If non-empty, also check `git diff <spec-baseline>..HEAD -- template/.forge/tests/test_stoke_mediation_coverage.py .forge/tests/test_stoke_mediation_coverage.py`.
+3. If `gates.py` changed AND the smoke-test fixture's `LAST-ROTATED:` marker was NOT updated (the marker line does not appear in the added-lines diff): emit `GATE [gate-mediation]: FAIL — gates.py was modified but test_stoke_mediation_coverage.py's LAST-ROTATED marker was not updated. The smoke-test fixture must rotate to a still-unmodeled token (Spec 444 Req 8c) — otherwise the unknown-validator coverage test decays to tautology. Remediation: update the CURRENT-FIXTURE-TOKEN and LAST-ROTATED comment in test_stoke_mediation_coverage.py.` Stop close.
+4. If both files are updated in the same spec: emit `GATE [gate-mediation]: PASS — gates.py extended AND fixture rotated.` Proceed.
+
+**Telemetry hook** (AC 11):
+
+Each gate firing records a single JSONL line to `docs/sessions/activity-log.jsonl`:
+```json
+{"timestamp":"<ISO 8601>","event_type":"gate-mediation-check","spec_id":"<NNN>","decision":"PASS|FAIL|SKIP","exemption_reason":"<empty | reason snippet>"}
+```
+The `exemption_reason` field is non-empty only when the `Gate-Mediation-Exempt:` exemption was used; `/insights` and `/brainstorm` watchlist scans count occurrences per 30-day window.
+
 ## [mechanical] Step 2e — Generate Review Brief (Spec 160)
 
 After all Step 2 gates complete, generate the Review Brief. This is the primary output for human review.

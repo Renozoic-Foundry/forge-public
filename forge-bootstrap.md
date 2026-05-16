@@ -231,6 +231,36 @@ Initialize git if not already a repo:
 git init  # only if .git/ does not exist
 ```
 
+### Step 5b — Write install manifest (Spec 431; Reqs 1, 1a, 1b)
+
+Record provenance for every FORGE file placed under `~/.claude/` by this
+bootstrap. The manifest at `~/.claude/.forge-installed.json` is the spine
+for future `/forge-stoke` legacy detection — without it, no manifest-orphan
+detection is possible for this install.
+
+```bash
+# Atomic-write under advisory lock (Req 1a). Records FORGE:BEGIN/END
+# delimited sections under ~/.claude/CLAUDE.md for manifest-attestation
+# (Req 1b).
+.forge/bin/forge-py .forge/lib/stoke.py manifest-init \
+  --project-root . \
+  --template-root .forge \
+  --spec-id 431-bootstrap
+```
+
+If the command fails (manifest lock contention, schema mismatch, etc.), it
+emits a diagnostic and exits non-zero. Bootstrap continues — the manifest is
+provenance-only; absence does not block bootstrap, but downstream
+`/forge-stoke` legacy detection will be limited to the hash-pinned catalog
+migration shim until the next stoke run writes the manifest.
+
+**Delimiter convention (Req 8)**: any FORGE-injected section in
+`~/.claude/CLAUDE.md` MUST be wrapped in
+`<!-- FORGE:BEGIN <section-id> -->` / `<!-- FORGE:END <section-id> -->`
+markers. `manifest-init` records the `(section_id, content_sha256)` pair
+so that future cleanup can refuse to act on unattested delimited blocks
+(forgery defense per AC 22).
+
 Report:
 ```
 FORGE bootstrap complete.

@@ -20,10 +20,20 @@ _exclude:
   - "docs/specs/CHANGELOG.md"
   - "docs/sessions/**"
   - "docs/specs/[0-9]*-*.md"
+  - ".mcp.json"
+
+# Spec 441 hotfix — consumer-owned top-level files.
+# Spec 427's original intent was "stoke does not clobber consumer-owned
+# CLAUDE.md / AGENTS.md / .copier-answers.yml". The implementation listed
+# them in `_exclude`, but in Copier 9.x `_exclude` applies to BOTH
+# `copier copy` (initial bootstrap) AND `copier update` (stoke) — which
+# meant every fresh bootstrap produced a non-functional consumer project
+# (no answers file → /forge stoke cannot run). `_skip_if_exists` is the
+# correct mechanism: render on first bootstrap, leave alone on updates.
+_skip_if_exists:
   - "AGENTS.md"
   - "CLAUDE.md"
   - ".copier-answers.yml"
-  - ".mcp.json"
 
 # Spec 294 — Copier-native placeholder scrub (runs on every copy AND update).
 # The helper applies a guarded scrub: only blanks a field when the field's current
@@ -41,6 +51,25 @@ _exclude:
 # forge-init Step 0 prereq check (Git for Windows option 3 OR Git Bash terminal).
 # See: docs/process-kit/derived-view-rendering-guide.md § Auto-migration on `copier update`.
 _tasks:
+  # Spec 437 — bootstrap-path consent gate (secondary; complements the per-question
+  # `validator:` on accept_security_overrides below). Runs FIRST in _tasks: so
+  # poisoned-answers-file renders abort before any persistent state is written by
+  # downstream tasks. See scripts/copier-hooks/forge_consent_gate.py.
+  - command:
+      - "{{ _copier_python }}"
+      - "{{ _copier_conf.src_path }}/scripts/copier-hooks/forge_consent_gate.py"
+      - "{{ accept_security_overrides|default(false) }}"
+      - "{{ accept_security_overrides_confirmed|default(false) }}"
+      - "{{ _copier_conf.dst_path }}"
+      # Non-default security-gated overrides for Req 1b literal-command-string display.
+      # Each emits "<key>=<value>" when the value differs from the template default;
+      # otherwise emits the empty string (forge_consent_gate.py treats blanks as absent).
+      - "{% if test_command != 'pytest -q' %}test_command={{ test_command }}{% endif %}"
+      - "{% if lint_command != 'ruff check .' %}lint_command={{ lint_command }}{% endif %}"
+      - "{% if harness_command != '' %}harness_command={{ harness_command }}{% endif %}"
+      - "{% if include_nanoclaw %}include_nanoclaw=true{% endif %}"
+      - "{% if include_advanced_autonomy %}include_advanced_autonomy=true{% endif %}"
+      - "{% if include_two_stage_review %}include_two_stage_review=true{% endif %}"
   - command:
       - "{{ _copier_python }}"
       - "{{ _copier_conf.src_path }}/scripts/copier-hooks/scrub_answers.py"
@@ -290,13 +319,74 @@ include_two_stage_review:
     {%- endif -%}
 
 # Spec 090 Req 6 — explicit operator consent for security-relevant overrides.
-# Default false; never prompts interactively (when: false). Set in baseline YAMLs
-# via --data-file when a baseline overrides any security-relevant question.
+# Spec 434 — v3.3 self-referential `when:` pattern (mirrors forge_baseline_* below).
+# The pattern was applied to forge_baseline_* but originally missed on this flag.
+# Bare `when: false` is stripped by Copier 9.14.0 from .copier-answers.yml on persist
+# even when --data-file supplies it — so `accept_security_overrides: true` set in a
+# baseline / consumer answers file would silently vanish, causing the per-question
+# `validator:` predicates (test_command, lint_command, harness_command, etc.) to
+# evaluate against an absent flag (truthy "not accept_security_overrides") and abort
+# `copier update`. The self-referential `when:` below evaluates against the supplied
+# value: when the baseline / answers file provides `accept_security_overrides: true`,
+# the question activates (no prompt because value already present, persists to
+# .copier-answers.yml); when absent or false, the default (`false`) keeps the
+# question suppressed and absent from the answers file — preserving today's
+# no-override behavior. See docs/process-kit/copier-gotchas.md.
+#
+# Spec 437 — primary consent gate. The `validator:` below refuses any render where
+# `accept_security_overrides == true` and `accept_security_overrides_confirmed` is
+# not also true. The refusal message displays the literal resolved command strings
+# for each non-default security-gated key (Req 1b). The secondary gate
+# (scripts/copier-hooks/forge_consent_gate.py, wired into `_tasks:` above) closes
+# Req 1a by rejecting answers-file-supplied consent tokens. See:
+# docs/specs/437-copier-bootstrap-path-consent-surface.md
+# docs/decisions/ADR-028-copier-when-answer-persistence-security-gated-flags.md
+# tmp/evidence/SPEC-437-spike-2026-05-15/mechanism-selection.md
 accept_security_overrides:
   type: bool
   default: false
-  when: false
-  help: "Spec 090: explicit consent that this baseline overrides one or more security-relevant Copier answers (test_command, lint_command, harness_command, include_nanoclaw, include_advanced_autonomy, include_two_stage_review). Set true in the baseline YAML to acknowledge the override."
+  when: "{{ accept_security_overrides|default(false) }}"
+  help: "Spec 090: explicit consent that this baseline overrides one or more security-relevant Copier answers (test_command, lint_command, harness_command, include_nanoclaw, include_advanced_autonomy, include_two_stage_review). Set true in the baseline YAML to acknowledge the override. Spec 437 requires a runtime consent token: re-run with `--data accept_security_overrides_confirmed=true`."
+  validator: >-
+    {%- if accept_security_overrides and not accept_security_overrides_confirmed|default(false) -%}
+    Spec 437 SECURITY GATE: refusing render. accept_security_overrides=true permits
+    these security-gated overrides:
+    {%- if test_command|default('pytest -q') != 'pytest -q' %}
+      test_command = {{ test_command }}
+    {%- endif %}
+    {%- if lint_command|default('ruff check .') != 'ruff check .' %}
+      lint_command = {{ lint_command }}
+    {%- endif %}
+    {%- if harness_command|default('') != '' %}
+      harness_command = {{ harness_command }}
+    {%- endif %}
+    {%- if include_nanoclaw|default(false) %}
+      include_nanoclaw = true
+    {%- endif %}
+    {%- if include_advanced_autonomy|default(false) %}
+      include_advanced_autonomy = true
+    {%- endif %}
+    {%- if include_two_stage_review|default(false) %}
+      include_two_stage_review = true
+    {%- endif %}
+    Runtime consent required. Re-run with:
+      --data accept_security_overrides_confirmed=true
+    Answers-file-supplied consent tokens are REJECTED (Spec 437 Req 1a — see
+    scripts/copier-hooks/forge_consent_gate.py for the secondary check).
+    {%- endif -%}
+
+# Spec 437 — runtime-only consent token paired with accept_security_overrides.
+# `secret: true` blocks persistence to .copier-answers.yml (legitimate `--data`
+# consent never reaches disk). The secondary `_tasks:` hook
+# forge_consent_gate.py independently re-reads the destination's
+# .copier-answers.yml and rejects any persisted value of this key (poison vector).
+# Bool default `false` makes the validator above fail-closed when --data is absent.
+accept_security_overrides_confirmed:
+  type: bool
+  default: false
+  secret: true
+  when: "{{ accept_security_overrides|default(false) and accept_security_overrides_confirmed|default(false) }}"
+  help: "Spec 437 runtime consent token. Supply via `--data accept_security_overrides_confirmed=true` at copier copy / copier update invocation time. Never persisted to .copier-answers.yml (secret: true)."
 
 # Spec 090 — provenance keys (set by baseline YAMLs; persisted to .copier-answers.yml).
 # These are normal Copier answers — when a baseline declares them, Copier records them

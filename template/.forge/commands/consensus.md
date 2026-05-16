@@ -52,12 +52,24 @@ Read AGENTS.md and look for a `forge.role_registry` section or `forge.dispatch_r
 
 Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction file does not exist, skip that role with a note.
 
-## [mechanical] Step 3 — Gather role assessments
+## [mechanical] Step 3 — Declare planned_agents and dispatch
 
-For each role in the registry:
+**Single source of truth (Spec 423)**: this step declares `planned_agents` as an explicit list BEFORE any dispatch, and the dispatch narration is **generated from `planned_agents`** — not authored freehand. The same list drives both narration and the Task tool-call loop, so the count and names cannot diverge. This collapses the narration-vs-dispatch defect class that caused /consensus 399 round 3 to silently omit COO.
 
-1. **Spawn an isolated read-only sub-agent** with:
-   - The role's instruction preamble (from `.claude/agents/`)
+1. **Declare `planned_agents`**: Build an explicit list of role identifiers for this round, one entry per role to be spawned. Example:
+   ```
+   planned_agents = [DA, MT, CTO, COO]
+   ```
+   Include CISO when Step 2's topic-touches-auth/data/access condition applies. The list is fixed before any Task tool call.
+
+2. **Emit narration generated from `planned_agents`**: Write the dispatch narration line whose count (N) and role names are derived from `planned_agents` — not authored freehand:
+   ```
+   Spawning N reviewer agents in parallel (R1, R2, ..., RN).
+   ```
+   N and the role names MUST equal the contents of `planned_agents`. Do not author a count or name that is not in the list. This narration is **generated from `planned_agents`** (Invariant A — Spec 423).
+
+3. **Dispatch — one Task call per list entry, in a single parallel-tool-call block**: Iterate `planned_agents`. For each role, emit exactly one Task tool call in the same response block, passing:
+   - The role's instruction preamble (from `.claude/agents/<role>.md`)
    - The review material (spec content, ADR content, or freeform topic)
    - Instructions to produce a structured assessment:
      ```
@@ -77,11 +89,32 @@ For each role in the registry:
      - reject: do not proceed, significant issues must be resolved first
      ```
 
-2. Parse each role's JSON response.
+4. Parse each role's JSON response. Record results keyed by role identifier so reconciliation (Step 3b) can match each `planned_agents` entry to a returned result.
 
-3. If a sub-agent fails or produces invalid output, record: `{ "role": "<name>", "vote": "error", "rationale": "Role assessment failed — <reason>", "key_risk": "unknown" }`
+5. If a sub-agent fails or produces invalid output, record an explicit dispatch-failure entry: `{ "role": "<name>", "status": "dispatch-failed", "vote": "error", "rationale": "Role assessment failed — <reason>", "key_risk": "unknown" }`. Reconciliation (Step 3b) treats this as accounted-for; failures surface to the operator, no auto-retry.
 
-Run all role assessments in **parallel** where possible.
+Run all role assessments in **parallel** where possible (single response block, multiple Task calls).
+
+## [mechanical] Step 3b — Pre-aggregation reconciliation gate (Spec 423)
+
+Before advancing to Step 4 (tally), perform reconciliation against `planned_agents`. This gate is the single mechanical check between dispatch and aggregation.
+
+1. **Reconcile**: for each role in `planned_agents`, verify it has either a returned result OR a recorded dispatch-failure (from Step 3.5).
+
+2. **If reconciliation passes** (every `planned_agents` entry is accounted for): proceed silently to Step 4.
+
+3. **If reconciliation fails — `planned_agents` has entries with no result and no failure record — refuse to advance**: do NOT aggregate, do NOT proceed to Step 4. Emit a structured diagnostic and stop the round:
+   ```
+   ## Dispatch Reconciliation Failure (Spec 423)
+   Round N planned_agents had unaccounted-for entries.
+   - planned: [list from planned_agents]
+   - returned results: [list of role IDs with results]
+   - dispatch failures: [list of role IDs with explicit failure records]
+   - missing (no result, no failure): [list of role IDs]
+
+   Halting round before aggregation. Re-dispatch the missing roles or record explicit failures, then re-run /consensus.
+   ```
+   Operator decides next action (re-dispatch missing roles, or record them as failures and continue). No auto-retry.
 
 ## [mechanical] Step 4 — Compute vote tally and divergence
 

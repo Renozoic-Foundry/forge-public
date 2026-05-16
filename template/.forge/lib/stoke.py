@@ -70,6 +70,11 @@ DEFAULT_MIN_LINES = 15
 BACKUP_PREFIX = "forge-stoke-backup-"
 DEFAULT_MAX_BACKUP_AGE_DAYS = 30
 
+# Spec 432: scoped-staging catalog location (relative to script's package).
+# Resolved at runtime via _project_type_exclusions_path() to allow testing
+# with synthetic catalogs.
+PROJECT_TYPE_EXCLUSIONS_FILENAME = "project-type-exclusions.yaml"
+
 # Conflict-marker patterns copier-direct may write into files on merge collision.
 CONFLICT_MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
 
@@ -129,6 +134,95 @@ def _read_copier_exclude(copier_yml: Path) -> list[str]:
         else:
             raise ValueError(f"malformed _exclude entry: {line!r}")
     return patterns
+
+
+def _read_copier_tasks(copier_yml: Path) -> list[str]:
+    """Parse `copier.yml::_tasks` and return one human-readable name per task.
+
+    Spec 428: powers the `list-tasks` subcommand. Each `_tasks` entry is either a
+    dict with a `command:` list (modern copier 9.x form) or a bare command
+    string. The "name" emitted is a single-line summary the operator can read in
+    the --trust consent prompt — typically the first concrete arg after the
+    interpreter, or a sh-c excerpt for inline shell tasks.
+
+    Minimal YAML parser to avoid a PyYAML dependency. Sufficient for the
+    well-formed copier.yml shape FORGE ships; malformed input raises ValueError.
+    Returns [] when `_tasks:` is absent or explicitly empty.
+    """
+    if not copier_yml.is_file():
+        raise FileNotFoundError(f"copier.yml not found at {copier_yml}")
+    text = copier_yml.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    names: list[str] = []
+    in_tasks = False
+    current: list[str] = []
+
+    _JINJA_RE = re.compile(r"\{\{[^}]*\}\}|\{%[^%]*%\}")
+
+    def _strip_jinja(tok: str) -> str:
+        # Remove all jinja interpolations and template tags, then collapse ws.
+        return re.sub(r"\s+", " ", _JINJA_RE.sub("", tok)).strip()
+
+    def _flush(current: list[str]) -> None:
+        if not current:
+            return
+        # Strip jinja noise from each token; drop tokens that become empty or
+        # are pure YAML literal-block markers / shell-wrapper noise.
+        cleaned = []
+        for c in current:
+            s = _strip_jinja(c)
+            if not s or s in ("|-", "|", "sh", "-c"):
+                continue
+            cleaned.append(s)
+        # Prefer a token that looks like a script path.
+        path_like = [c for c in cleaned if (c.endswith(".py") or c.endswith(".sh") or "/" in c)]
+        if path_like:
+            label = path_like[0]
+        elif cleaned:
+            label = cleaned[0]
+        else:
+            label = "inline shell task"
+        if "\n" in label or len(label) > 80:
+            label = label.replace("\n", " ")[:80].rstrip() + "…"
+        names.append(label)
+
+    for line in lines:
+        if not in_tasks:
+            if re.match(r"^_tasks\s*:", line):
+                in_tasks = True
+                rest = line.split(":", 1)[1].strip()
+                if rest == "[]":
+                    return []
+                if rest:
+                    raise ValueError(f"_tasks must be a list, got non-list scalar: {rest!r}")
+            continue
+        # In _tasks block: stop at next column-0 key.
+        if re.match(r"^[A-Za-z_]", line):
+            _flush(current)
+            current = []
+            break
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # New task entry begins with `- ` (top-level list marker, 2-space indent).
+        if re.match(r"^  - ", line):
+            _flush(current)
+            current = []
+            tail = line[4:].strip()
+            # Dict form `- command:` — skip the marker, collect from command: items.
+            if tail.startswith("command:"):
+                continue
+            if tail.startswith('"') or tail.startswith("'"):
+                current.append(tail.strip('"').strip("'"))
+            elif tail:
+                current.append(tail)
+        elif re.match(r"^      - ", line):
+            # Nested `command:` list items at 6-space indent.
+            item = line[8:].strip().strip('"').strip("'")
+            if item:
+                current.append(item)
+    _flush(current)
+    return names
 
 
 def _exclude_integrity_preflight(copier_yml: Path) -> list[str]:
@@ -584,6 +678,82 @@ def _read_copier_answers(live_root: Path) -> dict | None:
     return out
 
 
+def _detect_fresh_clone_consent_state(live_root: Path, answers: dict | None) -> list[str] | None:
+    """Spec 434 Req 4 — fresh-clone-detection warning preconditions.
+
+    Returns a list of non-default security-gated keys if ALL of:
+      (a) accept_security_overrides is true in .copier-answers.yml,
+      (b) .copier-answers.yml is unchanged from prior commit OR brand-new (no git history),
+      (c) at least one security-gated key has a non-default value.
+    Returns None if any precondition fails (no warning needed).
+
+    Threat model: a malicious / pre-positioned .copier-answers.yml with the flag set
+    plus a crafted test_command/lint_command would be honored silently. The warning
+    forces explicit operator confirmation when the answers file shows no sign of
+    in-tree operator authorship (no working-tree edit; no prior commit).
+    """
+    if not answers:
+        return None
+    flag_val = answers.get("accept_security_overrides", "false").strip().lower()
+    if flag_val not in ("true", "yes", "1"):
+        return None  # (a) flag not set → nothing to warn about
+
+    answers_path = live_root / ".copier-answers.yml"
+    if not answers_path.is_file():
+        return None
+
+    # (b) is the answers file (i) brand-new (untracked or no git history at all)
+    #     OR (ii) committed-and-unchanged (no working-tree edit since prior commit)?
+    #     Either condition means the operator hasn't actively touched this file in
+    #     this working session — the consent value came from elsewhere.
+    git_dir = live_root / ".git"
+    fresh_clone = False
+    if not git_dir.exists():
+        fresh_clone = True  # no git history at all
+    else:
+        try:
+            tracked = subprocess.run(
+                ["git", "ls-files", "--error-unmatch", ".copier-answers.yml"],
+                cwd=str(live_root), capture_output=True, text=True, check=False,
+            )
+            if tracked.returncode != 0:
+                fresh_clone = True  # untracked → operator hasn't committed it
+            else:
+                # `git status --porcelain` returns non-empty when the file has working-tree
+                # changes; empty when committed-and-unchanged. Empty == fresh-clone state.
+                status = subprocess.run(
+                    ["git", "status", "--porcelain", "--", ".copier-answers.yml"],
+                    cwd=str(live_root), capture_output=True, text=True, check=False,
+                )
+                if status.returncode == 0 and status.stdout.strip() == "":
+                    # committed-and-unchanged: consent value came from the prior commit,
+                    # not from an in-session operator edit.
+                    fresh_clone = True
+        except (FileNotFoundError, OSError):
+            fresh_clone = True
+
+    if not fresh_clone:
+        return None  # (b) operator has actively edited the file → assume conscious consent
+
+    # (c) any security-gated key has a non-default value?
+    DEFAULTS = {
+        "test_command": "pytest -q",
+        "lint_command": "ruff check .",
+        "harness_command": "",
+        "include_nanoclaw": "false",
+        "include_advanced_autonomy": "false",
+        "include_two_stage_review": "false",
+    }
+    non_default = []
+    for key, default in DEFAULTS.items():
+        if key in answers and answers[key].strip() != default:
+            non_default.append(key)
+    if not non_default:
+        return None  # (c) flag set but no actual override → nothing to warn about
+
+    return non_default
+
+
 def cmd_direct_apply(args: argparse.Namespace) -> int:
     """Full orchestration of the new copier-direct apply mechanism.
 
@@ -624,6 +794,25 @@ def cmd_direct_apply(args: argparse.Namespace) -> int:
     vcs_ref = args.vcs_ref
     if not vcs_ref and answers:
         vcs_ref = answers.get("_commit") or answers.get("_src_path")
+
+    # Step 5b: Spec 434 Req 4 — fresh-clone-detection warning for security overrides.
+    # Partial mitigation of the bootstrap-path consent gap (CISO round-1 finding).
+    # See docs/process-kit/copier-gotchas.md § Bootstrap-path consent surface.
+    consent_warn_keys = _detect_fresh_clone_consent_state(live_root, answers)
+    if consent_warn_keys is not None:
+        print(
+            "GATE [security-override-consent]: WARN — .copier-answers.yml has "
+            f"accept_security_overrides: true plus non-default values for "
+            f"{', '.join(consent_warn_keys)}, and the answers file shows no in-session "
+            "operator edit. Bootstrap-path consent gap (Spec 434 follow-up) — confirm "
+            "you intend to honor these overrides. Pass --confirm-security-overrides to "
+            "proceed; otherwise stoke aborts cleanly.",
+            file=sys.stderr,
+        )
+        if not getattr(args, "confirm_security_overrides", False):
+            print("GATE [security-override-consent]: ABORT — operator confirmation required", file=sys.stderr)
+            return 2
+        print("GATE [security-override-consent]: PASS — operator confirmed (--confirm-security-overrides)", file=sys.stderr)
 
     # Step 6: invoke copier update.
     # /consensus 427 round 3 fix (CISO hard finding on AC 7 / Req 1 / Constraint):
@@ -815,9 +1004,805 @@ def cmd_parse_sections(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---- Spec 432: scoped-staging + project-type exclusions ---------------------
+
+def _project_type_exclusions_path(override: Path | None = None) -> Path:
+    """Resolve the path to project-type-exclusions.yaml.
+
+    Default: alongside stoke.py at ../data/project-type-exclusions.yaml.
+    Override path is honored for tests and operator extensions.
+    """
+    if override is not None:
+        return override
+    return Path(__file__).resolve().parent.parent / "data" / PROJECT_TYPE_EXCLUSIONS_FILENAME
+
+
+def _parse_yaml_catalog(text: str) -> dict:
+    """Minimal YAML parser for project-type-exclusions.yaml.
+
+    Supports the schema documented in the catalog file:
+      project_types:
+        <name>:
+          manifest_files: [<file>, ...]
+          exclude_paths:  [<glob>, ...]
+
+    Avoids PyYAML dependency (same pattern as _read_copier_exclude). Indented
+    list items under each key are collected; comments and blank lines are
+    ignored. Quoted strings are stripped of quotes.
+    """
+    result: dict = {"project_types": {}}
+    lines = text.splitlines()
+    current_type: str | None = None
+    current_field: str | None = None
+    in_project_types = False
+
+    for raw in lines:
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # Detect top-level `project_types:`
+        if not line.startswith(" ") and not line.startswith("\t"):
+            if stripped.startswith("project_types"):
+                in_project_types = True
+                current_type = None
+                current_field = None
+                continue
+            else:
+                in_project_types = False
+                continue
+        if not in_project_types:
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        # 2-space indent: project type name (`maven:`)
+        if indent == 2 and stripped.endswith(":"):
+            current_type = stripped[:-1].strip()
+            result["project_types"][current_type] = {"manifest_files": [], "exclude_paths": []}
+            current_field = None
+            continue
+        # 4-space indent: field name (`manifest_files:` / `exclude_paths:`)
+        if indent == 4 and stripped.endswith(":") and current_type:
+            current_field = stripped[:-1].strip()
+            continue
+        # 6-space indent: list item (`- pom.xml`)
+        if indent == 6 and stripped.startswith("- ") and current_type and current_field:
+            item = stripped[2:].strip().strip('"').strip("'")
+            if current_field in ("manifest_files", "exclude_paths"):
+                result["project_types"][current_type][current_field].append(item)
+            continue
+    return result
+
+
+def _load_exclusion_catalog(catalog_path: Path | None = None) -> dict:
+    """Load and parse the project-type-exclusions.yaml catalog.
+
+    Returns the parsed dict (with `project_types` key). Raises FileNotFoundError
+    if the catalog is missing and ValueError if it cannot be parsed.
+    """
+    path = _project_type_exclusions_path(catalog_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"project-type-exclusions catalog not found at {path}")
+    text = path.read_text(encoding="utf-8")
+    try:
+        return _parse_yaml_catalog(text)
+    except Exception as e:
+        raise ValueError(f"malformed catalog {path}: {e}")
+
+
+def _detect_project_types(live_root: Path, catalog: dict) -> list[str]:
+    """Manifest-file-presence detection (Req 2).
+
+    Returns the list of active project type names. Manifest matching supports
+    fnmatch globs (e.g. `*.csproj`) at the project root only — manifest
+    presence in subdirectories does NOT activate (root-only trigger).
+    Multiple project types MAY be active simultaneously (Req 3).
+    """
+    active: list[str] = []
+    try:
+        root_entries = [p.name for p in live_root.iterdir() if p.is_file()]
+    except OSError:
+        return []
+    for type_name, type_def in catalog.get("project_types", {}).items():
+        for manifest in type_def.get("manifest_files", []):
+            if "*" in manifest or "?" in manifest or "[" in manifest:
+                if any(fnmatch.fnmatch(name, manifest) for name in root_entries):
+                    active.append(type_name)
+                    break
+            else:
+                if manifest in root_entries:
+                    active.append(type_name)
+                    break
+    return active
+
+
+def _active_exclusion_patterns(
+    catalog: dict,
+    active_types: list[str],
+    operator_extra: list[str] | None = None,
+) -> list[str]:
+    """Aggregate exclude_paths from active project types + operator extras (Req 8).
+
+    Operator-curated additions in `.copier-answers.yml::project_type_exclusions_extra`
+    EXTEND (not replace) the template catalog.
+    """
+    patterns: list[str] = []
+    for type_name in active_types:
+        type_def = catalog.get("project_types", {}).get(type_name, {})
+        for pat in type_def.get("exclude_paths", []):
+            if pat and pat not in patterns:
+                patterns.append(pat)
+    if operator_extra:
+        for pat in operator_extra:
+            if pat and pat not in patterns:
+                patterns.append(pat)
+    return patterns
+
+
+def _read_operator_extra_exclusions(live_root: Path) -> list[str]:
+    """Read `.copier-answers.yml::project_type_exclusions_extra` (Req 8 / AC 6).
+
+    Returns an empty list if the answers file or key is absent. Malformed
+    values yield an empty list — operator typo should not block stoke.
+    """
+    answers = live_root / ".copier-answers.yml"
+    if not answers.is_file():
+        return []
+    text = answers.read_text(encoding="utf-8")
+    extras: list[str] = []
+    in_block = False
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if not in_block:
+            m = re.match(r"^project_type_exclusions_extra\s*:\s*(.*)$", line)
+            if m:
+                rest = m.group(1).strip()
+                if rest.startswith("[") and rest.endswith("]"):
+                    inner = rest[1:-1]
+                    for item in inner.split(","):
+                        item = item.strip().strip('"').strip("'")
+                        if item:
+                            extras.append(item)
+                    return extras
+                if rest and rest != "":
+                    return []  # Non-list scalar: ignore
+                in_block = True
+            continue
+        # In block: gather `- ...` items; stop at next column-0 key
+        if re.match(r"^[A-Za-z_]", line):
+            break
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("- "):
+            item = stripped[2:].strip().strip('"').strip("'")
+            if item:
+                extras.append(item)
+    return extras
+
+
+def _list_tracked_files(live_root: Path) -> list[str]:
+    """Return paths tracked by git (relative, forward-slash). Empty on git error."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files"],
+            cwd=live_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+    return [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
+
+
+def _filter_safe_paths(
+    candidate_paths: list[str],
+    exclusion_patterns: list[str],
+) -> tuple[list[str], list[str]]:
+    """Split candidates into (safe, blocked).
+
+    `safe` are paths to stage. `blocked` are paths that matched an exclusion
+    pattern — they MUST NOT be staged even with --allow-dirty (Req 5).
+    """
+    safe: list[str] = []
+    blocked: list[str] = []
+    for rel in candidate_paths:
+        norm = rel.replace("\\", "/")
+        if _path_matches_patterns(norm, exclusion_patterns):
+            blocked.append(norm)
+        else:
+            safe.append(norm)
+    return safe, blocked
+
+
+def _audit_commit_for_exclusions(
+    live_root: Path,
+    exclusion_patterns: list[str],
+    commit_ref: str = "HEAD",
+) -> list[str]:
+    """Post-commit audit (Req 6 / AC 7): list committed files matching exclusions.
+
+    Returns the list of offending paths in the named commit. Empty list = clean.
+    Caller is expected to abort with non-zero exit if non-empty.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "show", "--name-only", "--pretty=format:", commit_ref],
+            cwd=live_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+    files = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
+    offenders = [f for f in files if _path_matches_patterns(f, exclusion_patterns)]
+    return offenders
+
+
+def _explicit_stage_paths(live_root: Path, paths: list[str]) -> tuple[int, list[str]]:
+    """Stage each path explicitly via `git add -- <path>`.
+
+    Returns (count_added, errors). Never uses `git add -A` or `git add .`
+    (Constraint). Each path is passed verbatim through `--` to defeat
+    shell-globbing hazards (Constraint, Windows-PowerShell safety).
+    """
+    added = 0
+    errors: list[str] = []
+    for rel in paths:
+        try:
+            subprocess.run(
+                ["git", "add", "--", rel],
+                cwd=live_root,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            added += 1
+        except subprocess.CalledProcessError as e:
+            errors.append(f"{rel}: {e.stderr.strip() or e}")
+        except FileNotFoundError as e:
+            errors.append(f"{rel}: {e}")
+    return added, errors
+
+
+def cmd_safe_stage(args: argparse.Namespace) -> int:
+    """Spec 432 entry point: scoped staging + exclusion audit.
+
+    Stages paths from EITHER --paths (explicit operator-supplied list) OR
+    the project's tracked-files-plus-restored set, filtered through the
+    active project-type exclusion catalog. Never uses `git add -A`.
+
+    On success, prints a JSON status block. On exclusion-violation (either
+    pre-stage or post-commit audit), exits non-zero with recovery commands.
+    """
+    live_root = Path(args.live_root) if args.live_root else Path.cwd()
+    catalog_path = Path(args.catalog) if args.catalog else None
+
+    # Load catalog. Hard refusal on missing/malformed (Req 1).
+    try:
+        catalog = _load_exclusion_catalog(catalog_path)
+    except (FileNotFoundError, ValueError) as e:
+        print(
+            f"GATE [exclusion-catalog]: FAIL — {e}\n"
+            "Remediation: restore template/.forge/data/project-type-exclusions.yaml "
+            "from the FORGE template, or pass --catalog <path>.",
+            file=sys.stderr,
+        )
+        return 5
+
+    active = _detect_project_types(live_root, catalog)
+    extras = _read_operator_extra_exclusions(live_root)
+    patterns = _active_exclusion_patterns(catalog, active, operator_extra=extras)
+
+    print(
+        f"Project types detected: {', '.join(active) if active else '(none)'}",
+        file=sys.stderr,
+    )
+    if extras:
+        print(f"Operator extras: {len(extras)} pattern(s)", file=sys.stderr)
+
+    # Build candidate list:
+    #   --paths <a> <b> ... → that exact list
+    #   else                → tracked + operator-supplied restored set (--restored)
+    if args.paths:
+        candidates = [p.replace("\\", "/") for p in args.paths]
+    else:
+        tracked = _list_tracked_files(live_root)
+        restored = [p.replace("\\", "/") for p in (args.restored or [])]
+        # De-dup while preserving order.
+        seen: set[str] = set()
+        candidates = []
+        for p in tracked + restored:
+            if p not in seen:
+                seen.add(p)
+                candidates.append(p)
+
+    safe, blocked = _filter_safe_paths(candidates, patterns)
+
+    if blocked:
+        print(
+            f"GATE [scoped-staging]: REFUSED — {len(blocked)} path(s) matched the "
+            f"project-type exclusion catalog and will NOT be staged.",
+            file=sys.stderr,
+        )
+        for b in blocked[:20]:
+            print(f"  - {b}", file=sys.stderr)
+        if len(blocked) > 20:
+            print(f"  ... and {len(blocked) - 20} more", file=sys.stderr)
+        # Req 5: --allow-dirty does NOT relax the catalog. The blocked set is
+        # always dropped; we proceed to stage `safe` only if any remain.
+
+    if not safe:
+        print(
+            "GATE [scoped-staging]: ABORT — no safe paths to stage after exclusion filter.",
+            file=sys.stderr,
+        )
+        return 6
+
+    if args.dry_run:
+        print(
+            json.dumps(
+                {
+                    "status": "dry-run",
+                    "active_project_types": active,
+                    "patterns_in_effect": patterns,
+                    "candidate_count": len(candidates),
+                    "safe_count": len(safe),
+                    "blocked_count": len(blocked),
+                    "safe_sample": safe[:10],
+                    "blocked_sample": blocked[:10],
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    added, errors = _explicit_stage_paths(live_root, safe)
+    if errors:
+        print("Staging errors:", file=sys.stderr)
+        for err in errors[:10]:
+            print(f"  - {err}", file=sys.stderr)
+
+    # Commit if a message was provided.
+    if args.commit_message:
+        try:
+            subprocess.run(
+                ["git", "commit", "-m", args.commit_message],
+                cwd=live_root,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(
+                f"GATE [scoped-staging]: FAIL — git commit failed: "
+                f"{e.stderr.strip() or e}",
+                file=sys.stderr,
+            )
+            return 7
+
+        # Post-commit audit (Req 6 / AC 7).
+        offenders = _audit_commit_for_exclusions(live_root, patterns)
+        if offenders:
+            print(
+                f"GATE [post-commit-audit]: FAIL — {len(offenders)} exclusion-listed "
+                f"path(s) landed in the commit. This is a defect — please report.",
+                file=sys.stderr,
+            )
+            for o in offenders[:20]:
+                print(f"  - {o}", file=sys.stderr)
+            print(
+                "\nRecovery:\n"
+                "  git reset --soft HEAD~1   # undo the commit, keep staged\n"
+                f"  git restore --staged {' '.join(offenders[:5])}{' ...' if len(offenders) > 5 else ''}\n"
+                "  # then re-run safe-stage",
+                file=sys.stderr,
+            )
+            return 8
+
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "active_project_types": active,
+                "patterns_in_effect": len(patterns),
+                "staged": added,
+                "blocked": len(blocked),
+                "committed": bool(args.commit_message),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def cmd_audit_commit(args: argparse.Namespace) -> int:
+    """Standalone post-commit audit (Req 6 / AC 7). Useful for retroactive checks."""
+    live_root = Path(args.live_root) if args.live_root else Path.cwd()
+    catalog_path = Path(args.catalog) if args.catalog else None
+    try:
+        catalog = _load_exclusion_catalog(catalog_path)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"GATE [exclusion-catalog]: FAIL — {e}", file=sys.stderr)
+        return 5
+    active = _detect_project_types(live_root, catalog)
+    extras = _read_operator_extra_exclusions(live_root)
+    patterns = _active_exclusion_patterns(catalog, active, operator_extra=extras)
+    offenders = _audit_commit_for_exclusions(live_root, patterns, commit_ref=args.commit_ref)
+    print(
+        json.dumps(
+            {
+                "commit": args.commit_ref,
+                "active_project_types": active,
+                "offenders": offenders,
+                "clean": len(offenders) == 0,
+            },
+            indent=2,
+        )
+    )
+    return 0 if not offenders else 8
+
+
+# ---- Spec 433: consumer .gitignore audit -----------------------------------
+
+# Each project type's exclude_paths from project-type-exclusions.yaml are
+# normalized into operator-friendly gitignore rules (e.g., `target/**` → `target/`).
+# The audit checks the consumer's project-root .gitignore for substring presence
+# of these normalized rules, stripping comment and negation lines first to
+# avoid false-positives (DA W-1, 2026-05-15).
+
+
+def _normalize_to_gitignore_rule(pattern: str) -> str:
+    """Collapse a catalog pattern to its operator-friendly .gitignore form.
+
+    Rules:
+      - `target/**`     → `target/`
+      - `**/target/**`  → `target/`
+      - `target/`       → `target/`
+      - `*.pyc`         → `*.pyc`
+      - `**/*.egg-info/**` → `*.egg-info/`
+    """
+    p = pattern.replace("\\", "/").strip()
+    # Strip a leading `**/` (e.g., `**/__pycache__/**` → `__pycache__/**`).
+    if p.startswith("**/"):
+        p = p[3:]
+    # Strip a trailing `/**` (e.g., `target/**` → `target/`).
+    if p.endswith("/**"):
+        p = p[:-3] + "/"
+    # Strip a bare trailing `**` (e.g., `target**` → `target`).
+    elif p.endswith("**"):
+        p = p[:-2]
+    return p
+
+
+def _required_gitignore_rules_for_types(
+    catalog: dict, active_types: list[str]
+) -> dict[str, list[str]]:
+    """Map project-type → unique list of normalized gitignore rules to require."""
+    out: dict[str, list[str]] = {}
+    for type_name in active_types:
+        type_def = catalog.get("project_types", {}).get(type_name, {})
+        seen: set[str] = set()
+        rules: list[str] = []
+        for pat in type_def.get("exclude_paths", []):
+            rule = _normalize_to_gitignore_rule(pat)
+            if rule and rule not in seen:
+                seen.add(rule)
+                rules.append(rule)
+        out[type_name] = rules
+    return out
+
+
+def _read_gitignore_lines(gitignore: Path) -> tuple[list[str], str]:
+    """Read .gitignore in binary, detect line terminator (CRLF/LF), return
+    (decoded_lines_without_terminator, terminator_string).
+
+    DA W-3 (2026-05-15): preserve the file's existing line ending. If the file
+    is mixed, the dominant terminator wins. If the file is empty, default to
+    the OS-native terminator.
+    """
+    if not gitignore.is_file():
+        return [], os.linesep
+    raw = gitignore.read_bytes()
+    if not raw:
+        return [], os.linesep
+    crlf_count = raw.count(b"\r\n")
+    # LF outside CRLF pairs:
+    lf_count = raw.count(b"\n") - crlf_count
+    terminator = "\r\n" if crlf_count > lf_count else "\n"
+    text = raw.decode("utf-8", errors="replace")
+    # Split on either CRLF or LF; preserve as decoded list without terminators.
+    lines = re.split(r"\r\n|\n", text)
+    # If the file ended with a terminator, split produces a trailing empty string;
+    # drop it so we don't insert a phantom empty line on rejoin.
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines, terminator
+
+
+def _gitignore_active_rules(lines: list[str]) -> list[str]:
+    """Strip comment lines (#-prefixed) and negation lines (!-prefixed) from
+    the .gitignore. The remainder is the set of lines that actually ignore
+    something.
+
+    DA W-1 (2026-05-15): comment + negation stripping eliminates the
+    false-positive class.
+    """
+    active: list[str] = []
+    for line in lines:
+        s = line.strip()
+        if not s:
+            continue
+        if s.startswith("#"):
+            continue
+        if s.startswith("!"):
+            continue
+        active.append(s)
+    return active
+
+
+def _gitignore_satisfies_rule(active_lines: list[str], rule: str) -> bool:
+    """Substring + trailing-slash equivalence (Req: scope §"Match semantics").
+
+    `target/`, `target`, `**/target/`, `/target/` all satisfy a `target/` rule.
+    """
+    needle = rule.rstrip("/")
+    if not needle:
+        return False
+    needle_slash = needle + "/"
+    for active in active_lines:
+        if needle in active or needle_slash in active:
+            return True
+    return False
+
+
+def _audit_gitignore(
+    live_root: Path,
+    catalog: dict,
+    active_types: list[str],
+) -> dict:
+    """Per-type audit of .gitignore against required rules.
+
+    Returns:
+        {
+          "gitignore_exists": bool,
+          "by_type": {"maven": {"required": [...], "missing": [...]}, ...},
+          "any_missing": bool,
+          "any_present_type_with_missing_rules": bool,
+        }
+    """
+    gitignore = live_root / ".gitignore"
+    required_by_type = _required_gitignore_rules_for_types(catalog, active_types)
+    exists = gitignore.is_file()
+    if exists:
+        lines, _terminator = _read_gitignore_lines(gitignore)
+        active_lines = _gitignore_active_rules(lines)
+    else:
+        active_lines = []
+
+    by_type: dict[str, dict] = {}
+    any_missing = False
+    for type_name, required in required_by_type.items():
+        missing = [r for r in required if not _gitignore_satisfies_rule(active_lines, r)]
+        by_type[type_name] = {"required": required, "missing": missing}
+        if missing:
+            any_missing = True
+
+    return {
+        "gitignore_exists": exists,
+        "by_type": by_type,
+        "any_missing": any_missing,
+    }
+
+
+def _format_gitignore_diff(audit: dict, today: str) -> str:
+    """Build a copy-pasteable diff block showing the lines that would be appended."""
+    parts: list[str] = []
+    parts.append(f"# Added by /forge stoke {today}")
+    for type_name, type_audit in audit["by_type"].items():
+        if type_audit["missing"]:
+            parts.append(f"# {type_name}")
+            parts.extend(type_audit["missing"])
+    return "\n".join(parts)
+
+
+def _append_to_gitignore(live_root: Path, audit: dict, today: str) -> dict:
+    """Append missing rules to consumer's .gitignore (or create it).
+
+    Preserves line-ending (DA W-3). Returns a status dict.
+    """
+    gitignore = live_root / ".gitignore"
+    exists = gitignore.is_file()
+    lines, terminator = _read_gitignore_lines(gitignore)
+    # Ensure existing content ends cleanly before appending new block.
+    new_lines = list(lines)  # copy to preserve byte-equality on unchanged content
+    if new_lines and new_lines[-1].strip() != "":
+        # File ends with content but no blank-line separator; we'll add one.
+        new_lines.append("")
+    # Compose appended block.
+    append_block = [f"# Added by /forge stoke {today}"]
+    for type_name, type_audit in audit["by_type"].items():
+        if type_audit["missing"]:
+            append_block.append(f"# {type_name}")
+            append_block.extend(type_audit["missing"])
+    new_lines.extend(append_block)
+    # Reserialize using the original terminator.
+    output = terminator.join(new_lines) + terminator
+    gitignore.write_bytes(output.encode("utf-8"))
+    return {
+        "gitignore_path": str(gitignore),
+        "created": not exists,
+        "appended_lines": len(append_block),
+        "terminator": "CRLF" if terminator == "\r\n" else "LF",
+    }
+
+
+def cmd_list_tasks(args: argparse.Namespace) -> int:
+    """Spec 428 — emit one human-readable name per `_tasks` entry in copier.yml.
+
+    Resolution order for source: --src-path arg; else .copier-answers.yml::_src_path
+    in the live root. Empty output + exit 0 when no `_tasks` declared. Non-zero
+    exit only on YAML parse failure or unreachable source.
+
+    The Step 0pre.1 consent prompt in /forge stoke calls this to dynamically
+    enumerate the tasks that will run if the operator passes --trust. Replaces
+    the pre-Spec-428 hardcoded example list.
+    """
+    src_path = args.src_path
+    if not src_path:
+        live_root = Path(args.live_root) if args.live_root else Path.cwd()
+        answers = _read_copier_answers(live_root)
+        if answers:
+            src_path = answers.get("_src_path")
+    if not src_path:
+        print("ERROR: no _src_path resolved; pass --src-path or run in a project with .copier-answers.yml", file=sys.stderr)
+        return 2
+    copier_yml = Path(src_path) / "copier.yml"
+    if not copier_yml.is_file():
+        print(f"ERROR: copier.yml not found at {copier_yml}", file=sys.stderr)
+        return 2
+    try:
+        names = _read_copier_tasks(copier_yml)
+    except ValueError as e:
+        print(f"ERROR: copier.yml parse failure: {e}", file=sys.stderr)
+        return 3
+    for name in names:
+        print(name)
+    return 0
+
+
+def cmd_audit_gitignore(args: argparse.Namespace) -> int:
+    """Spec 433 entry point: audit consumer .gitignore against active project types.
+
+    Behavior:
+      - Detects active project types via Spec 432 catalog.
+      - Reports per-type rule coverage.
+      - If --apply is set and missing rules exist, appends them (operator's
+        consent must be obtained by the calling command body, NOT by this
+        helper — keep helper non-interactive for scripting).
+      - --no-gitignore-audit: short-circuit; print 'skipped'.
+    """
+    if args.no_gitignore_audit:
+        print(json.dumps({"status": "skipped", "reason": "--no-gitignore-audit"}))
+        return 0
+
+    live_root = Path(args.live_root) if args.live_root else Path.cwd()
+    catalog_path = Path(args.catalog) if args.catalog else None
+    try:
+        catalog = _load_exclusion_catalog(catalog_path)
+    except (FileNotFoundError, ValueError) as e:
+        # Req 5 / Constraint: non-blocking on helper errors.
+        print(
+            f"WARN: gitignore audit skipped — catalog unavailable: {e}",
+            file=sys.stderr,
+        )
+        print(json.dumps({"status": "skipped", "reason": f"catalog: {e}"}))
+        return 0
+
+    active = _detect_project_types(live_root, catalog)
+    if not active:
+        print(
+            json.dumps(
+                {"status": "ok", "reason": "no project types detected", "by_type": {}}
+            )
+        )
+        return 0
+
+    audit = _audit_gitignore(live_root, catalog, active)
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+
+    # Terse report (Req 7): one line per type, plus combined diff if missing.
+    if not audit["any_missing"]:
+        for type_name in active:
+            print(f"{type_name.capitalize()}: OK", file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "gitignore_exists": audit["gitignore_exists"],
+                    "active_project_types": active,
+                    "any_missing": False,
+                }
+            )
+        )
+        return 0
+
+    for type_name, type_audit in audit["by_type"].items():
+        if type_audit["missing"]:
+            missing_str = ", ".join(f"`{r}`" for r in type_audit["missing"])
+            print(f"{type_name.capitalize()}: missing {missing_str}", file=sys.stderr)
+        else:
+            print(f"{type_name.capitalize()}: OK", file=sys.stderr)
+
+    diff_block = _format_gitignore_diff(audit, today)
+    print("\nDiff (would be appended to .gitignore):", file=sys.stderr)
+    print(diff_block, file=sys.stderr)
+    print(
+        "\nSee docs/process-kit/stoke-recovery-runbook.md for the audit rationale.",
+        file=sys.stderr,
+    )
+
+    if args.apply:
+        result = _append_to_gitignore(live_root, audit, today)
+        print(
+            json.dumps(
+                {
+                    "status": "applied",
+                    "active_project_types": active,
+                    "any_missing_pre_apply": True,
+                    "apply_result": result,
+                }
+            )
+        )
+        return 0
+
+    # Default: report only (Req 5 — non-blocking).
+    print(
+        json.dumps(
+            {
+                "status": "report-only",
+                "active_project_types": active,
+                "any_missing": True,
+                "by_type": {
+                    t: {"missing": d["missing"]}
+                    for t, d in audit["by_type"].items()
+                    if d["missing"]
+                },
+            }
+        )
+    )
+    return 0
+
+
 # ---- main -------------------------------------------------------------------
 
+# Spec 431 — new subcommands shipped by the stoke/ package.
+# Dispatched here so existing `.forge/lib/stoke.py <subcommand>` invocations
+# continue to work after the package extraction (Req 9, AC 17).
+_PACKAGE_SUBCOMMANDS = frozenset(
+    {
+        "detect-legacy",
+        "cleanup-legacy",
+        "manifest-init",
+        "manifest-verify",
+        "catalog-self-hash",
+    }
+)
+
+
+def _dispatch_package_subcommand(argv: list[str]) -> int:
+    """Forward to the stoke/ package's CLI when the first arg is a
+    package-owned subcommand (Spec 431)."""
+    from stoke.__main__ import main as package_main  # noqa: WPS433
+
+    return package_main(argv)
+
+
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] in _PACKAGE_SUBCOMMANDS:
+        return _dispatch_package_subcommand(sys.argv[1:])
+
     parser = argparse.ArgumentParser(prog="stoke.py", description="Spec 427 copier-direct stoke helper")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -828,6 +1813,7 @@ def main() -> int:
     p.add_argument("--no-cleanup-old-backups", action="store_true")
     p.add_argument("--vcs-ref", default=None, help="Override --vcs-ref (default: read from .copier-answers.yml::_commit)")
     p.add_argument("--trust", action="store_true", help="Pass --trust to copier update. OPERATOR-EXPLICIT per invocation per Req 1 / AC 7 / CISO Constraint — never baked into defaults, never from env, never from config. The /forge stoke command body prompts the operator and passes this flag only after explicit consent.")
+    p.add_argument("--confirm-security-overrides", action="store_true", help="Spec 434 Req 4: confirm honoring accept_security_overrides when .copier-answers.yml shows no in-session operator edit (fresh-clone state). Required to proceed when the security-override-consent gate WARNs.")
     p.set_defaults(func=cmd_direct_apply)
 
     p = sub.add_parser("backup-create")
@@ -849,6 +1835,78 @@ def main() -> int:
     p = sub.add_parser("parse-sections")
     p.add_argument("file_path")
     p.set_defaults(func=cmd_parse_sections)
+
+    # Spec 432 — scoped staging + exclusion audit
+    p = sub.add_parser(
+        "safe-stage",
+        help="Stage paths through the project-type exclusion filter (Spec 432). "
+             "Never uses `git add -A`. With --commit-message, also commits and runs "
+             "the post-commit audit.",
+    )
+    p.add_argument("--live-root", default=None)
+    p.add_argument("--catalog", default=None, help="Override path to project-type-exclusions.yaml (testing).")
+    p.add_argument(
+        "--paths",
+        nargs="*",
+        default=None,
+        help="Explicit list of paths to stage. Mutually informative with --restored; "
+             "if --paths is set, the tracked-files list is NOT used.",
+    )
+    p.add_argument(
+        "--restored",
+        nargs="*",
+        default=None,
+        help="Additional paths to stage on top of the tracked-files list "
+             "(e.g., files restored by Step 0b before copier update).",
+    )
+    p.add_argument(
+        "--commit-message",
+        default=None,
+        help="If set, run `git commit -m <msg>` after staging and audit the resulting commit.",
+    )
+    p.add_argument("--dry-run", action="store_true", help="Show what would be staged; do not modify the index.")
+    p.set_defaults(func=cmd_safe_stage)
+
+    p = sub.add_parser(
+        "audit-commit",
+        help="Post-hoc audit of an existing commit against the active exclusion catalog (Spec 432).",
+    )
+    p.add_argument("--live-root", default=None)
+    p.add_argument("--catalog", default=None)
+    p.add_argument("--commit-ref", default="HEAD")
+    p.set_defaults(func=cmd_audit_commit)
+
+    # Spec 433 — consumer .gitignore audit
+    p = sub.add_parser(
+        "audit-gitignore",
+        help="Audit the consumer's .gitignore against the active project-type catalog (Spec 433). "
+             "Reports missing rules; with --apply, appends them (preserves existing content + line endings).",
+    )
+    p.add_argument("--live-root", default=None)
+    p.add_argument("--catalog", default=None, help="Override project-type-exclusions.yaml path.")
+    p.add_argument(
+        "--apply",
+        action="store_true",
+        help="Append missing rules to .gitignore (operator consent must be obtained "
+             "by the caller per Req 4). Without --apply, the audit is report-only.",
+    )
+    p.add_argument(
+        "--no-gitignore-audit",
+        action="store_true",
+        help="Short-circuit: print 'skipped' and exit. Required for the operator "
+             "to disable the audit per invocation (Req 4).",
+    )
+    p.set_defaults(func=cmd_audit_gitignore)
+
+    # Spec 428 — dynamic _tasks enumeration for Step 0pre.1 consent prompt.
+    p = sub.add_parser(
+        "list-tasks",
+        help="Emit copier.yml::_tasks names from the resolved source, one per line. "
+             "Powers the Step 0pre.1 --trust consent prompt (Spec 428).",
+    )
+    p.add_argument("--src-path", default=None, help="Override source path (default: read _src_path from .copier-answers.yml).")
+    p.add_argument("--live-root", default=None, help="Project root for resolving .copier-answers.yml (default: cwd).")
+    p.set_defaults(func=cmd_list_tasks)
 
     args = parser.parse_args()
     return args.func(args)

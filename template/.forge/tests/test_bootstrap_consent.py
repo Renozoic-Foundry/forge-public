@@ -192,15 +192,27 @@ def test_consent_gate_hook_passes_required_arguments():
 # Hook unit tests (exercise forge_consent_gate.py directly)
 # ---------------------------------------------------------------------------
 
-def _run_hook(*args, cwd=None):
+def _run_hook(*args, cwd=None, operation="copy"):
     """Invoke forge_consent_gate.py with the given argv and return CompletedProcess.
+
+    Spec 445: the hook's positional contract added `operation` at argv[4]
+    (copy|update). Existing Spec 437 tests exercise fresh-copy semantics,
+    so this helper injects "copy" by default between argv[3] (dst_path) and
+    the override-key args. Pass `operation="update"` to test the Spec 445
+    update-mode skip path.
 
     `stdin=subprocess.DEVNULL` is required on Windows when pytest's stdin handle
     has been invalidated by a prior test's subprocess interaction — without it,
     `subprocess.run` raises "[WinError 6] The handle is invalid" when capturing.
     """
+    # First 3 positional args (accept_flag, consent_value, dst_path) come first;
+    # operation is argv[4]; remaining args are override keys.
+    if len(args) >= 3:
+        argv = [*args[:3], operation, *args[3:]]
+    else:
+        argv = list(args)  # malformed call — let the hook surface the error
     return subprocess.run(
-        [sys.executable, str(CONSENT_GATE), *args],
+        [sys.executable, str(CONSENT_GATE), *argv],
         cwd=str(cwd) if cwd else None,
         capture_output=True,
         text=True,

@@ -81,6 +81,18 @@ The `--data accept_security_overrides_confirmed=true` flag MUST be on the operat
 - `copier.yml` near `accept_security_overrides:` — primary validator + `_tasks:` wiring.
 - `.forge/tests/test_bootstrap_consent.py` — structural + hook-unit regression tests (13 tests).
 
+## Consent-gate `copier update` old-worker rebuild — Spec 445
+
+**Status (2026-05-16)**: `scripts/copier-hooks/forge_consent_gate.py` (Spec 437) skips the "consent absent" secondary check during `copier update` operations. The Req 1a poisoned-token check stays active on both copy and update.
+
+**Why**: during `copier update`, copier renders TWICE — once for the old-worker reconstruction (rebuilds previous project state from `.copier-answers.yml` alone for diff computation), then once for the new-worker apply. Runtime tokens passed via `--data accept_security_overrides_confirmed=true` ONLY reach the new-worker apply. Tripping the secondary check during old-worker rebuild aborts the update before any diff is computed — a category error: the gate is not asking for fresh consent during rebuild, it's reconstructing previously-consented state.
+
+**Threat model alignment**: Spec 437 Req 1a was scoped to the fresh-clone PR-poisoning attack: an adversary modifies `.copier-answers.yml` before the consumer's first `copier copy` to pre-position `accept_security_overrides: true` + a crafted command value. That attack surface does NOT apply to `copier update` of an existing project — the answers file is already part of the consumer's repo, and any modification is visible in PR-review diff before the update runs. The poisoned-token check (rejecting `accept_security_overrides_confirmed` persisted to the answers file) stays active on update as defense-in-depth.
+
+**Mechanism**: `copier.yml`'s `_tasks[0]` invokes the hook with `{{ _copier_operation }}` as argv[4]. The hook returns early when argv[4] equals `"update"` AFTER running the poisoned-token check. Older templates / copier versions where the operation arg is absent default to fresh-copy semantics (current behavior preserved).
+
+**Regression tests**: `.forge/tests/test_consent_gate_update_path.py` covers all four combinations of (operation × consent state) per Spec 445 AC 1-5.
+
 ## Bare-copier invocation is power-user only — Spec 444
 
 **Status (2026-05-16)**: `/forge stoke` is the **default operator path** for "update my project from the template." It mediates every consent gate (Copier `--trust`, Spec 090 security overrides, Spec 437 runtime tokens) through chat as yes/no questions. The operator never sees a Python traceback, never types `--data K=V`, never reads a Spec number to know what to do next.

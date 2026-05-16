@@ -36,9 +36,18 @@ CONSENT_GATE = REPO_ROOT / "scripts" / "copier-hooks" / "forge_consent_gate.py"
 # Structural — primary gate (validator on accept_security_overrides)
 # ---------------------------------------------------------------------------
 
-def test_primary_validator_present_on_accept_security_overrides():
-    """The per-question `validator:` block must exist on accept_security_overrides
-    and reference accept_security_overrides_confirmed."""
+def test_primary_validator_removed_per_spec_448():
+    """Spec 448 REMOVED the per-question validator on accept_security_overrides.
+
+    The validator's Jinja predicate could not be made to short-circuit on
+    `_copier_operation == 'update'` because copier doesn't inject that
+    variable into the validator's eval context during the old_worker rebuild
+    of `copier update`. Enforcement consolidates at the script-level gate
+    (`scripts/copier-hooks/forge_consent_gate.py`, wired as `_tasks[0]`),
+    which fires before any persistent state is written.
+
+    Restoring the validator will trip during update and block consumer flows.
+    """
     text = COPIER_YML.read_text(encoding="utf-8")
     match = re.search(
         r"^accept_security_overrides:\s*\n"
@@ -48,45 +57,31 @@ def test_primary_validator_present_on_accept_security_overrides():
     )
     assert match, "accept_security_overrides block not found"
     body = match.group(1)
-    assert "validator:" in body, (
-        "REGRESSION: Spec 437 primary gate removed — no validator: on "
-        "accept_security_overrides. Restore the validator that refuses render "
-        "when accept_security_overrides_confirmed is not also true."
-    )
-    assert "accept_security_overrides_confirmed" in body, (
-        "Spec 437 validator no longer references accept_security_overrides_confirmed."
-    )
-    assert "Spec 437" in body, (
-        "Spec 437 marker missing from accept_security_overrides validator — "
-        "future readers must be able to trace the gate to its spec."
+    # Strip comments; only YAML keys count.
+    code = "\n".join(ln for ln in body.splitlines() if not ln.lstrip().startswith("#"))
+    assert not re.search(r"^\s*validator\s*:", code, re.M), (
+        "REGRESSION: per-question validator: on accept_security_overrides was "
+        "re-introduced. Spec 448 removed it because copier doesn't inject "
+        "_copier_operation in the validator's Jinja context during old_worker "
+        "rebuild — any update-mode short-circuit at this layer is ineffective. "
+        "Enforcement consolidates at scripts/copier-hooks/forge_consent_gate.py."
     )
 
 
-def test_primary_validator_displays_literal_command_strings():
-    """Req 1b: refusal message must reference each security-gated key by name
-    so the literal command values are rendered into the error output."""
-    text = COPIER_YML.read_text(encoding="utf-8")
-    # Find the Spec 437 validator block specifically (not the older Spec 090
-    # per-question validators on test_command etc.).
-    start = text.find("\naccept_security_overrides:\n")
-    assert start != -1, "accept_security_overrides block not found"
-    # Block extends to the next top-level question (line beginning with non-whitespace + colon).
-    rest = text[start + 1 :]
-    end_match = re.search(r"\n[A-Za-z_][A-Za-z0-9_]*:\s*\n", rest)
-    body = rest[: end_match.start()] if end_match else rest
-    for key in (
-        "test_command",
-        "lint_command",
-        "harness_command",
-        "include_nanoclaw",
-        "include_advanced_autonomy",
-        "include_two_stage_review",
-    ):
-        assert key in body, (
-            f"Req 1b: validator does not reference `{key}`. The refusal message "
-            f"must enumerate each non-default security-gated key so its value is "
-            f"rendered into the error output."
-        )
+def test_req_1b_literal_command_strings_in_script_gate():
+    """Req 1b (Spec 437): refusal message must enumerate each non-default
+    security-gated key. Post-Spec-448, enforcement lives in the script gate
+    rather than the per-question validator. The literal-display assertion
+    here checks the script-gate refusal path; the per-invocation behavior
+    is covered by test_hook_poisoned_token_refuses below."""
+    text = CONSENT_GATE.read_text(encoding="utf-8")
+    # The script's refusal message enumerates overrides via the override_lines
+    # list (built from sys.argv[5:] post-Spec-445). Check that the script
+    # constructs an override list for refusal.
+    assert "override_lines" in text and "overrides" in text.lower(), (
+        "Req 1b: forge_consent_gate.py must build an override list for the "
+        "refusal message (literal-command-string display)."
+    )
 
 
 def test_consent_token_question_is_secret_and_bool():

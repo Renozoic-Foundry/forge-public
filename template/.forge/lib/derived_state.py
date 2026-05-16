@@ -342,19 +342,48 @@ def should_skip_canonical_write(project_root: Optional[Path] = None) -> bool:
 # ---------- CLI dispatch ----------
 
 def _format_rows_table(rows: list[dict], columns: list[str]) -> str:
-    """Plain-text table; one row per line, tab-separated columns."""
+    """Plain-text fallback table; one row per line, tab-separated columns.
+
+    Used only for --get-spec-index and --get-changelog. The --get-backlog
+    path delegates to render_backlog.render() so the helper's table output
+    is byte-identical to the table portion of docs/.generated/backlog-table.md
+    (Spec 439 Req 4 — delegation, no parallel formatter).
+    """
     lines = ["\t".join(columns)]
     for r in rows:
         lines.append("\t".join(str(r.get(c, "") if r.get(c) is not None else "") for c in columns))
     return "\n".join(lines) + "\n"
 
 
-def _emit(rows: list[dict], fmt: str, columns: list[str]) -> str:
+def _backlog_table_via_renderer(project_root: Optional[Path] = None) -> str:
+    """Spec 439 Req 4 — delegate --format=table to render_backlog.render().
+
+    Returns the markdown table portion (column headers + separator + data rows)
+    that appears under "## Ranked backlog" in docs/.generated/backlog-table.md.
+    The file-level wrapping (page title, generated-by comment, rendered timestamp,
+    scoring-formula prose) is omitted — those are render_backlog header=True
+    concerns that include a non-deterministic timestamp. The table content
+    delegated here is byte-identical to the corresponding section of the
+    rendered artifact.
+    """
+    from render_backlog import render  # delegate — no parallel formatter
+    full = render(_resolve_root(project_root) / "docs" / "specs", header=True)
+    lines = full.splitlines()
+    try:
+        start = next(i for i, ln in enumerate(lines) if ln.startswith("| Rank "))
+    except StopIteration:
+        return "\n"
+    return "\n".join(lines[start:]) + "\n"
+
+
+def _emit(rows: list[dict], fmt: str, columns: list[str], *, backlog: bool = False) -> str:
     if fmt == "json":
         return json.dumps(rows, ensure_ascii=False) + "\n"
     if fmt == "count":
         return f"{len(rows)}\n"
     if fmt == "table":
+        if backlog:
+            return _backlog_table_via_renderer()
         return _format_rows_table(rows, columns)
     raise ValueError(f"unknown format: {fmt}")
 
@@ -390,7 +419,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         if args.get_backlog:
             cols = ["rank", "spec_id", "title", "bv", "e", "r", "sr", "score", "status"]
-            sys.stdout.write(_emit(get_backlog_rows(), args.format, cols))
+            sys.stdout.write(_emit(get_backlog_rows(), args.format, cols, backlog=True))
             return 0
 
         if args.get_spec_index:

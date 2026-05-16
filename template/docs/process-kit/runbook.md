@@ -8,6 +8,8 @@ For flipping FORGE foundation gates from `mode: advisory` to `mode: strict` (Spe
 
 For triaging `GATE [authorization-rule-lint]` (Step 7c) or `GATE [agents-md-drift]` (Step 7d) findings — what each WARN/FAIL means, the prose↔YAML two-sided model, and the alias map — see [agents-md-authorization-model.md](agents-md-authorization-model.md) (Spec 334).
 
+For deciding whether a new script under `scripts/` should propagate to `template/scripts/` (and from there into Copier-rendered consumer projects) or remain framework-internal (canonical-only), see [scripts-propagation-policy.md](scripts-propagation-policy.md) (Spec 393). The policy spells out the criteria for `propagate` vs `framework-internal`, the full classification table for the current `scripts/*.{sh,ps1}` set, and the deferred validator-enforcement trigger.
+
 ---
 
 ## Process-Kit Doc Freshness Convention (Spec 278)

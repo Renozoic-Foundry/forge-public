@@ -139,6 +139,20 @@ cd my-project
 ```
 Then open the project in your AI-assisted IDE and let your assistant read `AGENTS.md`.
 
+**Bootstrapping with security overrides (consent-required):**
+
+If you need to override `test_command`, `lint_command`, `harness_command`, or any `include_*` security toggle at bootstrap time, supply the runtime consent token on the same invocation (Spec 437):
+
+```bash
+copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project \
+  --trust \
+  --data accept_security_overrides=true \
+  --data accept_security_overrides_confirmed=true \
+  --data 'test_command=./mvnw test'
+```
+
+The `--data accept_security_overrides_confirmed=true` flag MUST be on the CLI command line — answers-file-supplied consent tokens are rejected by design. The same shape applies to `copier update`. See [`docs/process-kit/copier-gotchas.md`](docs/process-kit/copier-gotchas.md#bootstrap-path-consent-surface--spec-437-consent-gate) for the rationale.
+
 </details>
 
 FORGE works with any AI-assisted IDE. Not using Claude Code? See the collapsed section above for Cursor, Windsurf, Copilot, and manual paths.
@@ -299,7 +313,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 423 specs across 109 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 434 specs across 111 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

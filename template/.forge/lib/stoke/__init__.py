@@ -30,6 +30,7 @@ __all__ = [
     "backup",
     "cleanup",
     "reporter",
+    "gates",
 ]
 
 # Spec 442 — Re-export legacy CLI callables from sibling stoke.py.

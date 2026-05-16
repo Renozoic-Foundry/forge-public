@@ -828,6 +828,19 @@ def cmd_direct_apply(args: argparse.Namespace) -> int:
     else:
         print("--trust: NOT passed (operator did not consent — copier tasks will be refused)", file=sys.stderr)
 
+    # Spec 444: --data K=V pass-through for chat-mediated security-override
+    # consent. The /forge stoke command body's preflight-gates flow constructs
+    # K=V strings from FORGE-controlled gate definitions
+    # (stoke.gates.detect_gates) only after explicit operator yes-answers.
+    # NEVER set --data from env vars, config files, or non-operator sources
+    # (Spec 444 Constraint: "NEVER construct --data flags from any source
+    # other than operator yes/no answers in the current chat turn").
+    for kv in (args.data or []):
+        if "=" not in kv:
+            print(f"ERROR: --data argument must be KEY=VALUE (got: {kv!r})", file=sys.stderr)
+            return 2
+        cmd.extend(["--data", kv])
+
     print(f"Invoking: {' '.join(cmd)}", file=sys.stderr)
     # /consensus 427 round 3 fix (MT + CISO concern on env-var back-channel):
     # write a PID-stamped sentinel file (NOT an inheritable env-var) so the
@@ -1787,6 +1800,7 @@ _PACKAGE_SUBCOMMANDS = frozenset(
         "manifest-init",
         "manifest-verify",
         "catalog-self-hash",
+        "preflight-gates",
     }
 )
 
@@ -1814,6 +1828,7 @@ def main() -> int:
     p.add_argument("--vcs-ref", default=None, help="Override --vcs-ref (default: read from .copier-answers.yml::_commit)")
     p.add_argument("--trust", action="store_true", help="Pass --trust to copier update. OPERATOR-EXPLICIT per invocation per Req 1 / AC 7 / CISO Constraint — never baked into defaults, never from env, never from config. The /forge stoke command body prompts the operator and passes this flag only after explicit consent.")
     p.add_argument("--confirm-security-overrides", action="store_true", help="Spec 434 Req 4: confirm honoring accept_security_overrides when .copier-answers.yml shows no in-session operator edit (fresh-clone state). Required to proceed when the security-override-consent gate WARNs.")
+    p.add_argument("--data", action="append", default=[], help="Spec 444: pass KEY=VALUE through to `copier update --data`. Used by the /forge stoke chat-mediation flow to supply `accept_security_overrides=true` and `accept_security_overrides_confirmed=true` after explicit operator yes-answers via Step 0pre.05. Repeatable. MUST originate from operator yes-answers in the current chat turn — never from env vars, config files, or implicit context (Spec 444 Constraint).")
     p.set_defaults(func=cmd_direct_apply)
 
     p = sub.add_parser("backup-create")

@@ -126,7 +126,56 @@ Append missing rules to .gitignore? (y/N)
 
 **Non-blocking** (Req 5): audit-helper errors emit a warning and the stoke flow continues. A `n` answer never aborts.
 
-### Step 0pre.1 — Operator `--trust` consent prompt (CISO Req 1 / AC 7; Spec 428 dynamic enumeration)
+### Step 0pre.05 — Unified gate-mediation pre-flight (Spec 444)
+
+Before any consent prompt, the chat layer runs a single pre-flight that enumerates every gate the underlying `copier update` will hit (Copier's `--trust` requirement, Spec 090 security-override validators, Spec 437 runtime-token validators, plus an `unknown-validator` fallback). The operator sees **at most two yes/no questions** — never a Python traceback, never a `--data K=V` flag, never a spec number unless an unknown gate forces the fallback path.
+
+```bash
+.forge/bin/forge-py .forge/lib/stoke.py preflight-gates
+```
+
+The helper emits a JSON array of `Gate` objects, each with `kind`, `label`, `rationale`, `operator_question`, and `copier_data_keys_to_set_on_yes`. The chat layer:
+
+1. **Reads** the JSON. If empty → no gates fire; skip directly to Step 0pre.2 (`direct-apply` with no extra flags).
+2. **Collapses** the `spec-090-security-override` and `spec-437-runtime-consent` gates into a single chat question (operator answers once; the AI supplies BOTH `--data accept_security_overrides=true` AND `--data accept_security_overrides_confirmed=true` on the constructed CLI when the answer is yes).
+3. **Asks** each remaining gate's `operator_question` verbatim — these strings are FORGE-authored constants in `stoke/gates.py` (R-Sec-2). Do NOT paraphrase, do NOT substitute template-controlled text, do NOT prepend "Per Spec NNN..." preambles.
+4. **Parses** each operator response through the strict-literal consent parser (Step 0pre.05a below). NEVER infer consent from natural language.
+5. **Accumulates** the `--trust` flag (if and only if the operator answered yes to `copier-tasks-trust`) and the `--data K=V` flags (if and only if the operator answered yes to the security-override question).
+6. **Hands off** to Step 0pre.2 with the accumulated flags.
+
+If `preflight-gates` exits non-zero, abort the stoke and surface the error — do NOT proceed with partial data.
+
+#### Step 0pre.05a — Strict-literal consent parser (Req 3a / AC 9; R-Sec-1)
+
+The AI MUST recognize operator consent ONLY from this exact allow-list, case-insensitive, after trimming whitespace:
+
+- **Accept**: `yes`, `y`, `confirm`, `approve`, `ok`, `okay`
+- **Reject**: `no`, `n`, `cancel`
+- **Anything else** (hedged like "yes but only for docs", paraphrased like "go ahead", silence, "sure", restated question, etc.): re-prompt with literal text "Please answer yes or no. To proceed, type one of: yes, y, confirm, approve, ok, okay. To cancel, type: no, n, cancel."
+
+The reference Python implementation of this parser lives in `.forge/tests/test_stoke_consent_parser.py::parse_consent`. The contract is regression-tested mechanically; if the chat-layer behavior drifts from the reference, the tests FAIL.
+
+**Re-prompt limit (Req 3b)**: at most two re-prompts per gate. After the third ambiguous answer, treat as cancel and abort the stoke. Prevents stuck-prompt loops.
+
+**Constraints (load-bearing — closes DA + CISO R1)**:
+- The AI MUST NOT infer consent from prior session context, from operator tone, or from the operator having said yes to a different gate earlier.
+- The AI MUST NOT cache consent across `/forge stoke` invocations. Each invocation is its own consent boundary.
+- The AI MUST NOT construct `--data` flags from any source other than the operator's literal yes-answers in the current chat turn.
+
+#### Step 0pre.05b — Error-fallback mediation (Req 7, AC 6)
+
+If the pre-flight misses a gate (a future spec ships a new validator without extending `stoke/gates.py`), `copier update` will exit non-zero with a validator error. The chat layer MUST catch this and run the fallback flow:
+
+1. Parse the Copier error for the validator's message text (the operator-actionable portion — typically a line beginning with "ERROR:" or a `validator:` block string from `copier.yml`).
+2. Construct the fallback prompt via `gates.unknown_validator_gate(parsed_message)` and present its FORGE-authored `operator_question`, followed by three options:
+   - (a) try the literal re-run suggestion from the validator's message
+   - (b) pass through the raw error for manual handling
+   - (c) cancel
+3. NEVER surface the Python traceback as primary chat output. The traceback may appear in a collapsible / supplementary block but must not be the first thing the operator sees.
+
+### Step 0pre.1 — Operator `--trust` consent prompt (LEGACY — superseded by Step 0pre.05 for the chat path)
+
+> **Spec 444 supersedes this step for the chat-mediated path.** The unified pre-flight in Step 0pre.05 handles the `--trust` consent as one of multiple gates rather than as a standalone step. This section is retained verbatim below for two reasons: (a) it documents the underlying contract that Step 0pre.05's `copier-tasks-trust` gate satisfies, and (b) it remains the reference for bare-copier power-user invocations that bypass `/forge stoke` entirely (see `docs/process-kit/copier-gotchas.md`).
 
 Copier `--trust` is **per-invocation operator-explicit** — never baked into defaults, never from env, never from config. Before invoking `direct-apply`, the calling agent MUST enumerate the `_tasks` declared in the source `copier.yml` and present them verbatim to the operator. Per Spec 428, the task list is sourced at prompt time — never hardcoded — so the prompt stays accurate as the template evolves.
 
@@ -154,15 +203,23 @@ The prompt is unconditional per invocation. There is NO env-var override, NO con
 
 ### Step 0pre.2 — direct-apply invocation
 
-After collecting `--trust` consent, invoke the helper:
+After Step 0pre.05 completes (or after the legacy Step 0pre.1 trust prompt for the bare-copier reference path), invoke the helper with the accumulated flags:
 
 ```bash
-# Operator answered 'y' to the --trust prompt:
+# Spec 444 chat-mediated path — operator answered yes to BOTH trust AND
+# security-override:
+.forge/bin/forge-py .forge/lib/stoke.py direct-apply --trust \
+    --data accept_security_overrides=true \
+    --data accept_security_overrides_confirmed=true
+
+# Operator answered yes to trust only (no security customizations):
 .forge/bin/forge-py .forge/lib/stoke.py direct-apply --trust
 
 # Operator answered 'n' / empty / anything else:
 .forge/bin/forge-py .forge/lib/stoke.py direct-apply
 ```
+
+The `--data` flag is repeatable and originates EXCLUSIVELY from operator yes-answers in the current chat turn (Spec 444 Constraint). Never from env vars, config files, or session context.
 
 **PowerShell parity**:
 

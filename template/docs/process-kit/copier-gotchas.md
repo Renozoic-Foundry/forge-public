@@ -81,8 +81,30 @@ The `--data accept_security_overrides_confirmed=true` flag MUST be on the operat
 - `copier.yml` near `accept_security_overrides:` — primary validator + `_tasks:` wiring.
 - `.forge/tests/test_bootstrap_consent.py` — structural + hook-unit regression tests (13 tests).
 
+## Bare-copier invocation is power-user only — Spec 444
+
+**Status (2026-05-16)**: `/forge stoke` is the **default operator path** for "update my project from the template." It mediates every consent gate (Copier `--trust`, Spec 090 security overrides, Spec 437 runtime tokens) through chat as yes/no questions. The operator never sees a Python traceback, never types `--data K=V`, never reads a Spec number to know what to do next.
+
+**Bare `copier update`** is supported as a power-user shape for scripting, CI, and edge cases — but it is **NOT the operator default**. If you reach for `copier update` directly, you accept the rough edges:
+
+- Cryptic validator messages naming `--data <flag>=true` rather than operator-shaped questions
+- A Python traceback on any validator failure, instead of a translated error
+- A separate `--trust` flag plus separate `--data accept_security_overrides=true` plus separate `--data accept_security_overrides_confirmed=true` for the same logical "yes, apply my customizations" intent
+
+**When to use bare `copier update`**:
+- CI pipelines that need non-interactive operation (`--defaults`, plus all `--data K=V` flags supplied up front from a vetted config)
+- Reproducing a specific incident with full control over every flag
+- Debugging FORGE itself when `/forge stoke` is the layer under test
+
+**When NOT to use bare `copier update`**:
+- Day-to-day operator updates. Use `/forge stoke`.
+- Any session where you'd type a `--data` flag based on a validator error message — that's the chat-mediation surface, not yours to drive manually.
+
+**Threat model note**: bare-copier invocations bypass Spec 444's strict-literal consent parser. The underlying Copier validators are still in place (Spec 090, Spec 437), but the operator-facing UX is the validator-message text rather than FORGE-controlled question text. A future spec (deferred in Spec 444's Deferred Scope) may revise validator messages so they speak operator-language as defense-in-depth.
+
 ## Conventions for future Copier-related work
 
 1. Any new security-gated flag MUST use the v3.3 self-referential `when:` pattern. Bare `when: false` is the trap.
 2. Any new dynamic `when:` predicate that gates a security-relevant question MUST come with a fixture test that renders against synthetic answers — the static audit-test (`test_copier_yml_audit.py`) can't catch dynamic predicates.
 3. After any Copier minor-version bump, re-run the empirical-verification scenarios that established the v3.3 pattern (see `copier.yml:310–318` for the canonical anchor).
+4. **Any new `validator:` or `_tasks:` entry MUST extend `template/.forge/lib/stoke/gates.py`** so `/forge stoke` can mediate the new gate in chat (Spec 444 Req 8a). `/close` enforces this mechanically — closing a spec that touches `copier.yml` without updating `gates.py` FAILS unless the spec declares `Gate-Mediation-Exempt: <≥30-char rationale>` in frontmatter.

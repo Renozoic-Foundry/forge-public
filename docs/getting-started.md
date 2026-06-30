@@ -50,6 +50,17 @@ irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install
 
 The install script adds FORGE's slash commands to your Claude Code configuration. It does not modify your project files.
 
+**Claude Code plugin install (alternative):** instead of the install script, Claude Code users can install the FORGE command, agent, skill, and hook payload directly from a `forge-public` checkout:
+
+```bash
+git clone https://github.com/Renozoic-Foundry/forge-public.git
+cd forge-public
+# In Claude Code, from the checkout:
+claude plugin install ./
+```
+
+The plugin and the install script both deliver the framework surface (slash commands and roles); project scaffolding still happens via Copier in Step 2.
+
 > **Warning:** If your IDE is already open, reload the window after running the install script to pick up the new commands.
 
 ---
@@ -165,4 +176,4 @@ This cycle repeats for every change, whether it is a one-line fix or a multi-wee
 
 ---
 
-*Last verified against Spec 263 on 2026-04-15.*
+*Last verified against Spec 507 on 2026-06-29.*

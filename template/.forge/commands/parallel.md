@@ -61,15 +61,22 @@ If in doubt, run inline first — /parallel can always be invoked later.
 
 ## Choose dispatch mode
 
-`/parallel` orchestrates worktree creation, conflict pre-flight, merge-back, and consolidation — but the **dispatch mechanism** (how agents actually fan out into the worktrees) is not unique. Three modes exist:
+`/parallel` orchestrates worktree creation, conflict pre-flight, merge-back, and consolidation — but the **canonical dispatch mechanism** (how agents fan out into the worktrees) is **conditional on the configured autonomy level** (read from AGENTS.md, Spec 021 auto-progression config). Per ADR-451 (autonomy-progression principle) and Spec 454, substrate canonicity tracks the autonomy level:
 
-| Mode | When to use | Mechanism | Status |
-|------|-------------|-----------|--------|
-| **Multi-tab** (canonical) | Genuine parallel execution — one Claude Code chat tab per worktree, each running `/implement` independently. | Operator opens N tabs (one per worktree), each runs `/tab <label> feature NNN` then `/implement NNN`. Tabs coordinate via the registry per Specs 351/352/353. | **Canonical** — use this for `/parallel`. |
-| **`EnterWorktree`** (alternative) | Solo-session dipping — single tab walks one worktree at a time, runs `/implement`, exits back to the parent session. Serialized, not parallel. | The `EnterWorktree` tool switches the current session into a worktree; `ExitWorktree` returns. One worktree at a time per session. | **Alternative** for solo-session worktree work. Not a parallel-dispatch mechanism. |
-| **`Agent` + `isolation: "worktree"`** | (Hypothetical) Spawning multiple `Agent` sub-agents from a single parent session, each isolated in its own worktree. | Would use the `Agent` tool with `isolation: "worktree"` per spawn. Requires a sub-agent dispatch path that does NOT exist in `/parallel` Step 6 today. | **Evaluated, not yet shipped.** Separate spec required — see Spec 405 Origin § option (b). |
+| Autonomy level | Canonical dispatch mode |
+|----------------|-------------------------|
+| **L0–L2** (supervised / interactive — default operating level) | **Multi-tab** (Specs 351/352/353) |
+| **L3+** (autonomous / agent-parallel) | **Native `Agent` + `isolation: "worktree"`** (requires Claude Code >= 2.1.154) |
 
-**Default behavior**: Step 6 below creates the worktrees; the agents that fill them are **operator-launched in additional Claude Code tabs** (multi-tab pattern). `/parallel` does NOT auto-spawn sub-agents in the current implementation. Earlier prose referencing `EnterWorktree` as the fan-out mechanism was inaccurate — `EnterWorktree` is single-session by design.
+Read the configured autonomy level from AGENTS.md first, then use the matching canonical mode. Both modes remain available at every level — only the canonical/default label is autonomy-conditional.
+
+| Mode | When canonical | Mechanism | Status |
+|------|----------------|-----------|--------|
+| **Multi-tab** | Canonical at **L0–L2** | Operator opens N tabs (one per worktree), each runs `/tab <label> feature NNN` then `/implement NNN`. Tabs coordinate via the registry per Specs 351/352/353. | **Canonical at L0–L2**; available as fallback at L3+. |
+| **`Agent` + `isolation: "worktree"`** | Canonical at **L3+** | One parent session spawns N `Agent` sub-agents, each with `isolation: "worktree"` and `worktree.baseRef: head` (branch from local HEAD; `fresh` branches from `origin/<default>`). Each implements its assigned spec in its isolated worktree; the parent inspects each worktree before merge. Requires Claude Code >= 2.1.154 (reinforced subagent-isolation guard). **Required permission posture**: allow Edit/Write scoped to the worktree path (e.g. `.worktrees/spec-NNN/**`) only — do NOT globally auto-allow writes or disable permission prompts. | **Canonical at L3+** (Spec 454); available as alternative at L0–L2. |
+| **`EnterWorktree`** | — | Solo-session dipping — single tab walks one worktree at a time, runs `/implement`, exits. Serialized, not parallel. | **Solo-session alternative** at any level. Not a parallel-dispatch mechanism. |
+
+**Default behavior**: Step 6 below creates the worktrees, then dispatches per the autonomy-level-canonical mode — at L0–L2 the worktrees are **operator-launched in additional Claude Code tabs** (multi-tab); at L3+ the parent session **spawns native worktree-isolated `Agent` sub-agents** routed through the same pre-flight / inspect / gate-outcome governance. `EnterWorktree` remains a solo-session alternative at any level.
 
 See `docs/process-kit/multi-tab-quickstart.md` § Dispatch mode comparison for the canonical decision table.
 
@@ -234,14 +241,42 @@ b. Report:
 c. If swarm_ceiling_usd is 0 or unset: skip enforcement, report "No swarm budget ceiling configured."
 d. Initialize `docs/sessions/swarm-budget-state.md` with: start time, N agents, per-agent allocation, swarm ceiling, thresholds.
 
-## [mechanical] Step 6 — Create worktrees and launch agents
+## [mechanical] Step 6 — Declare planned_specs, create worktrees, and dispatch
 
-For each spec (in spec-number order):
-1. Create a branch: `spec-NNN` from the current HEAD.
-2. Create a git worktree: `git worktree add .worktrees/spec-NNN spec-NNN`
-3. Report: "Worktree created: .worktrees/spec-NNN on branch spec-NNN"
+**Single source of truth (Spec 435, porting Spec 423)**: this step declares `planned_specs` as an explicit list BEFORE any dispatch, and the dispatch narration (native-agent count at L3+, operator-tab count at L0–L2) is **generated from `planned_specs`** — not authored freehand. The same list drives both the narration and the per-spec dispatch loop, so the count and the spec IDs cannot diverge. This collapses the narration-vs-dispatch defect class that Spec 423 fixed in /consensus (orchestrator narrated 4 reviewers but launched 3).
 
-**Dispatch (canonical: multi-tab)**: After all worktrees are created, present the operator with the per-worktree launch instructions:
+1. **Declare `planned_specs`**: Build an explicit list of the spec IDs that survived Step 1b ceremony-floor filtering and Step 2 validation for this bundle — one entry per spec to be dispatched. Example:
+   ```
+   planned_specs = [005, 007, 012]
+   ```
+   The list is fixed before any worktree creation or agent/tab dispatch. Inline-cheaper-filtered (Step 1b) and failed-validation (Step 2) specs are NOT in `planned_specs`.
+
+2. **Create worktrees** — for each spec in `planned_specs` (in spec-number order):
+   1. Create a branch: `spec-NNN` from the current HEAD.
+   2. Create a git worktree: `git worktree add .worktrees/spec-NNN spec-NNN`
+   3. Report: "Worktree created: .worktrees/spec-NNN on branch spec-NNN"
+   4. **Write the batch-lane contract marker (Spec 475)** into the worktree — this artifact, not the launch prose, is what binds the lane session (ADR-451 corollary; SIG-BATCH-A/B):
+      ```bash
+      mkdir -p .worktrees/spec-NNN/.forge/state
+      cat > .worktrees/spec-NNN/.forge/state/batch-lane.json << EOF
+      {
+        "batch_id": "<batch id, e.g. YYYYMMDD-HHMM>",
+        "spec_id": "NNN",
+        "terminal_state": "implemented",
+        "forbidden": ["/close", "deferred-scope promotion", "/spec stub creation", "pick-next recommendations"],
+        "return_instruction": "Lane terminal state reached. Write a mini session log to docs/sessions/parallel-NNN.md, run /tab close, and report back in the orchestrator tab. /close runs in the orchestrator after merge.",
+        "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+        "orchestrator_session": "<orchestrator tab/session id>"
+      }
+      EOF
+      ```
+      Report: "Batch-lane contract written: .worktrees/spec-NNN/.forge/state/batch-lane.json". Lifecycle commands (`/close`, `/implement`, `/spec`) read this marker and enforce the forbidden list inside the lane; the marker dies with the worktree at merge cleanup. The forbidden list is the v1 schema — evolve additively (see docs/process-kit/parallelism-guide.md § Batch-lane contract).
+
+3. **Emit dispatch narration generated from `planned_specs`**: the dispatched-agent count (L3+) or operator-tab count (L0–L2) and the spec IDs MUST equal the contents of `planned_specs` — do not author a count or spec ID that is not in the list. This narration is **generated from `planned_specs`** (Invariant A — Spec 435).
+
+**Dispatch — select by configured autonomy level** (read from AGENTS.md, Spec 021):
+
+**L0–L2 (canonical: multi-tab)**: After all worktrees are created, present the operator with the per-worktree launch instructions:
 
 ```
 Worktrees created. To launch parallel agents, open one Claude Code tab per worktree:
@@ -256,16 +291,20 @@ For each worktree:
      made, and issues encountered. Report estimated token usage.
   6. /tab close
 
+Lanes stop at `implemented` — do NOT run /close, promote deferred scope, or
+create new specs in a lane. The batch-lane contract marker in each worktree
+(Spec 475) enforces this; /close runs here in the orchestrator after merge.
+
 When all tabs report "done", return to this tab and type 'all done' to proceed to merge.
 ```
 
-Wait for the operator's "all done" signal. `/parallel` does NOT auto-spawn sub-agents — the multi-tab pattern is operator-launched (see § Choose dispatch mode above).
+Wait for the operator's "all done" signal. At L0–L2 `/parallel` does NOT auto-spawn sub-agents — the multi-tab pattern is operator-launched (see § Choose dispatch mode above).
 
-**Dispatch (alternative: `EnterWorktree`)**: A solo operator may use `EnterWorktree` to enter each worktree one at a time, run `/implement NNN`, then `ExitWorktree`. This **serializes** execution — not parallel. Use this only when multi-tab is unavailable (e.g., single-tab automation contexts).
+**L3+ (canonical: native `Agent` + `isolation: "worktree"`)**: The parent session spawns one `Agent` sub-agent per spec, each with `isolation: "worktree"` and `worktree.baseRef: head` (branch from local HEAD; use `fresh` to branch from `origin/<default>`). **Required permission posture**: the operator's settings must allow Edit/Write scoped to the worktree path (e.g. `.worktrees/spec-NNN/**`) only — do NOT globally auto-allow writes or disable permission prompts. Requires Claude Code >= 2.1.154 (reinforced subagent-isolation guard). Each sub-agent implements ONLY its assigned spec; the parent runs the conflict pre-flight before dispatch, inspects each worktree's diff before merge, and emits `GATE [name]: PASS/FAIL` per spec — identical governance to the multi-tab path. The native `isolation: "worktree"` worktree supersedes the manual `git worktree add` in steps 1–2 above for the L3+ path — do not double-create; pass `worktree.baseRef` instead. **Batch-lane contract at L3+ (Spec 475)**: as soon as each native worktree path exists, the parent session writes the same `batch-lane.json` marker (step 2.4 above) into it before the sub-agent begins lifecycle work — sub-agents are bound by the same artifact contract as multi-tab lanes.
 
-**Dispatch (not shipped: `Agent` + `isolation: "worktree"`)**: Sub-agent fan-out from this parent session is evaluated but not implemented. File a separate spec if needed.
+**Solo-session alternative (`EnterWorktree`, any level)**: A solo operator may use `EnterWorktree` to enter each worktree one at a time, run `/implement NNN`, then `ExitWorktree`. This **serializes** execution — not parallel. Use only when the canonical mode for the level is unavailable.
 
-Report: "Worktrees ready. Awaiting operator launch (multi-tab) or `EnterWorktree` dispatch."
+Report: "Worktrees ready. Dispatch per autonomy level — L0–L2: awaiting operator multi-tab launch; L3+: native `Agent` fan-out dispatched (worktree-isolated, governance-gated)."
 
 ## [decision] Step 7 — Wait, budget tracking, and completion
 
@@ -299,6 +338,26 @@ Failed worktrees preserved: .worktrees/spec-NNN (if any)
 ```
 
 If all specs failed, stop and report. Do not proceed to merge.
+
+## [mechanical] Step 7b — Pre-merge reconciliation gate (Spec 435, porting Spec 423)
+
+Before advancing to Step 8 (merge confirmation), perform reconciliation against `planned_specs`. This gate is the single mechanical check between dispatch and merge — the /parallel analog of Spec 423's pre-aggregation reconciliation gate in /consensus.
+
+1. **Reconcile**: for each spec in `planned_specs`, verify it has either a completion result (✅ completed / ❌ failed from Step 7) OR a recorded dispatch-failure. At L3+ the accounted-for set is the agents the orchestrator spawned and monitored; at L0–L2 the operator is the dispatcher, so this gate verifies that the set reported in the "all done" signal covers `planned_specs`.
+
+2. **If reconciliation passes** (every `planned_specs` entry is accounted-for as completed, failed, or skipped): proceed silently to Step 8.
+
+3. **If reconciliation fails — `planned_specs` has entries with no completion result and no failure record — refuse to advance**: do NOT merge, do NOT proceed to Step 8. Emit a structured diagnostic and stop the bundle:
+   ```
+   ## Dispatch Reconciliation Failure (Spec 435)
+   Bundle planned_specs had unaccounted-for entries.
+   - planned: [list from planned_specs]
+   - completed/failed: [list of spec IDs with a Step 7 result]
+   - missing (no result, no failure): [list of spec IDs]
+
+   Halting bundle before merge. Re-dispatch the missing specs (re-launch their tab/agent) or record explicit failures, then re-run /parallel.
+   ```
+   Operator decides next action (re-dispatch missing specs, or record them as failures and continue). No auto-retry.
 
 ## [decision] Step 8 — Human confirmation before merge
 

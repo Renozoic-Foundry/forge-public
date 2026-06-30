@@ -16,8 +16,11 @@ If $ARGUMENTS is `?` or `help`:
   Print:
   ```
   /now — Review project state and recommend the next action.
-  Usage: /now
-  No arguments accepted.
+  Usage: /now [--watch]
+  Arguments:
+    (none)   — single pass: review state once and recommend the next action.
+    --watch  — open a model-paced /loop dynamic over /now that re-runs until a
+               meaningful state change or /loop end (Spec 464). Status cue at arming + each wake.
   Reads: .forge/lib/derived_state.py --get-backlog (live frontmatter source), docs/sessions/ (latest log + JSON sidecar), CLAUDE.md, docs/specs/README.md
   Reports: validation queue, active work, next recommended spec, evolve loop status, blockers.
           Also: count of drafts past `valid-until:` (Spec 363) — silent on zero.
@@ -25,6 +28,40 @@ If $ARGUMENTS is `?` or `help`:
   See: CLAUDE.md (operating loop, spec lifecycle), .forge/lib/derived_state.py (canonical programmatic source — Spec 439), docs/backlog.md (operator-visible artifact)
   ```
   Stop — do not execute any further steps.
+
+---
+
+## [mechanical] Watch mode — `--watch` (Spec 464)
+
+If `$ARGUMENTS` contains `--watch`, run `/now` as a self-pacing surveyor loop instead of a single pass.
+
+**Primitive**: open a `/loop dynamic` over `/now`. The model selects each next-check delay
+(it does NOT take a fixed interval); the underlying `ScheduleWakeup` / native scheduling re-invokes
+`/now` at model-paced intervals. The chosen delay is bounded:
+- **Lower bound**: `forge.now.watch_default_min_delay` from `AGENTS.md` (default `60` seconds).
+- **Upper bound**: `3600` seconds.
+The model picks each delay from observed activity cadence and respects the ~5-minute Anthropic
+prompt-cache window where workload allows (see `docs/process-kit/native-loop-adoption-guide.md` §
+Cache-window guidance).
+
+**Status cue (COO R1 — emit verbatim shape at watch arming AND at each wake)**:
+- At arming, print exactly: `[watch armed] next check in ~Xs; /loop end to terminate`
+- At each subsequent wake, print exactly one line of the form:
+  `watch wake N — active spec NNN still in-progress; no new digests; next ~Ys`
+  (substitute the live N / spec / digest / delay values; the `watch wake N` and `next ~Ys` tokens are fixed).
+
+**Termination**: the `/now --watch` loop MUST terminate on any of:
+- (a) any user prompt;
+- (b) a detected state change since the last wake — active spec advanced, a new spec was drafted,
+  `/evolve` fired, or the session log was updated;
+- (c) explicit `/loop end`.
+
+**Audit-scope note (CISO R1)**: `--watch` creates a persistent filesystem-survey loop visible in
+operator transcripts. At each wake it reads `.forge/state/`, `docs/specs/`, and `docs/digests/`.
+See the guide's "Audit-scope note for /now --watch" section.
+
+Each wake runs the normal `/now` Steps below, then emits the one-line status cue and computes the
+next delay. Without `--watch`, run a single pass (the normal steps) and stop.
 
 ---
 
@@ -110,6 +147,33 @@ If `status` is not `complete` OR `configure_nudge_shown: true`: skip this step s
 Do not add any further prompts, choice blocks, or follow-up interaction — this is a one-line advisory only. The nudge must never appear again after the first emission (dismissal persists via the flag).
 
 If `.forge/onboarding.yaml` lacks the `configure_nudge_shown` key entirely (pre-existing projects), treat that as "not shown" — the nudge will appear once on the next `/now`, then dismiss.
+
+## [mechanical] Step 0f — Authority trust-root posture (Spec 469)
+
+Emit a single read-only one-line posture for the Authority Constitution autonomy/budget
+enforcement trust root (ADR-046 / ADR-453). This is **observability, never enforcement** — it
+derives the active tier from filesystem checks and never blocks. Skip silently if
+`.forge/config/authority.yaml` is absent (consumer has not adopted slice 2).
+
+Derive the tier (in priority order):
+- **`managed-settings`** — an OS-level managed-settings file is installed at the platform path
+  (`/Library/Application Support/ClaudeCode/managed-settings.json` macOS,
+  `/etc/claude-code/managed-settings.json` Linux, `C:\Program Files\ClaudeCode\managed-settings.json`
+  Windows) AND it denies edits to `.forge/config/authority.yaml`. The ceiling is the immutable
+  trust root: the ADR-046 invariant is enforced at the trust-root tier.
+- **`hooks-only`** — no managed-settings install, but `.claude/settings.json` wires
+  `check-authority-guard.sh` as a PreToolUse hook. The invariant is enforced for L0–L2 and is
+  **bypassable at L3** (an agent at `bypassPermissions` can edit `.claude/settings.json` to remove
+  the hook). Defense-in-depth, not a trust root.
+- **`prose-only`** — neither installed: AGENTS.md prose only; no mechanical enforcement.
+
+Emit exactly one line:
+```
+Authority: <managed-settings | hooks-only | prose-only>
+```
+On a freshly-bootstrapped consumer (no operator-installed managed settings) the expected value is
+`hooks-only`. Do not add follow-up prompts or detail — the one-line posture is the entire output
+of this step.
 
 ## [mechanical] Step 0d — MCP integrity probe (Spec 284)
 
@@ -237,6 +301,13 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    - **Sunset reminder**: read Spec 395 frontmatter for `Provisional-Until: <date>`. Starting D-7 (date − 7 ≤ today ≤ date), emit `Spec 395 sunset review due in <N> days — see /evolve.` Past the date, the review is overdue; emit `Spec 395 sunset review overdue (<N> days) — run /evolve to evaluate the gate.`
    This advisory is read-only and additive — it does not modify any spec frontmatter or block subsequent commands.
 
+### Capability surfacing (Spec 471)
+
+8e. **Optional-capability count surface (Spec 471)**: Call `bash .forge/bin/forge-capability.sh pending`. This prints a bare integer — the number of registry capabilities that are inactive AND not dismissed (the single source `/now` quotes; do not recompute it here).
+   - If the count is greater than zero, emit exactly one line in this format: `N optional capability(ies) available — /configure → Capabilities`.
+   - Emit nothing otherwise (count zero, or the helper unavailable).
+   - This surface is count-only — never enumerate individual capabilities, never emit a per-capability row. It mirrors the unreviewed-digests / aging-drafts count pattern. Activation and dismissal happen via `/configure → Capabilities` (the sole write path); `/now` never edits `.claude/settings.json` or the registry.
+
 8c. **Process-kit external-source freshness check** (Spec 278): Read `forge.process_kit.freshness_threshold_days` from AGENTS.md (default: **180** if absent or unset). Scan `.md` files under `docs/process-kit/` AND `template/docs/process-kit/` for a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker within the first 10 lines.
    - For each file carrying the marker: compare the date to today. If the date is older than the threshold, flag the guide as stale.
    - Files without the marker are skipped silently (not every guide needs one — the convention applies only to guides that cite external authorities; see `docs/process-kit/runbook.md` § Process-Kit Doc Freshness Convention).
@@ -273,6 +344,9 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    ## Evolve loop status
    <last review date, overdue flag>
 
+   ## Consensus acceptance rate (30d)
+   <one-line figure from forge-py .forge/lib/acceptance_rate.py, or "n/a">
+
    ## Session identity
    <confirmed operator name from Step 0b.f>
    ```
@@ -285,8 +359,21 @@ Then report:
 - **Evolve loop check**: state the date of the last evolve loop review (from the most recent session log's `Last evolve loop review:` field) and flag if it's overdue (> 30 days)
 - **Active tabs**: any other Claude Code tabs with active claims (from step 8) — warn about potential conflicts
 - **Blockers**: anything that must be resolved before the next spec can start
+- **Consensus acceptance rate (Spec 497 — read side of Spec 495 / Spec 258 AC#5)**: run `forge-py .forge/lib/acceptance_rate.py` and surface its one-line rolling-30-day figure (e.g., `Consensus acceptance rate (last 30d): 80% (4/5 accepted; 1 modified, 0 rejected)`). When it reports `n/a` (no rated decisions in the window), surface that verbatim — never a divide error. This is the rate the operator's `consensus_tracking` config (AGENTS.md) defines: `accepted / (accepted + modified + rejected)`.
 
-If no outstanding items exist and the backlog is current, recommend the single highest-value next action and explain the rationale using the scoring rubric.
+If no outstanding items exist and the backlog is current, recommend the single highest-value next action. **Frame the recommendation as the four-part operator summary** (Spec 497 — lean by default; honors `forge.output.verbosity`; see `docs/process-kit/operator-summary-guide.md`):
+```
+## Recommended next action
+### 1. Accomplished & machine-verified
+<current state: validation-queue depth, most recent close, acceptance-rate figure from above>
+### 2. Needs human validation
+<bullet checklist of implemented specs awaiting /close, or "Nothing pending validation.">
+### 3. Why it matters
+<link the recommended action to the top-ranked backlog objective / roadmap value, using the scoring rubric>
+### 4. Recommended next actions
+<When a real choice exists (e.g., validate-first vs implement-next): ≥2 options each with pros/cons, then a named recommendation. Otherwise: the single highest-value next step.>
+```
+The Step 13 context-aware choice block follows this summary.
 
 ## [mechanical] Step 0e — Release-eligible + deprecation surfacing (Spec 291)
 
@@ -358,20 +445,48 @@ If `docs/.generated/` directory exists (project has migrated to split-file mode 
 
 Skip silently if `docs/.generated/` is absent.
 
+## [mechanical] Step 11c — Session-log signal-propagation drift detector (Spec 452, advisory)
+
+Check whether any session-log EA/CI entries are missing from the persistent logs (the drift class Spec 452 closed — signals.md drift makes /evolve pattern analysis blind to session-log signals):
+
+```bash
+# Spec 473 recency cap: scan only the last 30 days of session logs so this
+# advisory check on the highest-frequency command stays O(recent), not
+# O(project age). Compute the cutoff as today minus 30 days (ISO YYYY-MM-DD).
+SINCE=$(.forge/bin/forge-py -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=30)).isoformat())")
+.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --dry-run --since="$SINCE"
+```
+
+Read the final `DONE | dry-run:` summary line:
+- If `0 would be appended`: skip silently — no drift.
+- If N > 0: emit one advisory line: `Signal-propagation drift: N orphaned EA/CI entries/stubs in session logs not yet in the persistent logs (scanned last 30 days; run the script unscoped with --dry-run for a full audit). Run the Spec 452 migration script with --apply, or let the next /close Step 5d propagate today's entries.`
+
+This is **advisory only** — never blocks, never auto-applies. The 30-day recency cap (Spec 473) scopes only this advisory invocation; bare `--dry-run` / `--apply` and the one-shot backfill remain unscoped. Skip silently if the script is absent (pre-Spec-452 consumer project).
+
 ## [mechanical] Step 12 — Evolve loop trigger detection (Spec 131, enhanced by Specs 157, 193)
 
-Check signal-based triggers for the evolve loop. Read `docs/sessions/evolve-config.yaml` if it exists for threshold overrides; otherwise use defaults below.
+Check signal-based triggers for the evolve loop. **Thresholds are read from the canonical source
+`forge.evolve.signal_thresholds` in `AGENTS.md` (Spec 500 R8 — the SAME source `/evolve --auto`
+admission reads; do NOT re-inline the numbers here).** `docs/sessions/evolve-config.yaml`, if present,
+may still override per-project.
 
-**Signal-based triggers** (composable — ANY threshold crossed fires the recommendation):
-1. **Unreviewed signals**: Count entries in `docs/sessions/signals.md` added after the last evolve review date. Default threshold: **15**.
-2. **Open scratchpad notes**: Count unchecked `[evolve]` (or `[outer-loop]`) items in `docs/sessions/scratchpad.md`. Default threshold: **4**.
-3. **Error autopsies**: Count error autopsy entries in session logs since last evolve review. Default threshold: **3**.
-4. **Deferred scope items**: Count "Out of scope" items across closed specs since last review that were dispositioned as "deferred" (not "dropped"). Default threshold: **5**.
-5. **Spec velocity**: Count specs closed since last evolve review (from CHANGELOG.md). Default threshold: **5**.
+**Signal-based triggers** (composable — ANY threshold crossed fires the recommendation). Each count is
+measured since the last review date (see below) and compared to its canonical threshold:
+1. **Unreviewed signals**: entries in `docs/sessions/signals.md` added after the last review date → `signal_thresholds.unreviewed_signals`.
+2. **Open scratchpad notes**: unchecked `[evolve]` (or `[outer-loop]`) items in `docs/sessions/scratchpad.md` → `signal_thresholds.open_evolve_scratchpad`.
+3. **Error autopsies**: error-autopsy entries in session logs since the last review → `signal_thresholds.error_autopsies`.
+4. **Deferred scope items**: "Out of scope" items across closed specs since the last review dispositioned "deferred" (not "dropped") → `signal_thresholds.deferred_scope_items`.
+5. **Spec velocity**: specs closed since the last review (from CHANGELOG.md) → `signal_thresholds.spec_velocity`.
 
-**Fallback time trigger**: If the last evolve review date is >30 days ago or blank, also flag as overdue (backward-compatible safety net).
+**Soft time fallback (recommendation only — Spec 500 R3/R5)**: if the last review date is older than
+`forge.evolve.time_fallback_days` (default 30) or blank, include the evolve recommendation as a safety
+net. This is a *recommendation*, never a hard "overdue" admission block — `/now` does not block on it and
+it never contradicts an admitted `/evolve` (the calendar review-gate was retired by Spec 500 / ADR-500).
 
-Read the most recent session log's `Last evolve review:` field (or `Last evolve loop review:` for backward compat).
+**Single last-review source (Spec 500 R6a)**: read the last review date from
+`docs/sessions/evolve-state.md` `last_evolve_loop_run:` — the one canonical source. Do NOT also read
+`.forge/state/evolve-cool-down.json` (retired) as a second source; reading two divergent date sources was
+the EA-431 drift defect this spec fixes.
 
 - If any threshold is crossed: report which triggers fired:
   ```

@@ -10,6 +10,10 @@ No. FORGE works with any AI assistant that reads AGENTS.md and follows markdown-
 
 Yes, with varying integration depth. The core workflow — specs, evidence gates, session logs — is IDE-independent and lives in plain markdown files. AI assistants that read project markdown files can follow FORGE's process. You lose the native slash-command experience, but the methodology itself is portable.
 
+## How do I install FORGE in Claude Code?
+
+Two paths. The install script (`install.sh` / `install.ps1`) plants the bootstrap command, or — for Claude Code specifically — you can install the FORGE command, agent, skill, and hook payload directly from a `forge-public` checkout with `claude plugin install ./`. Either way, you still scaffold an individual project with Copier (`/forge-bootstrap` or `copier copy`). The plugin delivers the framework surface; Copier lays down the per-project spec/session/process-kit structure.
+
 ## What does FORGE cost per session?
 
 FORGE itself is free and open source (MIT license). The cost is whatever your AI assistant charges for token usage. Spec-driven workflows tend to use tokens more efficiently because the AI has clear objectives and structured context, reducing the back-and-forth that burns tokens on ambiguous tasks.
@@ -71,4 +75,4 @@ Usually no. The typical workflow is: `/interview` (to explore and define the pro
 
 ---
 
-Last verified against Spec 263 on 2026-04-15.
+Last verified against Spec 507 on 2026-06-29.

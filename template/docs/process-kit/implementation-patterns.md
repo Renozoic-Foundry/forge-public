@@ -373,3 +373,53 @@ fi
 ### When to apply
 
 Apply this pattern's AC to a spec whenever the spec adds, modifies, or audits a command/script that exposes a `--dry-run` flag. The audit table in [docs/specs/404-dry-run-hermeticity-ac.md](../specs/404-dry-run-hermeticity-ac.md) tracks which FORGE-shipped scripts are compliant.
+
+---
+
+## Spec drafting prompts — minimal-slice + assumption-verification convention
+
+Version: 1.0 (Spec 465, 2026-06-12)
+
+### Purpose
+
+Two failure classes recur when spec drafts are authored by subagents (or written quickly in-session):
+
+1. **Scope-broadening**: the 2026-06-11 batch (Specs 460–464) hit a Maverick-Thinker structural reframe at consensus round 1 for **5 of 5 specs**. Root cause (CI-371): the drafting prompts asked for "200–400 line specs with comprehensive ACs" — a length target that inadvertently rewards padding scope instead of cutting it, directly against Architectural Principle 5 (minimal by default).
+2. **Unverified load-bearing claims**: two drafts in the same batch asserted facts about existing code that were false (EA-149, EA-150), and the falsehoods survived until consensus review nearly inverted a spec's central honesty claim.
+
+This convention removes both incentives at the source: the drafting prompt itself.
+
+### Rule 1 — Minimal-slice directive (replaces any length target)
+
+Drafting prompts MUST NOT specify a line-count or section-count target as a goal. Instead, use the minimal-slice directive:
+
+> Produce the **smallest possible slice that earns its keep against Architectural Principle 5** (minimal by default — every abstraction must serve a specific acceptance criterion). Cut anything that does not serve an AC. A short spec that ships is worth more than a comprehensive one that gets reframed at review.
+
+Length emerges from scope; it is never the goal.
+
+### Rule 2 — Assumption-verification token
+
+Every claim a draft makes about **existing** code, config, or infrastructure state MUST carry one of:
+
+- an inline verification token — `verified: <command + observed result>` — recording the grep/file-check that confirmed the claim at drafting time, or
+- the explicit fallback phrase **"to be verified at /implement"**, which converts the claim into a tracked obligation instead of an assumed fact.
+
+Claims about files the spec will *create* need no token; claims about what *already exists* always do.
+
+### Worked example (from EA-149)
+
+**Negative (what happened)** — Spec 464's original draft asserted:
+
+> "AC5: the existing ADR-046 cool-down check in evolve.md is preserved."
+
+No such check existed — ADR-046 was prose-only. `grep -c 'cool-down' .claude/commands/evolve.md` returned 0. The spec would have shipped a self-rewaking loop on top of a gate that was never there, and only a consensus-round critical finding caught it.
+
+**Positive (the rewrite this convention requires)**:
+
+> "evolve.md currently has NO mechanical ADR-046 cool-down check (`verified: grep -c 'cool-down\|ADR-046' .claude/commands/evolve.md → 0`; ADR-046 is prose-only). This spec implements the missing check as in-scope work, then layers the rewake on top of it."
+
+Same underlying reality — but the second version states it honestly, carries its receipt, and turns the gap into scoped work instead of a false premise.
+
+### When to apply
+
+Apply to every drafting prompt handed to a subagent (single or fan-out batch) and to any in-session draft written under time pressure. The `/spec` command body points here at its draft-writing step. A verification-token *linter* is deliberately not part of this convention (Spec 465 constraint) — promote one via a follow-up spec only if usage evidence shows the prose convention failing.

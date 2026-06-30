@@ -6,7 +6,7 @@ FORGE synthesizes five established methodologies into a cohesive framework for h
 
 FORGE's mission is to make each individual developer the CEO of a continuously-optimizing development company. FORGE provides strategic advisors, executive staff, and auditable process at every step — but the developer decides exactly what happens, when, and why.
 
-The CEO metaphor is not rhetoric — it has concrete scaffolding. FORGE provides a standing review panel of executive and adversarial roles (the CxO agents — CTO, COO, CISO, CMO, CRO, CResO, CXO, CQO, CCO, CFO, CEfO — alongside Devil's Advocate and Maverick Thinker) that can be convened via `/consensus` for structured multi-perspective review. Command agents act as executive staff who do the work: `/matrix` is your PM, `/brainstorm` is your business analyst, `/implement` is your build agent, `/evolve` is your enterprise architect. Evidence gates, session logs, signal capture (error autopsies, chat insights, unified signals), and multi-layer audit trails mean every lifecycle transition is captured in a reviewable artifact — the company runs on evidence, not assertion.
+The CEO metaphor is not rhetoric — it has concrete scaffolding. FORGE provides a standing review panel of executive and adversarial roles — the eleven CxO agents (CTO, COO, CISO, CMO, CRO, CResO, CXO, CQO, CCO, CFO, CEfO) plus the adversarial roles Devil's Advocate, Maverick Thinker, and Competitor — that can be convened via `/consensus` for structured multi-perspective review. Together with the pipeline roles (Spec Author, Implementer, Validator), FORGE ships 17 specialized agents. Command agents act as executive staff who do the work: `/matrix` is your PM, `/brainstorm` is your business analyst, `/implement` is your build agent, `/evolve` is your enterprise architect. Evidence gates, session logs, signal capture (error autopsies, chat insights, unified signals), and multi-layer audit trails mean every lifecycle transition is captured in a reviewable artifact — the company runs on evidence, not assertion.
 
 "Continuously-optimizing" is the operative word. FORGE's signal → pattern → spec loop means that every debugging conversation, every correction, every validated pattern becomes institutional knowledge that compounds across sessions. When a class of failure repeats across multiple sessions, the pattern analysis engine recommends a spec to fix the process itself — not just the individual bug. The [debugging-in-forge.md](articles/debugging-in-forge.md) article documents this loop with concrete examples drawn from FORGE's own development history. The framework improves itself as you use it.
 
@@ -107,11 +107,11 @@ The interlock is deliberate: KCS v6 discovers that a gate is too heavy → an Ev
 
 | Level | Name | What the AI does | What you do |
 |---|---|---|---|
-| **L0** | Supervised | Generates suggestions | You implement everything |
-| **L1** | Human-gated (default) | Implements with evidence gates | You approve every transition |
-| **L2** | Semi-autonomous | Chains spec → implement without pausing | You validate at close |
-| **L3** | Delegated | Full lifecycle including close | You review async (via messaging bridge) |
-| **L4** | Autonomous | Self-directed with evolve loop | You set objectives, review outcomes |
+| **L0** | Full Manual | Generates suggestions | You implement everything |
+| **L1** | Human-Gated (default) | Implements with evidence gates | You approve every transition |
+| **L2** | Supervised Autonomy | Chains spec → implement without pausing | You validate at close |
+| **L3** | Trusted Autonomy | Full lifecycle including close | You review async (via messaging bridge) |
+| **L4** | Full Autonomy | Self-directed with evolve loop | You set objectives, review outcomes |
 
 The default is L1 because trust must be earned through evidence. Moving to L2 requires that evidence gates consistently pass without human intervention. Moving to L3 requires that an async messaging bridge (such as [NanoClaw](https://github.com/Renozoic-Foundry/nanoclaw-forge), FORGE's optional messaging integration for Telegram, WhatsApp, or Slack) is configured so you can review and approve gate decisions from your phone while the agent continues working. L4 is a preview capability, not yet production-ready — it requires both strong evidence gates and operator confidence that the Evolve Loop is producing genuine improvements.
 
@@ -147,4 +147,4 @@ Copier's upstream sync model makes this practical. Unlike fork-and-merge approac
 
 ---
 
-*Last verified against Spec 263 on 2026-04-15.*
+*Last verified against Spec 507 on 2026-06-29.*

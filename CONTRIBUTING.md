@@ -39,7 +39,7 @@ Windows users: use Git Bash for all shell operations. PowerShell wrappers are in
    test -f "$FORGE_TEST_DIR/.copier-answers.yml" && echo "PASS" || echo "FAIL"
    ```
 4. Run bash validation: `bash scripts/validate-bash.sh`
-5. Verify cross-level sync: `bash .forge/bin/forge-sync-cross-level.sh --check`
+5. Verify generated-surface parity (repo-root `.forge/` canonical → plugin payload + `template/`): `bash .forge/bin/forge-parity.sh --check`
 
 See `CLAUDE.md` (in your bootstrapped project) for the full testing sequence.
 
@@ -63,8 +63,8 @@ After any template change:
 # Validate bash scripts
 bash scripts/validate-bash.sh
 
-# Validate cross-level parity (repo-root canonical ↔ template/ mirrors)
-bash .forge/bin/forge-sync-cross-level.sh --check
+# Verify generated-surface parity (repo-root .forge/ canonical → plugin payload + template/)
+bash .forge/bin/forge-parity.sh --check
 
 # Bootstrap a clean project and verify no errors
 bash scripts/smoke-test-runtime.sh
@@ -78,8 +78,8 @@ When adding or renaming a slash command:
 
 1. **Check for ambiguity**: Does the command name imply modification of external or shared systems? If so, declare explicit scope limits in the opening line of the command file. Example: a command named `/deploy` must open with "**Scope**: operates on the current project directory only — does not push to any remote system."
 2. **Use the canonical form**: `/forge init` not `/forge light`; `/forge stoke` not `/forge-stoke`. Dispatch aliases are a source of confusion — prefer one canonical name.
-3. **Mirror to both locations**: Every command file must exist in both `template/.claude/commands/` and `template/.forge/commands/` with identical content.
-4. **Update `update-manifest.yaml`**: If you add, remove, or rename a command file, update `template/.forge/update-manifest.yaml` to classify it in `framework.paths`, `removed.paths`, or `obsolete.mappings` as appropriate.
+3. **Author in the canonical source, then regenerate**: Command files live in the repo-root `.forge/commands/` single source. The plugin payload (`.claude/commands/`) and the `template/` Copier surface are **generated downstream** — never hand-edit the generated copies. After changing a canonical command, run `bash .forge/bin/forge-parity.sh` to regenerate the downstream surfaces and `bash .forge/bin/forge-parity.sh --check` to verify parity.
+4. **Update `update-manifest.yaml`**: If you add, remove, or rename a command file, update `.forge/update-manifest.yaml` to classify it in `framework.paths`, `removed.paths`, or `obsolete.mappings` as appropriate.
 
 ## Upstream Learning Pipeline
 
@@ -155,7 +155,7 @@ FORGE is maintained by a small team. Here's what to expect:
 
 | Type | Target Response | Notes |
 |------|----------------|-------|
-| **Security vulnerability** | 48 hours | See [SECURITY.md](SECURITY.md) for private reporting |
+| **Security vulnerability** | 48 hours | Use GitHub **private vulnerability reporting** — see [SECURITY.md](SECURITY.md) |
 | **Bug report** | 3-5 business days | Faster if reproduction steps are included |
 | **Feature request** | 1-2 weeks | Evaluated against the backlog during evolve loop reviews |
 | **Pull request** | 1-2 weeks | Faster for small changes with clear spec references |

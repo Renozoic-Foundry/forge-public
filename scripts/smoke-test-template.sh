@@ -14,6 +14,17 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FORGE_TEST_DIR="${TMPDIR:-${TEMP:-/tmp}}/forge-smoke-test-$$"
 
+# Resolve a working copier invocation (Spec 451) — the PATH exe shim can fail
+# silently on Windows/MSYS (exits 1, zero output). Prefer module invocation.
+COPIER=""
+for cand in "py -m copier" "python -m copier" "copier"; do
+    if $cand --version >/dev/null 2>&1; then COPIER="$cand"; break; fi
+done
+if [[ -z "$COPIER" ]]; then
+    echo "FAIL: no working copier invocation found (tried py -m copier, python -m copier, copier)"
+    exit 1
+fi
+
 # Cleanup on exit
 cleanup() {
     if [[ -d "$FORGE_TEST_DIR" ]]; then
@@ -37,7 +48,7 @@ echo ""
 # arbitrary-command-execution via answer-file values. The smoke test asserts a
 # clean default-bootstrap path, so --trust is the documented invocation here.
 echo "Step 1: Running copier copy --defaults --trust ..."
-if ! copier copy "$REPO_ROOT" "$FORGE_TEST_DIR" --defaults --trust 2>&1; then
+if ! $COPIER copy "$REPO_ROOT" "$FORGE_TEST_DIR" --defaults --trust 2>&1; then
     echo "FAIL: copier copy exited with error"
     exit 1
 fi
@@ -68,16 +79,18 @@ echo "Step 3: Checking for Jinja2 artifacts ..."
 # (lines whose first non-whitespace character is `#`), which are intentional
 # documentation strings describing the Jinja convention (e.g.,
 # forge-utils.sh's "# .jinja files may contain {% raw %} lines" comment).
+# Portable filter (Spec 451): the previous awk -F: parser broke on Windows
+# drive-letter paths (C:\...) and read a line-number field that `grep -l`
+# never produces — the comment filter silently never filtered on Windows.
+# Check each candidate file directly: flag only non-comment occurrences.
 jinja_raw=""
-jinja_raw="$(grep -rln '{% raw %}' "$FORGE_TEST_DIR/" 2>/dev/null \
-    | awk -F: '{
-        # Re-grep the matched line in the file; suppress if it begins with `#`.
-        cmd = "sed -n " $2 "p \"" $1 "\" 2>/dev/null"
-        cmd | getline line
-        close(cmd)
-        sub(/^[[:space:]]+/, "", line)
-        if (substr(line, 1, 1) != "#") print $1
-    }' | sort -u || true)"
+while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    if grep '{% raw %}' "$f" 2>/dev/null | grep -vqE '^[[:space:]]*#'; then
+        jinja_raw+="$f"$'\n'
+    fi
+done < <(grep -rl '{% raw %}' "$FORGE_TEST_DIR/" 2>/dev/null || true)
+jinja_raw="${jinja_raw%$'\n'}"
 if [[ -n "$jinja_raw" ]]; then
     echo "  FAIL: Found {% raw %} tags in non-comment lines:"
     echo "$jinja_raw" | while IFS= read -r f; do echo "    $f"; done

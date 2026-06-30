@@ -125,7 +125,7 @@ Spec 267 extends `/evolve` Step 8a with two outputs that depend directly on the 
 - **Root-cause Category Grouping** (Spec 267 Requirement 5) — every signal is bucketed by `Root-cause category`, surfacing whether recent failures cluster in spec quality, model knowledge, attentive execution, or process defects. If the `other` bucket exceeds 40% of recent signals, an advisory fires recommending re-calibration against this guide.
 - **Gate-Coverage Gaps** (Spec 267 Requirement 5) — `missed-by-existing-gate` signals are clustered by the named gate. A cluster qualifies as a gap when ≥3 signals name the same gate OR ≥50% of a pattern cluster is `missed-by-existing-gate`. Each qualifying gap surfaces as a candidate for spec-level gate improvement.
 
-See [`.claude/commands/evolve.md`](../../.claude/commands/evolve.md) Step 8a (h) and (i) for the exact output formats.
+See [`.forge/commands/evolve.md`](../../.forge/commands/evolve.md) Step 8a (h) and (i) for the exact output formats.
 
 ---
 

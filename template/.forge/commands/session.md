@@ -159,7 +159,12 @@ Review this draft. You can:
    Confirm each: **yes** (append to logs) | **edit** (modify then append) | **drop** (discard)
    ```
 
-   **Human confirmation required** for each entry before appending to the session log's Error autopsies / Chat insights sections AND to the persistent log files. Absence/empty values for the three new fields are acceptable (treated as `other` / empty / `no-applicable-gate` downstream) — the goal is to prompt the agent's best inference, not block drafting.
+   **Human confirmation required** for each entry. A single confirmation covers the tri-target append (Spec 452): on "yes", write the entry to all three targets in the same cycle —
+   1. the session log's Error autopsies / Chat insights sections,
+   2. the persistent log file (`docs/sessions/error-log.md` for EA, `docs/sessions/insights-log.md` for CI) with a `- Session: YYYY-MM-DD-NNN` line after the heading,
+   3. a one-line stub appended to `docs/sessions/signals.md`: `### SIG-NNN-EA-<ID> — <title> (propagated from session YYYY-MM-DD-NNN; detail: error-log.md)` (or `-CI-<ID>` / `insights-log.md`), where NNN is the related spec from the entry (or the active spec if none).
+
+   Do NOT prompt three times — one confirmation, three writes. Skip the signals.md stub if a `SIG-*-EA-<ID>` / `SIG-*-CI-<ID>` stub already exists (idempotency, Spec 452 Req 2). Absence/empty values for the three new fields are acceptable (treated as `other` / empty / `no-applicable-gate` downstream) — the goal is to prompt the agent's best inference, not block drafting. See `docs/process-kit/signal-capture-conventions.md` for the propagation invariant.
 5. **Scratchpad auto-triage** (Spec 157). Read docs/sessions/scratchpad.md (if it exists). For each open (unchecked) note, present a **recommended action** based on content analysis:
 
    | Pattern | Recommended Action |
@@ -187,6 +192,8 @@ Review this draft. You can:
 7. **Generate JSON handoff sidecar** (Spec 119): After the markdown session log is complete, generate a machine-parseable JSON sidecar file alongside it. The sidecar filename matches the session log but with a `.json` extension (e.g., `docs/sessions/2026-03-27-001.json` alongside `docs/sessions/2026-03-27-001.md`).
    - The JSON must conform to the schema at `.forge/templates/session-handoff-schema.json`.
    - Extract from the session log: `session_id` (from filename), `date`, `summary`, `decisions[]`, `specs_touched[]`, `gate_outcomes[]`, `open_items[]` (spec triggers, pain points, process improvements), `next_actions[]`, `error_autopsies[]`, `chat_insights[]`.
+   - **`consensus_reviews[]` (Spec 258/495)**: if `/consensus` or `/close` recorded consensus-decision entries into this session's sidecar during the session, preserve them (do not drop them when regenerating). They are the canonical source for the rolling-30-day acceptance rate read by `/now` and `/evolve` F4 — overwriting the sidecar without carrying them forward would silently lapse the metric (the Spec 258 failure mode).
+   - **`token_usage` (Spec 497 / ADR-496)**: fold per-spec token-usage events captured at implement-time into the durable sidecar. For each spec touched this session, read `.forge/state/events/NNN/token-usage.jsonl` (if present) and sum the latest record(s) into a single `token_usage` object `{input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, total_tokens}`. Store **token counts only — never a cost (USD) figure** (ADR-316 + ADR-496). If no token-usage events exist, omit the field. (The per-spec event stream is the working-tree capture point; this sidecar field is the durable, tracked persistence.)
    - If no items exist for an array field, write an empty array `[]`.
    - Report: "JSON handoff sidecar written: `docs/sessions/YYYY-MM-DD-NNN.json`."
 8. Report the session log file path and a one-line summary of any open action items.

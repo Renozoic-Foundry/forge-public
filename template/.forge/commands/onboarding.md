@@ -452,6 +452,31 @@ Apply these staged onboarding changes? (yes / no)
 
   Report: `Onboarding declined. Staging discarded; working tree pristine. Re-run /onboarding to retry.`
 
+### [decision] Step C0 — Optional capabilities (Spec 471)
+
+**post-confirmation — runs after staging commit (Spec 315).** This step runs only on the "yes" path, AFTER the atomic-apply / commit and manifest-integrity step has completed. The capability writes (`activate` / `dismiss`) are post-confirmation actions; they are NEVER performed mid-staging.
+
+1. Run `bash .forge/bin/forge-capability.sh pending`. If the count is `0`, skip this step silently.
+2. If the count is ≥ 1, present ONE batched question listing every `recommended: true` capability (read `title` + `pitch` from `.forge/capabilities.yaml` for display):
+
+   ```
+   N recommended optional capability(ies) are available but inactive:
+     <id> — <pitch>
+
+   Activate them? Reply:
+     all   — activate every recommended capability
+     pick  — choose a subset (one prompt, one answer — never a per-capability loop)
+     skip  — leave them inactive and stop surfacing them at /now
+   ```
+
+3. **STOP — wait for response.**
+4. Dispatch:
+   - `all` → for each recommended capability, run `bash .forge/bin/forge-capability.sh activate <id>`.
+   - `pick` → present **a single multi-select prompt** listing all recommended capabilities with numbers, answered in one line (e.g. `1 3`). This is **one prompt, one answer — never a per-capability loop**. For each selected number, run `bash .forge/bin/forge-capability.sh activate <id>`; unselected recommended capabilities are dismissed via `bash .forge/bin/forge-capability.sh dismiss <id>` so they do not re-nag.
+   - `skip` → run `bash .forge/bin/forge-capability.sh dismiss <id>` for every recommended capability (no re-nag at every `/now`).
+
+All capability state changes route through `forge-capability.sh`; this step writes no settings file directly.
+
 ### [mechanical] Step C — Mark complete and hand off
 
 Set `status: complete` in `.forge/onboarding.yaml` and write the file. (This runs only on the "yes" path — declined sessions are restored to their pre-session baseline at the "no" branch above.)

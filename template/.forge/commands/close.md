@@ -30,6 +30,18 @@ If $ARGUMENTS is `?` or `help`:
 
 ---
 
+## [mechanical] Step 0-bl — Batch-lane contract guard (Spec 475)
+
+Before any other step, check for `.forge/state/batch-lane.json` in the current working tree. Skip silently if no marker exists — single-tab and orchestrator sessions proceed normally.
+
+If the marker exists and parses as JSON:
+- If `created_at` is older than 24 hours: emit `⚠ Stale batch-lane marker (created <created_at>) — worktree likely abandoned; proceeding. Delete .forge/state/batch-lane.json if this lane is no longer part of a batch.` and proceed to Step 0a (warn-and-proceed — permanent refusal would brick an orphaned tab).
+- Otherwise REFUSE: print the marker's `return_instruction` verbatim, then:
+  `/close is forbidden inside a batch lane worktree (batch <batch_id>, spec <spec_id>, terminal state: <terminal_state>). /close runs in the orchestrator after merge.`
+  STOP — do not proceed to Step 0a or any later step. This is the artifact-binding counterpart of ADR-451 (prose in the orchestrator tab does not bind lane sessions; only worktree-resident artifacts do — SIG-BATCH-A/B).
+
+If the marker exists but is malformed JSON: REFUSE with the generic pointer `/close is forbidden inside a batch lane worktree — marker present but unreadable. Fix or deliberately delete .forge/state/batch-lane.json to override.` (Malformed still signals lane context; fail closed.)
+
 ## [mechanical] Step 0a — Evolve Loop Boundary Check (Spec 191)
 Read `docs/sessions/context-snapshot.md`. If a `## Active evolve loop` section exists with `status: in-progress`:
 - Stop and report: "Evolve loop in progress (started <started>). Solve-loop commands (/implement, /spec, /close) are blocked until the evolve loop completes. Return to the /evolve session and use the exit gate to choose your next action."
@@ -209,6 +221,36 @@ Check whether the spec has outstanding dependency review requirements:
    - Emit: `GATE [dependency-review]: PASS — dependency gate skipped at close with justification: "<reason>".`
    - Proceed normally.
 
+## [mechanical] Step 2b5 — Live-smoke evidence gate (Spec 403)
+
+Sibling to the Step 2b3/2b4 evidence checks. Where `/implement` Step 6e *detects* live-smoke Test-Plan steps and prompts for execution, this gate *enforces* that the captured evidence exists before close. It closes the synthetic-fixture-blind-spot failure mode (SIG-387-01): a spec whose Test Plan calls for a real dry-run must not close on fixtures alone.
+
+1. **Load the keyword set**: read `forge.implement.live_keywords:` from `AGENTS.md`. If absent, use the default set: `live dry-run`, `smoke test`, `against the live repo`, `against FORGE-self`, `against the codebase`, `production data sample`.
+
+2. **Scan the Test Plan**: read the spec's `## Test Plan` section (including any `### Cross-platform coverage` subsection). Case-insensitive substring match each line against the keyword set.
+   - **No match**: skip silently — this spec declared no live-smoke step. Mark `[x] Live-smoke evidence gate (Spec 403) — no live-keyword steps in Test Plan`. Proceed.
+   - **One or more matches**: continue to step 3.
+
+3. **Check for captured evidence**: look for a `### Live-smoke evidence` subsection in the spec's `## Evidence` section that contains at least one captured `- Output:` block (not empty, not "pending").
+
+4. **Gate outcome**:
+   - Evidence present → `GATE [live-smoke]: PASS — live-smoke evidence found for <N> Test-Plan step(s).` Proceed.
+   - Test Plan flagged a live step but no `### Live-smoke evidence` present → `GATE [live-smoke]: FAIL — Test Plan contains a live-smoke step ("<matched text>") but no ### Live-smoke evidence was captured. Remediation: re-run /implement Step 6e and execute the live-smoke step (answer "yes" at the prompt), or record the output manually under ### Live-smoke evidence in the spec's Evidence section.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
+
+## [mechanical] Step 2b6 — Plugin parity gate (Spec 463, conditional)
+
+Sibling to the Step 2b3/2b4/2b5 evidence gates. Enforces the P1=C two-source parity
+contract: the plugin payload source (`.claude/`) and the Copier source
+(`template/.claude/`) MUST be byte-identical across the common subset
+(`commands/`, `agents/`, `skills/`).
+
+1. **Detect applicability**: if `.forge/bin/plugin-parity-check.sh` does not exist
+   (pre-Spec-463 projects), skip silently — mark `[x] Plugin parity gate (Spec 463) — not present in this project`. Proceed.
+
+2. **Run the gate**: `bash .forge/bin/plugin-parity-check.sh`.
+   - Exit 0 → `GATE [plugin-parity]: PASS — plugin payload source and Copier source are byte-identical across the common subset.` Proceed.
+   - Exit non-zero → `GATE [plugin-parity]: FAIL — byte-level drift between .claude/ (plugin payload) and template/.claude/ (Copier source). Remediation: re-sync the two sources so they are byte-identical across commands/, agents/, skills/, then re-run /close.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
+
 <!-- module:compliance -->
 ## [mechanical] Step 2c — Lane B spec sealing (Spec 052, conditional)
 After completing the status transition to `closed` (Step 3 below), if `docs/compliance/profile.yaml` exists (Lane B project):
@@ -384,6 +426,53 @@ If enabled:
    YYYY-MM-DD HH:MM | <role> | spec-NNN | <recommendation> | advisory-close | mode: dispatch
    ```
 
+6. **Role-value instrumentation (Spec 305)** — for each dispatched closing-advisory role, also append one `role-dispatch` record to the shared score-audit sink:
+   ```bash
+   bash .forge/lib/score-audit.sh record-dispatch NNN close <role> <recommendation> <confidence> "<key concern>"
+   ```
+   Map the role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence verbatim. Best-effort: the helper always exits 0 — never block /close. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
+
+### [mechanical] Step 2d+a — Operator-Acceptance Capture (Spec 305)
+
+After the closing advisory (Step 2d+) and BEFORE the commit, capture whether the operator
+acted on the advisory role recommendations fired across this spec's lifecycle (`/spec`,
+`/implement`, `/close`, `/consensus`). This turns role dispatch into a measurable
+accept/ignore signal (`score-audit.sh role-audit` rolls it up). Conditional + non-blocking.
+
+1. **Read prior dispatches**: list `role-dispatch` records for this spec —
+   `bash .forge/lib/score-audit.sh read-records NNN | grep '"kind":"role-dispatch"'` — and collect
+   the distinct advisory roles that fired (the Spec 187 dispatch roles + Review-Router perspectives;
+   the DA gate and the Validator are gates, not advisories — exclude them).
+   - Let `N` = count of distinct advisory roles with ≥1 dispatch for this spec.
+   - **If `N = 0`: skip silently.** No prompt, no records. (The common case for small specs.)
+
+2. **If `N ≥ 1`**, present a single choice block (not one prompt per role):
+   ```
+   ## Operator-Acceptance Capture (Spec 305)
+   N advisory role recommendation(s) fired during Spec NNN's lifecycle:
+   <role> (<stage(s)>, last recommendation: <rec>) — key concern: <concern>
+   ...
+   For each, did you act on it? Mark `accepted | ignored | partial | skip-all`.
+   ```
+   > **Choose** — type a number or keyword:
+   > | # | Rank | Action | Rationale | What happens |
+   > |---|------|--------|-----------|--------------|
+   > | **1** | 1 | `accepted` | You acted on the recommendations | Record `accepted: true` per role |
+   > | **2** | — | `ignored` | You consciously did not act | Record `accepted: false` per role |
+   > | **3** | — | `partial` | Acted on some / partially | Record `accepted: null` + a one-line `partial_note` per role |
+   > | **4** | — | `skip-all` | No-friction opt-out | Record nothing; proceed (no error) |
+
+   Per-role granularity is allowed (operator may answer e.g. "CTO accepted, CEfO ignored").
+
+3. **Write acceptance records** (single-shot append; latest-entry-wins per R7 — no supersede chain):
+   ```bash
+   bash .forge/lib/score-audit.sh record-acceptance NNN <role> <true|false|null> ["<partial_note>"]
+   ```
+   One fresh `role-acceptance` record per advisory role (except under `skip-all`, which writes nothing).
+   Best-effort: the helper always exits 0 — `skip-all` and a non-writable sink both proceed without
+   error. This step is NEVER a blocking gate. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-acceptance ...`.)
+   `Detection: active`.
+
 ### [mechanical] Step 2g — Shadow-Mode Gate Comparison (Spec 277, Phase 1)
 
 See `docs/process-kit/gate-comparison-methodology.md` for the shadow-run rationale and the decision criteria consumed by Phase 2. This step silently captures timing, token, and raw-findings data from three review gates — `/ultrareview`, Validator Stage 2 (Code Quality), and the DA role-registry review — for later offline comparison. **Zero user-visible behavior change**: findings are never surfaced in the Review Brief, never logged to stdout as gate output, and never block `/close`.
@@ -452,6 +541,30 @@ Before generating the Review Brief, actively verify bidirectional sync:
   - If `sync`: for each drifted file, copy the changes to the other side. Re-run the check to confirm sync.
   - If `intentional`: append to the spec's Revision Log: `YYYY-MM-DD: Template/FORGE dual-check: drift noted as intentional for <files> — <reason>.` Proceed.
   - If `block`: report "Close blocked — resolve template/own-copy drift and re-run /close." Stop.
+
+### [mechanical] Step 2d^2 — Single-source parity gate (Spec 480 / NC-1a)
+
+The repo-root tree is the single canonical source; both the plugin payload (`.claude/commands/`) and the `template/` Copier surface are generated downstream. This gate mechanically enforces that no canonical source was edited without regenerating its downstream surfaces — the machine-checked backstop to the prose dual-check above.
+
+Run `bash .forge/bin/forge-parity.sh --check`. This delegates to the two existing sync scripts' `--check` modes (`.claude/commands/` body-equivalence per Spec 329; `template/` mirror byte-equivalence; `.jinja` Copier-var files excluded per Spec 281/390). Bounded runtime — no Copier re-render.
+
+**Evaluation**:
+- Exit 0: mark `[x] Single-source parity — canonical and generated surfaces in sync`. Emit `GATE [single-source-parity]: PASS.` Proceed silently.
+- Non-zero: the gate output names the drifted surface(s) (`.claude/commands/` and/or `template/` mirrors). Present:
+  ```
+  SINGLE-SOURCE PARITY DRIFT — A canonical source file was edited without regenerating its downstream surface(s):
+  <drifted surface list from forge-parity.sh --check output>
+
+  Regenerate downstream surfaces from canonical before closing.
+  ```
+  > **Choose** — type a number or keyword:
+  > | # | Rank | Action | Rationale | What happens |
+  > |---|------|--------|-----------|--------------|
+  > | **1** | 1 | `regen` | Restores parity from canonical; safest default | Run `bash .forge/bin/forge-parity.sh` (no flags), then re-run `--check` to confirm |
+  > | **2** | — | `block` | Manual fix path; use only if regen is unsafe | Block close until parity is restored manually |
+
+  - If `regen`: run `bash .forge/bin/forge-parity.sh`, then re-run `bash .forge/bin/forge-parity.sh --check`. On exit 0, emit `GATE [single-source-parity]: PASS — regenerated.` Proceed.
+  - If `block`: report "Close blocked — resolve single-source parity drift (run forge-parity.sh) and re-run /close." Stop.
 
 ### [mechanical] Step 2d+++ — Consumer-Propagation Check (Spec 303)
 
@@ -555,30 +668,32 @@ After all Step 2 gates complete, generate the Review Brief. This is the primary 
 
 2b. **LOC proportionality signal** (Spec 252): Read the Stage 2 code quality reviewer's metrics (`new_lines_of_code`, `files_modified`, `files_in_scope`) and the spec's E score from frontmatter. Include a proportionality line in the Review Brief: "Implementation size: N lines across M files (spec E=X)." If the agent judges the implementation size as disproportionate to the spec's E score and scope, escalate to the "Needs Your Review" section: "Review for over-engineering — implementation is larger than expected for E=X." This is a qualitative signal based on agent judgment, not a mechanical threshold.
 
-3. **Output the Review Brief**:
+3. **Output the four-part operator summary** (Spec 497 — lean by default; honors `forge.output.verbosity`). This replaces the prior three-section Review Brief layout while preserving every fact it carried (no information loss — reorganized, plus a value-link and decision pros/cons the old format lacked). See `docs/process-kit/operator-summary-guide.md`.
    ```
    ## Review Brief — Spec NNN
 
-   ### Machine-Verified (no action needed)
+   ### 1. Accomplished & machine-verified
+   <one line: what shipped> — <N> gates PASS.
    - [x] <check description> — <gate result>
-   - [x] <check description> — <gate result>
-   (medium confidence items noted with: "(medium confidence — override if concerned)")
+   (medium-confidence items noted: "(medium confidence — override if concerned)")
 
-   ### Needs Your Review
-   <numbered list, prioritized per Step 2e.5>
-   1. **[Category]** (why this needs human judgment)
-      - Expected: <what the spec says should happen>
-      - Actual: <what was produced — rendered output, excerpt, or file reference>
-      - AI assessment: <what the AI thinks, and why it can't be certain>
-      - Verify: <specific thing the human should check>
+   ### 2. Needs human validation
+   <bullet checklist — each item is a single tick the human can verify; if nothing needs human judgment, state "Nothing requires human judgment — all ACs machine-verified.">
+   - [ ] **[Category]** <what to verify> — Expected: <…>; Actual: <… / file ref>; AI assessment: <why AI can't be certain>
+   - [ ] **[Category]** …
 
-   2. **[Category]** ...
+   ### 3. Why it matters
+   <1-2 lines linking the deliverable to the spec's ## Objective — and to the PRD / security / compliance posture when the scope touches them>
 
-   ### Machine-Handled (override if you disagree)
-   These were verified by AI and are not presented for review.
-   If you want to inspect any, say "show <item>".
-   - <list of machine-verified items not shown in detail>
+   ### 4. Recommended next actions
+   <When a decision is open: ≥2 options, each with pros/cons, then a named recommendation. When no decision is open: the single recommended next step.>
+   - Option A — <action>. Pros: <…>. Cons: <…>.
+   - Option B — <action>. Pros: <…>. Cons: <…>.
+   - **Recommendation**: <named option> — <one-line why>.
    ```
+
+   - **Part 1** is sourced from the machine-verifiable gates collected in step 1 (plus the LOC-proportionality line from step 2b). **Part 2 — "Needs human validation" — is the canonical "Needs Your Review" set**: items 4-7 below (Physical Logic Check, review-fatigue prioritization, trust-signal recording, enforcement-mode behavior) populate it; render each as a tick, not a prose paragraph. **Part 3** ties the close to the spec's `## Objective` (and security/compliance when in scope) — the value-link AC3 verifies is present. **Part 4** carries the decision pros/cons + named recommendation AC4 verifies; when no decision is open it collapses to the single recommended next step.
+   - **Verbosity (AC6)**: in `lean` (default), Parts 1-2 list items tersely and Part 4 shows options without expanded sub-detail; the machine-handled inventory is omitted from chat (say "show <item>" to expand a specific item). In `verbose` (or on operator request), expand every machine-handled item inline and include the full Expected / Actual / AI-assessment / Verify block for each Part-2 item. Both modes carry the same four labeled sections.
 
 4. **Physical Logic Check** (Spec 160, Requirement 13-15): If the spec scope involves physical-world recommendations, real-world actions, hardware interactions, or cause-and-effect chains in the physical world, include a dedicated item in "Needs Your Review":
    ```
@@ -831,7 +946,66 @@ fi
 echo "GATE [safety-backfill-sla]: PASS — within SLA or audit clean"
 ```
 
-Mark `[x] Safety-property gate (Spec 387) — completed`. Proceed to Step 3.
+Mark `[x] Safety-property gate (Spec 387) — completed`. Proceed to Step 2g+.
+
+## [mechanical] Step 2g+ — Adoption gate (Spec 402)
+
+After the safety-property gate (Step 2g) and before the close-completion (Step 3), check whether this spec ships new machinery — a frontmatter field, a generated-artifact path, a config block, or an annotation format — without any consumer using it. This closes the build-without-adopt failure mode (the broader artifact/format/config superset of Spec 387's safety-property subset). The originating spec body counts as a consumer; an explicit `Follow-up adoption spec: NNN` field defers adoption to a named successor.
+
+This gate is a **machine-verifiable** check (see `docs/process-kit/gate-categories.md`) and runs at /close time only — it never retroactively flags already-closed specs.
+
+Source the helper library and run the gate driver:
+```bash
+# shellcheck source=/dev/null
+source .forge/lib/close-adoption-gate.sh
+spec_file="$(ls docs/specs/NNN-*.md | head -1)"
+if adoption_gate_check "$spec_file" "$(pwd)"; then
+  : # PASS line already printed to stdout
+else
+  # adoption_gate_check printed the GATE FAIL line (stdout) + remediation (stderr).
+  exit 2
+fi
+```
+
+PowerShell parity:
+```powershell
+. .forge/lib/close-adoption-gate.ps1
+$spec = (Get-ChildItem docs/specs -Filter 'NNN-*.md' | Select-Object -First 1).FullName
+if (-not (Invoke-AdoptionGateCheck -SpecFile $spec -RepoRoot (Get-Location).Path)) { exit 2 }
+```
+
+Gate semantics:
+- **Detection**: the gate scans the spec's Scope / Requirements / Acceptance Criteria for (a) new frontmatter-field declarations (`New-Field-Name:` not already a known FORGE field), (b) generated-artifact-path declarations (backticked output globs like `docs/compliance/traceability-*.md`), and (c) config-block keys (`forge.*` / `multi_agent.*`).
+- **Adoption check**: for each declaration, grep the repo for ≥1 consumer. The originating spec body counts — a frontmatter field populated in the spec's own frontmatter, or a path/config referenced by any consuming file, satisfies adoption.
+- **Escape hatch**: a valid `Follow-up adoption spec: NNN` field (NNN must reference an existing spec) defers the gate entirely — adoption is owned by the named successor.
+- **FAIL**: if any declaration has no consumer AND no follow-up field is present, the gate emits `GATE [close-adoption]: FAIL — <N> declaration(s) shipped without a consumer: <list>` and exits 2. Remediation: exercise the declaration in the originating spec or a consuming file, or add `Follow-up adoption spec: NNN`.
+
+This gate does NOT re-check Spec 387–covered safety properties (Step 2g owns those) and introduces no new CLI flags or config options.
+
+Mark `[x] Adoption gate (Spec 402) — completed`. Proceed to Step 5d.
+
+See `docs/process-kit/close-adoption-gate-guide.md` for worked examples and the detection-rule reference.
+
+## [mechanical] Step 5d — Session-log EA/CI propagation to persistent logs (Spec 452)
+
+> **Ordering note**: numbered 5d for spec traceability (it belongs to the Step 5/6 signal-capture family) but executes BEFORE Step 3 — a propagation FAIL must block the status transition (Spec 452 Req 1f). Non-monotonic placement has precedent in this file (Step 8b runs before Step 8a).
+
+Propagate today's session-log `## Error autopsies` / `## Chat insights` entries to the persistent logs (`docs/sessions/error-log.md`, `docs/sessions/insights-log.md`) and emit one-line `SIG-NNN-EA-<ID>` / `SIG-NNN-CI-<ID>` stubs to `docs/sessions/signals.md` so `/evolve` pattern analysis sees every session-log signal. The propagation engine is the Spec 452 migration script — one parser implementation shared with the one-shot backfill, so the close-time path and the migration path cannot drift:
+
+1. Locate today's session log (`docs/sessions/YYYY-MM-DD-NNN.md` — the most recent log for today's date). If no session log exists, or it has no `## Error autopsies` / `## Chat insights` sections: skip silently (fresh-project case — nothing to propagate) and proceed to Step 3.
+2. Run:
+   ```bash
+   .forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --apply --session-only=YYYY-MM-DD-NNN --spec=NNN
+   ```
+   where `--session-only` names today's session log (filename stem) and `--spec=NNN` is the closing spec — it keys the `SIG-NNN-EA/CI-<ID>` stub IDs.
+3. Evaluate the exit code:
+   - **0** → emit `GATE [signal-propagation]: PASS — <N> propagated, <M> skipped duplicates.` (counts from the script's `DONE |` summary line). Proceed to Step 3.
+   - **2** (malformed EA/CI block) → emit `GATE [signal-propagation]: FAIL — <MALFORMED-BLOCK stderr diagnostic verbatim>. Remediation: fix the malformed EA/CI block in the session log, then re-run /close.` **HALT — do NOT proceed to Step 3 (status transition).**
+   - **1** (write error) → emit `GATE [signal-propagation]: FAIL — <stderr diagnostic>. Remediation: resolve the persistent-log write error, then re-run /close.` **HALT — do NOT proceed to Step 3.**
+4. Idempotency contract (Spec 452 Req 2): the script dedups by entry ID — re-running /close on a previously-closed spec (e.g., /revise + re-close) appends nothing (`0 appended` is a normal PASS). Missing persistent logs are created with a header rather than failing.
+5. Propagation never rewrites session-log content — the session log is the source-of-truth; the persistent logs are append-only targets.
+
+See `docs/process-kit/signal-capture-conventions.md` for the propagation invariant and remediation guidance.
 
 ## [mechanical] Step 3 — Status transition
 Perform the `closed` status transition:
@@ -1180,10 +1354,11 @@ c. For each disposition:
 If the spec has no "Out of scope" section or it is empty, skip silently and proceed.
 
 ## [mechanical] Step 6 — Signal Capture
-Run the retrospective signal capture inline for this spec. Three signal categories:
+Run the retrospective signal capture inline for this spec. Four signal categories:
 - **Content**: What worked/didn't in the deliverable itself
 - **Process**: What worked/didn't in the workflow
 - **Architecture**: Design insights for future work
+- **Positive (Spec 497 — wins-to-keep)**: a win worth keeping or amplifying this cycle — a pattern, decision, gate, or tool that paid off. The FORGE signal taxonomy was historically ~54:1 failure-biased with no positive bucket; this category captures the success side so `/evolve` reviews wins alongside negatives (and they can graduate to memory / strategy docs). Draft a `[positive]` SIG for each genuine win; zero is acceptable. See `docs/process-kit/positive-signal-taxonomy.md`.
 
 ### Signal classification (Spec 267)
 
@@ -1196,7 +1371,7 @@ Then draft each SIG entry in this format:
 ```
 ### SIG-NNN-XX — <title>
 - Date: YYYY-MM-DD
-- Type: [content|process|architecture|trust]
+- Type: [content|process|architecture|trust|positive]
 - Spec: NNN
 - Impact: <low|medium|high>
 - Observation: <what happened>
@@ -1204,6 +1379,18 @@ Then draft each SIG entry in this format:
 - Wrong assumption: <the specific false belief, or empty>
 - Evidence-gate coverage: <caught-by-existing-gate|missed-by-existing-gate|no-applicable-gate> [— gate name if missed]
 - Recommendation: <what to change>
+```
+
+**Positive-signal shape (Spec 497)**: for a `[positive]` entry the three failure-classification fields above (Root-cause category / Wrong assumption / Evidence-gate coverage) do not apply — replace them with the positive fields below. `Observation` states the win; `Recommendation` becomes the keep/amplify action.
+```
+### SIG-NNN-XX — <title>
+- Date: YYYY-MM-DD
+- Type: [positive]
+- Spec: NNN
+- Impact: <low|medium|high>
+- Observation: <the win — what worked well>
+- Why it worked: <the enabling pattern, decision, gate, or tool>
+- Keep/amplify: <how to repeat or institutionalize it>
 ```
 
 **Re-read `docs/sessions/signals.md` now** (Spec 123 — context overflow guard) to avoid collision with concurrent edits, then **auto-append** all drafted entries directly to the file using the established format (`###` header with date and spec, then categorized signal entries). If the file doesn't exist, create it from the signals log header.
@@ -1330,7 +1517,10 @@ mkdir -p .forge/state
 echo "close-NNN" > .forge/state/active-close
 ```
 
-Run `git status`. If there are outstanding changes, stage relevant files and commit: "Close Spec NNN — <title>".
+**Explicit-path staging + pathspec commit (Spec 494)**: Do NOT use `git add -A`/`git add -u` or a bare `git commit`. In a chained/parallel session the shared git index may already hold a concurrent lane's staged files, and a bare commit would sweep them into this spec's close commit (Defect C — observed 2026-06-11 when Spec 435's commit captured Spec 421's staged files). Instead:
+1. Build the explicit path list `CLOSE_PATHS` = this spec's `## Implementation Summary` `Changed files` ∪ the artifacts `/close` itself wrote this run (the spec file, `docs/.generated/*`, the session log, `docs/sessions/signals.md`, `docs/sessions/activity-log.jsonl`, `.forge/state/events/NNN/*`, and any evidence dir). Run `git status` to confirm the set and catch anything unexpected.
+2. Stage them explicitly: `git add -- <CLOSE_PATHS>` — reuses the Spec 432 `_explicit_stage_paths` discipline (verbatim paths through `--`, never `-A`/`-u`).
+3. Commit **by explicit pathspec** so only this spec's files are captured even when other paths are staged: `git commit -m "Close Spec NNN — <title>" -- <CLOSE_PATHS>`. A concurrent lane's pre-staged files are left untouched (still staged for their lane), never committed here. Verified by `.forge/bin/tests/test-spec-494-staging-collision.sh`.
 
 **Commit guard cleanup (Spec 257)**: After committing (or if no commit was needed), clear the active-close marker:
 ```bash

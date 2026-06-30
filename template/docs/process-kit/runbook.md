@@ -219,3 +219,31 @@ Drafts age. A 35–39-spec backlog with the oldest draft at 42 days is a legitim
 **Recommended drainage sequence (Spec 362)**: When the backlog has accumulated 5+ ready drafts, the optimal flow is (1) **/now** to surface aging-draft count (Spec 363); (2) **/matrix** to plan sprints — Step 11 emits an `execute-all` choice block when ≥2 dependency-clean parallel-safe lanes exist; (3) the operator selects `execute-all`, which constructs a `/parallel --batch '<lane1>' '<lane2>' ...` command spanning all dependency-clean lanes forward in dependency-respecting order; (4) `/parallel` runs each bundle sequentially with its existing per-bundle conflict pre-flight, swarm budget, and post-merge `close all` choice block (which fires once per bundle, preserving per-spec push authorization). This sequence drains the backlog without adding a new orchestrator command — both `/matrix` and `/parallel` stay within their established roles.
 
 **Trade-off**: the field is operator-editable, so aging-evasion via direct edit is possible. This is the same friction trade-off the deprecated Spec 360 `keep` action would have had — but here the operator must touch the spec file, which is the explicit engagement signal. Sustained bulk-renewing without triage would surface as a backlog-overload symptom, not a Spec 363 defect; a future WIP-limit spec could address it if observed.
+
+## Role-Value Instrumentation: when to run `role-audit` (Spec 305)
+
+- Last verified: 2026-06-15
+
+FORGE auto-dispatches advisory roles at `/spec` (Review Router), `/implement`/`/close`
+(Spec 187 dispatch), and `/consensus`. Spec 305 logs each invocation as a `role-dispatch`
+record — and each operator accept/ignore decision at `/close` as a `role-acceptance` record —
+in the shared sink `.forge/state/score-audit.jsonl`.
+
+**When to run the rollup**:
+
+- **During `/evolve`** — when reviewing whether to trim redundant roles (CTO/CEfO, COO/CXO) or
+  promote under-dispatched ones (CMO, CRO, COO, CResO, CCO). Run
+  `bash .forge/lib/score-audit.sh role-audit` for a per-role table: dispatch count, acceptance %,
+  avg concerns, stage distribution, most-common concern. This is the empirical input the
+  scratchpad item (e) trim/promote decision needs — replace hunches with logged data.
+- **After ~20+ logged specs** — acceptance rates become meaningful at N≥20; below that, treat
+  the table as directional. Operators who reflexively `skip-all` the `/close` acceptance prompt
+  produce dispatch-count data without acceptance signal (a known limitation, Spec 305 VS c-i) —
+  dispatch counts and concern frequencies are still useful.
+- **Machine-readable**: `bash .forge/lib/score-audit.sh role-audit --json` for piping into other
+  analysis. (PowerShell parity: `pwsh .forge/lib/score-audit.ps1 role-audit [--json]`.)
+
+The sink is **gitignored local-only telemetry** — it does not propagate across clones. The
+rollup is read-only and the logging is advisory (the helper always exits 0; it never blocks a
+command). Log rotation is a tracked near-term follow-up (the sink grows unbounded). Full schema:
+`docs/process-kit/role-dispatch-schema.md`.

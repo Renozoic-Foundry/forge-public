@@ -42,13 +42,70 @@ If $ARGUMENTS is `?` or `help`:
 Read `docs/sessions/evolve-config.yaml` (skip silently if absent — use defaults: trigger=manual, notify_via=log-only).
 
 Determine run mode:
-- If `--auto` in $ARGUMENTS: automated mode — check trigger conditions from config:
-  a. If `trigger=on_spec_count`: read session logs to count specs closed since `last_evolve_loop_run:` in `docs/sessions/evolve-state.md` (create if absent). If count ≥ `spec_count_threshold`, proceed. Otherwise: report "Auto evolve loop: trigger condition not yet met (N/threshold specs closed)." Stop.
-  b. If `trigger=time`: check `last_evolve_loop_run:` date. If days elapsed ≥ `time_interval_days`, proceed. Otherwise: report "Auto evolve loop: N days since last run (threshold: time_interval_days)." Stop.
-  c. If `trigger=manual`: report "Auto evolve loop: trigger=manual in config. Skipping automated run." Stop.
+- If `--auto` in $ARGUMENTS: automated mode (scheduled heartbeat). Admission is decided by **signal
+  thresholds in Step 0-cd** (Spec 500 — this supersedes the legacy `trigger=on_spec_count|time|manual`
+  config triggers, which are no longer consulted for admission). Proceed to Step 0-cd: it admits only
+  when ≥1 canonical signal threshold is crossed and otherwise SKIPs (exit 0) and reschedules the heartbeat.
 - If `--spec NNN`: fast-path mode for spec NNN.
 - If `--full`: full F1-F4 review.
+- If `--auto`: this invocation may be a scheduled rewake (see Step 0-cd and the rewake at command exit).
 - Otherwise: interactive mode — ask which spec was just completed (or confirm periodic review).
+
+### [mechanical] Step 0-cd — Signal-based admission (Spec 500 / ADR-500 — supersedes the Spec 464 calendar entry-gate)
+
+There is **no calendar cool-down on running the review**. The ADR-046 cool-down lives on *applied*
+self-modification (Step AS below — ADR-046 Invariant #3), NOT on the review. Admission is decided by
+who invoked `/evolve` and, for the automated heartbeat, whether signals have accumulated. This runs at
+command entry, before the state marker and before any F1–F4 work.
+
+1. **Explicit human invocation** — if `--auto` is NOT in `$ARGUMENTS` (`/evolve`, `/evolve --full`,
+   `/evolve --spec NNN`): **always admit**. A human asking for a review is sufficient justification.
+   Emit `GATE [evolve-admission]: PASS — explicit invocation.` Proceed.
+2. **Automated rewake** — if `--auto` IS in `$ARGUMENTS`: admit only when **≥1 signal threshold is crossed**.
+   a. Read the canonical thresholds from `forge.evolve.signal_thresholds` in `AGENTS.md` (the SINGLE
+      source — Spec 500 R8; do NOT re-inline the numbers here). Keys: `unreviewed_signals`,
+      `open_evolve_scratchpad`, `error_autopsies`, `deferred_scope_items`, `spec_velocity`.
+   b. Compute the same five signal counts `/now` Step 12 uses, measured since the last review date
+      (`docs/sessions/evolve-state.md` `last_evolve_loop_run:` — the single last-review source, Spec 500 R6a;
+      `.forge/state/evolve-cool-down.json` is retired and MUST NOT be read).
+   c. **Hysteresis (R10)**: if `forge.evolve.admission_hysteresis` is true, require at least one NEW signal
+      since the last recorded skip (`evolve-state.md` `last_auto_skip:`), so a count parked at a threshold
+      boundary does not flap admit/skip across successive heartbeats.
+   d. If ≥1 threshold is crossed: emit `GATE [evolve-admission]: PASS — auto; thresholds crossed: <list>.` Proceed.
+   e. If none crossed: emit `GATE [evolve-admission]: SKIP — auto; no accumulation — skipped (nothing crossed since <date>; signals N/<t>, scratchpad N/<t>, EA N/<t>, deferred N/<t>, velocity N/<t>).` Record `last_auto_skip: <today>` in `evolve-state.md`, reschedule the heartbeat (Step Z), and **exit 0** WITHOUT running F1–F4.
+3. **Soft time fallback (R3 — recommendation only, NEVER a block)**: independent of admission, if the last
+   review is older than `forge.evolve.time_fallback_days` (default 30), include a one-line nudge in the
+   output (and `/now` surfaces the same nudge). This never blocks admission and never forces it.
+
+### [mechanical] Step AS — Apply-surface cool-down gate (Spec 500 R4 / ADR-500 / ADR-046 Invariant #3)
+
+This is where the ADR-046 cool-down actually lives. **EVERY `/evolve` auto-apply write** — any write that
+modifies an operating-rule / config / gate file — MUST pass this gate BEFORE writing. Enumerated apply paths
+(Spec 500 R4b / AC4b — this list is the enumeration invariant the fixture checks):
+- Trust-calibration `apply all` / `apply <N>` (Step 8b) → writes `docs/process-kit/gate-categories.md`.
+- Score-anchor / E-anchor revisions, if applied inline → writes `docs/process-kit/scoring-rubric.md`.
+- Any future `/evolve` auto-apply path that writes an operating-rule/config/gate file.
+
+(Score-calibration *timestamp* writes — `Last score calibration:` in `docs/backlog.md` — and proposal
+drafting are NOT self-modifications of operating rules and are exempt.)
+
+Gate procedure (shared with `/config-change` — one throttle across both apply surfaces):
+1. Read `forge.evolve.apply_cool_down_days` from `AGENTS.md` (default `7`).
+2. Read `docs/sessions/config-change-audit.md`; find the most recent entry with `outcome: applied` (the
+   SAME source `/config-change` Step 2 reads).
+3. If that entry's date is within `apply_cool_down_days` of today: **BLOCK the apply**. Emit
+   `GATE [evolve-apply-cool-down]: BLOCK — last applied self-modification <date> (<n>d ago); cool-down <N>d. Apply deferred.`
+   Record the proposed (un-applied) change in the evolve session log and **continue the review WITHOUT writing**.
+4. Otherwise (outside the window, or no prior applied entry): **ALLOW**. After writing, append to
+   `docs/sessions/config-change-audit.md`:
+   `- date: YYYY-MM-DD | source: /evolve | change: <what was applied> | outcome: applied`
+   so the next apply (from `/evolve` OR `/config-change`) is throttled against it. Emit
+   `GATE [evolve-apply-cool-down]: PASS — no applied self-modification within <N>d; apply recorded.`
+
+**Sequencing invariant (Spec 500 R4c)**: this gate ships in the SAME change as the Step 0-cd entry-gate
+removal — there is no state where `/evolve` has neither the calendar entry-gate nor this apply-surface
+cool-down. The fixture `test-spec-500-apply-surface-cooldown` asserts both the enumeration above and the
+no-window invariant.
 
 ### [mechanical] Step 0a — Evolve Loop State Marker (Spec 191)
 Write the evolve-loop state marker to `docs/sessions/context-snapshot.md`:
@@ -83,6 +140,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    - Flag any drift as a process defect requiring a new spec
 4. **Backlog state (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` — confirm the completed spec's row reflects `implemented` (the helper reads frontmatter directly, so freshness is immediate; mode-detection is internal).
 5. Check if any other backlog items are now unblocked by this completion and note them.
+6. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py .forge/lib/acceptance_rate.py` and surface its one-line rolling-30-day figure. When it reports `n/a` (no rated decisions in window), surface that verbatim. This is the same read the operator's `consensus_tracking` config (AGENTS.md) defines; it is also surfaced by `/now`.
 
 **If periodic review (full F1–F4):**
 3. Spot-check 2–3 `implemented` or `closed` specs for acceptance criteria drift.
@@ -116,6 +174,8 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    If the audit log is empty or absent (pre-instrumentation specs only), the helper emits `0 records — calibration deferred until data accumulates`. Continue with operator-recall calibration from Step 6b.
 
    Note: this report is data, not authority. Anchor revisions still require operator judgment — see `docs/process-kit/score-calibration-loop.md` § Time-blindness mitigation for the principle that durations are derived from shell arithmetic over git timestamps, not model recall.
+
+6b++. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py .forge/lib/acceptance_rate.py` and surface the rolling-30-day figure (`accepted / (accepted + modified + rejected)` over `docs/sessions/*.json`, per `docs/process-kit/telemetry-capture-guide.md`). When it reports `n/a` (no rated decisions in window), surface that verbatim — never a divide error. A persistently low or sharply dropping rate is a calibration/process signal worth a CEfO/CQO note; the figure is data, not authority.
 
 6c. **CEfO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
    - Read `.claude/agents/cefo.md` for the role preamble.
@@ -208,6 +268,17 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       If no qualifying clusters exist: emit a single line "Gate-coverage gaps: none detected (N `missed-by-existing-gate` signals, no cluster ≥3 or ≥50%)."
 
       This output is **advisory** — it does not block the evolve loop. It surfaces systemic evidence-gate gaps so the operator can propose spec-level gate improvements.
+8j. **Positive-signal review (Spec 497):** The pattern analysis above clusters problems; this sub-step reviews the success side so wins are reinforced, not just failures fixed. Read `docs/sessions/signals.md` for entries with type tag `[positive]` recorded since the last evolve review.
+   a. Group `[positive]` entries by their `Why it worked` factor (the enabling pattern, decision, gate, or tool) — same ≥2-keyword-overlap clustering as step (b).
+   b. Append a positive-signal section to the pattern analysis output:
+      ```
+      Positive-Signal Review — <date>
+      | Win pattern | Occurrences | Signal IDs | Keep/amplify recommendation |
+      |-------------|-------------|------------|-----------------------------|
+      | <enabling factor> | N | SIG-NNN, ... | <how to repeat or institutionalize> |
+      ```
+   c. For any win recurring ≥2 times (a durable, repeatable success), recommend graduating it: capture in project memory or a strategy/process-kit doc so the pattern is reused deliberately. See `docs/process-kit/positive-signal-taxonomy.md`.
+   d. If no `[positive]` entries exist since the last review: emit a single line "Positive signals: none captured since last review — consider whether wins are going unrecorded (the taxonomy was historically ~54:1 failure-biased)." Advisory only; never blocks.
 8b. **Trust calibration review (Spec 160):** Read `docs/sessions/signals.md` for trust signals (type tag `[trust]`):
    a. **Aggregate corrections by check type**: For each check type that appears in trust signals, count:
       - Total spec closures where this check type was machine-verified (estimate from CHANGELOG close count)
@@ -231,6 +302,10 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       > | **2** | 2 | `apply <N>` | Selective acceptance; apply only some adjustments | Apply a specific recommendation (type the row number) |
       > | **3** | — | `defer` | Insufficient data; revisit later | Revisit all recommendations next cycle |
       > | **4** | — | `dismiss` | Recommendations not warranted | Dismiss all — no adjustments warranted |
+   c2. **Apply-surface cool-down (Spec 500 R4)**: `apply all` / `apply <N>` writes `gate-categories.md` —
+      an applied self-modification. Before writing, pass **Step AS** (apply-surface cool-down). On
+      `GATE [evolve-apply-cool-down]: BLOCK`, record the proposed category changes in the evolve session
+      log and do NOT write `gate-categories.md`. On PASS, write and append the `outcome: applied` audit entry.
    d. If no trust signals exist or no adjustments are warranted: report "Trust calibration: no adjustments needed (N closures reviewed, 0 corrections)."
 
 8c. **CQO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
@@ -503,6 +578,29 @@ d. Update `docs/sessions/evolve-state.md`: set `last_evolve_loop_run: YYYY-MM-DD
 - If `notify_via=log-only`: append results to today's session log under `## Evolve Loop Run`. No NanoClaw message. Record `last_evolve_loop_run` in `docs/sessions/evolve-state.md`.
 - If `docs/sessions/evolve-config.yaml` is absent: treat as `notify_via=log-only`.
 <!-- /module:nanoclaw -->
+
+## [mechanical] Step Z — Heartbeat reschedule (Spec 500 — replaces the Spec 464 cool-down-delay rewake; runs at command exit)
+
+There is **no review cool-down state to write** — admission is signal-based (Step 0-cd). The single
+last-review source `docs/sessions/evolve-state.md` `last_evolve_loop_run:` is updated by the
+Automated-delivery / log-only branch above (Spec 500 R6a). `.forge/state/evolve-cool-down.json` is
+**retired** — do NOT write or read it for review admission.
+
+1. **Schedule the heartbeat** (gated): read `forge.evolve.scheduled_rewake` from `AGENTS.md` (default `true`).
+   - If `false`: schedule **nothing**. Behavior is identical to a manually-invoked `/evolve`. (Log to the
+     evolve session log that `scheduled_rewake` is `false` so the opt-out is audit-visible — CISO R2.)
+   - If `true`: invoke `ScheduleWakeup` with:
+     - `delay = forge.evolve.rewake_interval_days × 86400` (default `1` day; `ScheduleWakeup` clamps to its
+       own bounds). This is a recurring **signal-check heartbeat**, NOT a cool-down timer (Spec 500 R9).
+     - `prompt = /evolve --auto` (exactly; no extra args — CISO R1).
+
+   The heartbeat re-invokes `/evolve --auto`; the Step 0-cd **signal-admission** check (R2) decides whether
+   the review actually runs. The heartbeat MUST NOT reintroduce any day-count reject.
+
+2. **Safe fallback (Spec 500 R7)**: if `ScheduleWakeup` is unavailable in the host runtime (it degrades to
+   a `CronCreate`-backed no-op per the Spec 464 Step-0 finding), do NOT hard-block or stall — `/now`'s
+   signal-based recommendation (`now.md` Step 12) covers the surfacing. Log that the heartbeat could not be
+   scheduled, and exit cleanly.
 
 
 ## [mechanical] Tab-lane awareness directive (Spec 351)

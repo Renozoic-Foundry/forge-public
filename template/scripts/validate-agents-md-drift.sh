@@ -489,6 +489,24 @@ write_evidence_artifact() {
 # ---- main ----
 
 parse_alias_map
+
+# Spec 411: coordinated two-list bypass check. Runs BEFORE extract_block_actions /
+# validate_alias_targets / drift computation so a coordinated bypass is reported as itself — not
+# masked by the dangling-target exit-2 (an ignore_block entry can make its alias target dangling)
+# and not confused with unrelated drift against the live AGENTS.md. A coordinated bypass (an action
+# suppressed on BOTH ignore_prose and ignore_block) is a fatal alias-map integrity error, same class
+# as the empty/dangling-target rejections below: exit 2, regardless of --mode.
+BYPASS_DETECTOR="${REPO_ROOT}/.forge/lib/two-list-bypass-detect.sh"
+if [[ -f "$BYPASS_DETECTOR" ]]; then
+    if ! bypass_out="$(bash "$BYPASS_DETECTOR" --alias-map "$ALIAS_MAP" 2>&1)"; then
+        echo "$bypass_out" >&2
+        echo "ERROR: coordinated two-list bypass in $ALIAS_MAP (Spec 411) — drift detection would be silently neutralized for the listed action(s). Resolve the ignore_prose + ignore_block pair before this gate can pass." >&2
+        exit 2
+    fi
+else
+    echo "WARN: validate-agents-md-drift: two-list bypass detector not found at $BYPASS_DETECTOR — Spec 411 coordinated-bypass check skipped" >&2
+fi
+
 extract_block_actions
 validate_alias_targets   # Spec 330 AC 9b — reject dangling alias targets at parse time
 extract_prose_actions

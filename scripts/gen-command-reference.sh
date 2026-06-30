@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # gen-command-reference.sh — Generate docs/command-reference.md from command source files.
-# Reads template/.claude/commands/*.md and outputs a grouped markdown reference.
-# Spec 214.
+# Reads .forge/commands/*.md (the canonical command surface) and outputs a grouped markdown reference.
+# Spec 214; source repointed to canonical .forge/commands/ + STAGE_MAP completeness guard (Spec 510).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CMD_DIR="$REPO_ROOT/template/.claude/commands"
+CMD_DIR="$REPO_ROOT/.forge/commands"
 
 # --- Stage groupings (from docs/QUICK-REFERENCE.md) ---
 
@@ -17,7 +17,7 @@ for cmd in now session note insights tab; do
   STAGE_MAP[$cmd]="Session and orientation"
 done
 # Planning and discovery
-for cmd in explore brainstorm interview spec matrix consensus decision revise; do
+for cmd in explore brainstorm interview spec matrix consensus decision revise reconcile; do
   STAGE_MAP[$cmd]="Planning and discovery"
 done
 # Implementation
@@ -25,11 +25,11 @@ for cmd in implement close test trace parallel scheduler; do
   STAGE_MAP[$cmd]="Implementation"
 done
 # Lifecycle and maintenance
-for cmd in forge forge-init forge-stoke onboarding config-change; do
+for cmd in forge forge-init forge-stoke onboarding config-change configure; do
   STAGE_MAP[$cmd]="Lifecycle and maintenance"
 done
 # Process and review
-for cmd in evolve synthesize dependency-audit nanoclaw configure-nanoclaw; do
+for cmd in evolve synthesize dependency-audit nanoclaw configure-nanoclaw signal-to-strategy; do
   STAGE_MAP[$cmd]="Process and review"
 done
 
@@ -153,23 +153,37 @@ for filepath in "$CMD_DIR"/*.md; do
   CMD_TIER[$filename]="$(extract_model_tier "$filepath")"
   total=$((total + 1))
 done
-# Process .md.jinja files (e.g., explore.md.jinja)
-for filepath in "$CMD_DIR"/*.md.jinja; do
-  [[ -f "$filepath" ]] || continue
-  filename="$(basename "$filepath" .md.jinja)"
-  # Skip if already processed as .md
-  [[ -n "${CMD_DESC[$filename]+x}" ]] && continue
-  CMD_DESC[$filename]="$(extract_description "$filepath")"
-  CMD_TIER[$filename]="$(extract_model_tier "$filepath")"
-  total=$((total + 1))
+# Note: the canonical .forge/commands/ tree contains only *.md command files (no
+# *.md.jinja). The former .md.jinja walk was dead against this source and was retired
+# in Spec 510. explore/test live here as plain .md and are picked up by the loop above.
+
+# --- STAGE_MAP completeness guard (Spec 510) ---
+# Every canonical command counted in $total must map to a stage. A command present in
+# CMD_DESC but absent from STAGE_MAP would be silently unrendered (printed
+# "Total commands" > rendered rows). Fail loud naming the offender(s) so a newly added
+# canonical command can never again be counted-but-unrendered.
+unmapped=()
+for cmd in "${!CMD_DESC[@]}"; do
+  if [[ -z "${STAGE_MAP[$cmd]:-}" ]]; then
+    unmapped+=("$cmd")
+  fi
 done
+if [[ ${#unmapped[@]} -gt 0 ]]; then
+  mapfile -t unmapped_sorted < <(printf '%s\n' "${unmapped[@]}" | sort)
+  {
+    echo "ERROR: gen-command-reference.sh — ${#unmapped_sorted[@]} canonical command(s) have no STAGE_MAP entry:"
+    printf '  - %s\n' "${unmapped_sorted[@]}"
+    echo "Add each to a STAGE_MAP bucket (and, if a new stage, to the STAGES array) — Spec 510 drift guard."
+  } >&2
+  exit 1
+fi
 
 # --- Output ---
 
 cat <<HEADER
 # Command Reference
 
-Auto-generated reference for all FORGE slash commands, derived from source files in \`template/.claude/commands/\`.
+Auto-generated reference for all FORGE slash commands, derived from source files in \`.forge/commands/\`.
 
 **Total commands: $total**
 HEADER

@@ -1,0 +1,18 @@
+# FORGE eol policy (shipped to consumer projects via Copier).
+# Pins line endings so cross-platform checkouts stay byte-stable — in particular so a
+# SIGNED plugin payload manifest verifies identically on Windows (autocrlf=true) and Linux.
+
+# Auto-detect text files and normalize line endings.
+* text=auto
+
+# Force LF for shell + config text so Windows autocrlf doesn't introduce CRLF.
+*.sh text eol=lf
+.shellcheckrc text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+
+# Plugin payload signing (Spec 488/517): the manifest is signed over LF bytes — pin it LF on
+# every checkout; the detached minisign signature is binary (no eol conversion). Without these,
+# a Windows checkout CRLFs the manifest and the SessionStart integrity hook's minisign -V fails.
+.claude-plugin/payload-manifest.txt text eol=lf
+*.minisig binary

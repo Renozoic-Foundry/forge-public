@@ -1,0 +1,69 @@
+# Framework: FORGE
+# Loop contract — consensus-vet-pending (Spec 459)
+#
+# Reuses the Spec 458 loop-contract shape (docs/process-kit/signal-to-strategy-loop.md
+# §1 "Loop contract (one page)"). One green, artifact-producing, lifecycle-neutral
+# routine. See docs/process-kit/scheduled-routines-guide.md for the prose contract.
+#
+# GREEN ROUTINE INVARIANT (Spec 459 Constraints): artifact-producing only. This
+# routine MUST NOT advance the spec lifecycle, expand autonomy, or modify shared
+# systems. Forbidden actions are enumerated below and are grep-verifiable.
+
+name: consensus-vet-pending
+purpose: >
+  Run the /consensus role-registry vet over draft specs that are awaiting review,
+  and deposit a structured vet summary into the triage inbox for operator
+  disposition. Surfaces blind spots, role objections, and readiness so review
+  compounds without manual re-invocation.
+
+trigger: scheduled            # cadence-driven; see cadence
+cadence: weekly               # operator-tunable via forge.routines.cadence (AGENTS.md)
+class: green                  # green = artifact-producing, lifecycle-neutral
+execution_mode: on-box        # on-box (default) | remote (InfoSec-approval-gated)
+pausable: true                # operator can pause without losing state
+
+inputs:
+  read_only: true
+  scope:
+    - docs/specs/*.md           # draft specs only (Status: draft)
+    - docs/specs/README.md      # index for status lookup
+    - .claude/agents/*.md       # registry roles for the consensus vet
+  selection: "specs with 'Status: draft' and Consensus-Review not yet recorded"
+
+allowed_actions:
+  - "Read draft specs and the registry role definitions."
+  - "Run the /consensus role-registry vet (read-only analysis) over each pending draft."
+  - "Write a vet-summary entry to the triage inbox (docs/sessions/triage/)."
+  - "Recommend (not perform) a disposition: ready-for-review, needs-revision, or defer."
+
+outputs:
+  triage_inbox: docs/sessions/triage/        # consensus-vet-<YYYY-MM-DD>-spec-<NNN>.md
+  existing_artifact_destinations: []          # none — consensus vet lands only in triage
+  # NEVER writes to lifecycle-advancing states (in-progress/implemented/closed).
+
+# --- Forbidden actions (Spec 459 AC2 — grep-verifiable) ---
+# This routine MUST NOT dispatch any of the following. Each is listed explicitly
+# so the negative scope-grep (AC3) and the forbidden-actions grep (AC2) can verify.
+forbidden_actions:
+  - "/implement"                 # MUST NOT dispatch — no implementation
+  - "/close"                     # MUST NOT dispatch — no lifecycle close
+  - "git commit"                 # MUST NOT commit
+  - "git push"                   # MUST NOT push
+  - "autonomy config write"      # MUST NOT write autonomy level / auto_progression
+  - "budget config write"        # MUST NOT write budget ceilings / swarm budget
+  - "spec lifecycle advance"     # MUST NOT change a spec's Status field
+
+stop_conditions:
+  - "All pending draft specs have a triage vet-summary entry."
+  - "No draft specs are pending review."
+  - "Operator pauses the routine (pausable: true)."
+  - "Routine has produced its per-run artifact set (one entry per pending draft)."
+
+escalation_boundary: >
+  If a draft spec appears to require lifecycle advancement, the routine STOPS at a
+  triage recommendation. Advancing the spec (/implement, /close) is the operator's
+  explicit current-turn decision and is never performed by this routine.
+
+verification:
+  - "grep the forbidden_actions block lists /implement, /close, git commit, autonomy/budget writes."
+  - "Confirm outputs land only under docs/sessions/triage/ (no lifecycle-state writes)."

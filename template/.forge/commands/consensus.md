@@ -93,6 +93,12 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 
 5. If a sub-agent fails or produces invalid output, record an explicit dispatch-failure entry: `{ "role": "<name>", "status": "dispatch-failed", "vote": "error", "rationale": "Role assessment failed — <reason>", "key_risk": "unknown" }`. Reconciliation (Step 3b) treats this as accounted-for; failures surface to the operator, no auto-retry.
 
+6. **Role-value instrumentation (Spec 305)** — after parsing each role's response, append one `role-dispatch` record per assessed role to the shared score-audit sink:
+   ```bash
+   bash .forge/lib/score-audit.sh record-dispatch <NNN-or-topic-slug> consensus <role> <vote> "" "<key_risk>"
+   ```
+   Map `vote` → recommendation verbatim (`approve|concern|reject`). For a freeform-topic consensus (no spec id) pass the topic slug as the first arg. Skip dispatch-failed entries (no vote). Best-effort: the helper exits 0 even if the sink is unwritable — never block consensus. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
+
 Run all role assessments in **parallel** where possible (single response block, multiple Task calls).
 
 ## [mechanical] Step 3b — Pre-aggregation reconciliation gate (Spec 423)
@@ -192,6 +198,75 @@ When the consensus topic is a spec AND the current round converges (round ≤ 2 
 7. **Report**: emit `Consensus-Close-SHA recorded: <8-char-prefix> (round N, aligned-approve M/M). /implement Step 2b can now verify DA-Encoded-Via: consensus-round-N for this spec.`
 
 This step is purely additive — specs without `Consensus-Close-SHA` (legacy + non-convergent + opt-out) continue to use fresh DA at `/implement` Step 2b. **/implement MUST NOT write `Consensus-Close-SHA`**; the SHA is exclusively written here at convergent close. See `docs/process-kit/devils-advocate-checklist.md` § DA-Encoded-Via convention for the end-to-end picture.
+
+## [reference] Autonomous consensus batches and the HUMAN-JUDGMENT taxonomy (Spec 468)
+
+> **Provisional — observed once (n=1), revisit at n≥3.** The patterns below were
+> validated across a single autonomous consensus batch (2026-06-11; CI-372/373/375).
+> They are codified here so the next operator/agent finds them at decision time, NOT
+> as settled doctrine. Treat the terminal-state classifier, Path C, and the cap value
+> as working defaults to be re-evaluated once two more autonomous batches accumulate.
+
+### Autonomous-batch worked example (`/loop` dynamic mode as a consensus driver)
+
+`/loop` dynamic mode (a Claude Code harness skill — there is no FORGE `/loop` command)
+can drive `/consensus` rounds autonomously. When it does, classify each topic's outcome
+with this **4-state terminal classifier**:
+
+- **APPROVED** — convergent aligned-approve. **Minimum 2 rounds before APPROVED** is
+  permitted (a single-round approve does not terminate the batch — round 1 surfaces the
+  architectural reframe, round 2 confirms it held).
+- **REVISE-AUTO** — divergence the loop can resolve by applying reviewer concerns as a
+  scoped auto-revision, then re-running. Bounded by the auto-revision cap (below).
+- **STALEMATE** — rounds exhausted (round-3 cap, Step 4b) with divergence that is
+  implementation-notes, not spec changes. Hand to the operator with the Step 4b options.
+- **HUMAN-JUDGMENT** — divergence requiring operator judgment a loop must not auto-resolve
+  (see taxonomy below). The loop STOPS and escalates rather than auto-revising.
+
+**Auto-revision cap**: an autonomous batch applies at most **8** auto-revisions across its
+topics before halting for operator review (CI-375 observed 7 used cleanly, holding under
+the cap). Provisional: raise to 10 if batches consistently hit 7–8; lower to 6 if
+consistently under 4.
+
+### HUMAN-JUDGMENT trigger taxonomy (5 examples)
+
+A batch classifies a topic HUMAN-JUDGMENT — escalate, do not auto-revise — when any of:
+
+1. **MT structural reframe + mechanical hardenings** — a Maverick-Thinker reframe changes
+   the *mechanism* (not just parameters) AND reviewers add mechanical hardenings on top.
+   The reframe is a design choice only the operator should ratify. *(This is the canonical
+   Path C trigger — see below.)*
+2. **Genuine security finding traded against scope** — a CISO/DA critical that can only be
+   closed by reducing operator-visible value (BV) or dropping a feature. The value/safety
+   tradeoff is an operator call.
+3. **Aligned-concern with divergent root causes** — every role votes `concern` (no approve,
+   no reject) but each names a *different* systemic issue. No single auto-revision resolves
+   all lenses; the operator decides what to cut.
+4. **Doctrinal / architectural-principle tension** — a finding conflicts with a stated
+   Architectural Principle (e.g., AP4 "Template is the product"). Re-interpreting doctrine
+   is operator authority, not a loop's.
+5. **Cross-spec scope collision** — the reframe would move scope into (or out of) a sibling
+   spec. Re-drawing spec boundaries needs operator sign-off.
+
+### Path C (the provisionally recommended-first resolution)
+
+When a HUMAN-JUDGMENT topic matches trigger #1 (MT structural reframe paired with mechanical
+hardenings), **Path C is the operator-preferred resolution observed on 2026-06-11**:
+
+> **Path C** — *one slice: adopt the MT mechanism-level reframe(s), then apply the mechanical
+> hardenings on top of the reframed design — in a single revision, not two.*
+
+Path C beat the alternatives observed that session (Path A: ship original + defer reframe;
+Path B: split reframe into its own spec) because it captured the better mechanism without a
+round-trip. Provisional (n=1): present Path C first when trigger #1 fires, but the operator
+chooses.
+
+### `/now` auto-rev surface — descoped (Spec 468)
+
+A live `/now` "auto-rev N/8 used" counter was scoped OUT of this slice: `/loop` persists no
+machine-readable batch state for `/now` to read, and this slice adds no new state file.
+**Follow-up trigger**: if/when an autonomous-batch driver persists machine-readable batch
+state (e.g. an auto-rev counter file), add the `auto-rev N/8` line to `/now`.
 
 ## [mechanical] Step 5 — Present consensus summary
 

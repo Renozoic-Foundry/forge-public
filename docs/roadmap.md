@@ -8,11 +8,11 @@ Each phase builds on the previous. No phase can be skipped — the evidence gate
 
 ## Current State
 
-**All four autonomy phases are delivered as template infrastructure.** FORGE operates at **L2 autonomy** in daily use (supervised, command chaining) with all infrastructure for L3–L4 in place. 264 specs across 59 sessions (2026-03-13 through 2026-04-15). Over 250 specs closed, 13 draft, 11 deprecated.
+**All four autonomy phases are delivered as template infrastructure.** FORGE operates at **L3 autonomy** in daily use (trusted autonomy with async close review) with infrastructure for L4 in place. 507 specs across 136 sessions (2026-03-13 through 2026-06-29); 442 closed.
 
 **What works today:**
-- Spec-driven development with evidence gates (29 active slash commands)
-- Agent role separation with context-scoped isolation (Spec 099) — DA and validator as isolated subagents
+- Spec-driven development with evidence gates (32 active slash commands)
+- Agent role separation (Spec 099) — configurable `none` (default) / `context-scoped` / `full`; DA and validator can run as isolated subagents
 - OCI container isolation for permission enforcement
 - Budget tracking (time-based) with dynamic model routing (Spec 085)
 - Kill switch procedure with YubiKey hardware authentication
@@ -70,20 +70,7 @@ Each phase builds on the previous. No phase can be skipped — the evidence gate
 - **Session identity and spec owner resolution** (Spec 133)
 - **Digest ingestion pipeline** for research integration (Spec 136)
 
-**What's next (13 draft specs):**
-- Spec 222 — Agent Integration Protocol (score 30, blocked by 122 revision)
-- Spec 090 — Shared Team Baselines (score 28)
-- Spec 225 — Output Verbosity Setting (score 27)
-- Spec 231 — /onboarding Rename Evaluation (score 27)
-- Spec 177 — FORGE as Claude Code Plugin Evaluation (score 27)
-- Spec 247 — Operator Effort Attribution (score 26)
-- Spec 109 — Cross-Project Knowledge Bridge (score 26)
-- Spec 120 — DX Metrics Dashboard (score 25)
-- Spec 122 — Multi-Vendor Model Strategy (score 23)
-- Spec 230 — FORGE Activity Visualization (score 22)
-- Spec 254 — Tracking File Conflict Elimination (score 21)
-- Spec 135 — Review Engagement Canary (score 30, deprioritized)
-- Spec 233 — Move FORGE Files Under .forge/ (score 17)
+**What's next:** This roadmap captures the autonomy-escalation phases (all delivered). Day-to-day prioritization of upcoming work lives in the project backlog and is surfaced by `/now` and `/matrix`. The draft list that previously sat here has since resolved — those items were closed, deprecated, or deferred — and has been removed so completed or dropped work is not presented as upcoming.
 
 ---
 

@@ -1,0 +1,45 @@
+# Framework: FORGE
+# .forge/config/authority.yaml — Authority Constitution enforcement-ceiling config (Spec 469, NC-2 slice 2)
+#
+# WHAT THIS IS: the machine-read *enforcement ceiling* for the ADR-046 no-self-escalation
+# invariant. It carries the MAXIMUM permitted autonomy level and budget — the envelope that
+# the declarative AGENTS.md values are validated against (ADR-453 boundary).
+#
+# WHAT THIS IS NOT: the declarative/operating config. The *currently declared* operating
+# autonomy level, the per-lane budget tables, auto_progression chains, and the autonomy-level
+# matrix all stay in AGENTS.md (Spec 453 primary source — UNCHANGED by Spec 469).
+#
+# TRUST BOUNDARY (load-bearing — read the honesty note):
+#   This file is repo-tracked and therefore AGENT-EDITABLE on a machine where the operator has
+#   NOT installed the OS-level managed-settings trust root. The values below are the *declared*
+#   ceiling. They become AGENT-IMMUTABLE only when an admin installs
+#   docs/process-kit/managed-settings-template.json at the OS managed-settings path, which adds a
+#   deny rule for this exact file (see docs/process-kit/authority-constitution-guide.md).
+#
+#   Enforcement tiers (surfaced by /now as `Authority: <tier>`):
+#     - managed-settings : OS managed-settings installed → this ceiling is the immutable trust root.
+#     - hooks-only       : PreToolUse guard (check-authority-guard.sh) denies agent edits to this
+#                          file at L0–L2, but is BYPASSABLE AT L3 (bypassPermissions can edit
+#                          .claude/settings.json to remove the hook). Defense-in-depth, not a root.
+#     - prose-only       : neither installed → AGENTS.md prose only; no mechanical enforcement.
+#
+#   Until the operator installs managed settings, this repo is at the `hooks-only` tier and the
+#   ADR-046 invariant is hooks-only enforced (bypassable at L3). No artifact claims otherwise.
+
+schema_version: 1
+
+# Maximum autonomy level the agent may operate at WITHOUT a human-mediated managed-settings
+# change. The declared operating level in AGENTS.md ("Current autonomy level") must be <= this.
+# Editing AGENTS.md to declare a level ABOVE this ceiling is self-escalation (ADR-046 violation).
+max_autonomy_level: L3        # L0 | L1 | L2 | L3 | L4
+
+# Maximum permitted budget ceiling (the envelope). The per-lane budget tables in AGENTS.md
+# declare budgets WITHIN this envelope; they may not exceed it without a managed-settings change.
+budget_ceiling:
+  tokens: 500000              # hard cap across any single lane/swarm run
+  cost_usd: 15.00            # hard cap in USD
+
+# disableBypassPermissionsMode consistency flag (advisory mirror of the managed-settings control).
+# The authoritative control lives in managed-settings.json; this is the declared intent the guide
+# instructs the operator to keep consistent.
+bypass_permissions_permitted: false

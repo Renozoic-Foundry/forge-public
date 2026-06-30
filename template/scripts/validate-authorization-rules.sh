@@ -21,6 +21,16 @@ SCAN_ROOTS=(
 )
 MIN_ACTIONS=(git_push git_push_force git_reset_hard git_checkout_dashes gh_pr_create gh_pr_merge rm_rf)
 
+# Spec 504: deterministic work-unit cap (a backstop, NOT the perf fix). One work unit is
+# counted per (file × action × matching-line) processed in the scan body. If the running
+# total exceeds this limit the gate trips FAIL-LOUD (WARN in advisory, FAIL + non-zero in
+# strict) and NEVER exits 0 / emits PASS. This is a deterministic iteration count, NOT a
+# wall-clock timeout, so the AC-3 fail-loud test is reproducible / non-flaky. The value is a
+# named constant declared IDENTICALLY in the .ps1 variant (AC-5 cap-semantics equivalence) —
+# do not change one without the other (the test asserts threshold equality across variants).
+# FORGE_AUTH_LINT_WORK_CAP is a test-only override that lets AC-3 drive the cap deterministically.
+SCAN_WORK_UNIT_CAP="${FORGE_AUTH_LINT_WORK_CAP:-1000000}"
+
 MODE_OVERRIDE=""
 JSON_OUTPUT=""
 SCAN_PATHS_OVERRIDE=""
@@ -106,8 +116,36 @@ extract_block() {
     '
 }
 
-# Trim surrounding single quotes from a YAML value
-unquote() { sed -e "s/^[[:space:]]*'//" -e "s/'[[:space:]]*\$//"; }
+# Spec 504 perf fix: pure-bash equivalents of the per-line `printf '%s' "$x" | sed`
+# subshells that parse_block/parse_whitelist used for single-quote trimming and inline-comment
+# stripping. On fork-expensive runtimes (Windows/Git-Bash) that subshell-per-field form spawned
+# hundreds of processes during startup and was the dominant cost of the >90s hang (the scan body
+# subprocess fan-out was only part of it). Behavior is preserved: same leading-space + single-quote
+# trimming, same "  #..." inline-comment strip on the FIRST double-space-hash occurrence.
+
+# Strip a leading single quote (with optional leading spaces) and a trailing single quote
+# (with optional trailing spaces) — pure-bash, no subprocess. Result is returned via the global
+# RET (NOT printed + captured via $(...), which would re-introduce a subshell fork per call).
+RET=""
+unquote_str() {
+    local v="$1"
+    v="${v#"${v%%[![:space:]]*}"}"   # left-trim whitespace
+    v="${v#\'}"                        # drop one leading single quote
+    v="${v%"${v##*[![:space:]]}"}"   # right-trim trailing whitespace
+    v="${v%\'}"                        # drop one trailing single quote
+    RET="$v"
+}
+
+# Strip an inline YAML comment beginning at the first "  #" (two spaces + hash) — pure-bash.
+# Equivalent to sed -E "s/  #.*$//" for our line shape. Keeps #'s inside quoted values intact
+# because those are not preceded by a double-space in this corpus. Result returned via RET.
+strip_inline_comment_str() {
+    local s="$1"
+    if [[ "$s" == *"  #"* ]]; then
+        s="${s%%  #*}"
+    fi
+    RET="$s"
+}
 
 # Parse the structured block into shell-readable arrays:
 #   MODE_DEFAULT, WINDOW_DEFAULT, GATING_DEFAULT (top-level scalars)
@@ -132,14 +170,15 @@ parse_block() {
 
         # Strip inline YAML comments (but keep #'s inside single-quoted values intact)
         # We avoid parsing complex YAML; simple split on " #" works for our shape.
+        # Spec 504: pure-bash (RET) — no `printf | sed` subshell per line.
         local stripped
-        stripped="$(printf '%s' "$line" | sed -E "s/  #.*$//")"
+        strip_inline_comment_str "$line"; stripped="$RET"
 
         # Top-level keys (no leading spaces) — match either "key: value" or bare "key:"
         if [[ "${stripped:0:1}" != " " ]] && [[ "$stripped" =~ ^([a-z_]+):([[:space:]]+(.*))?$ ]]; then
             key="${BASH_REMATCH[1]}"
             value="${BASH_REMATCH[3]:-}"
-            value="$(printf '%s' "$value" | unquote)"
+            unquote_str "$value"; value="$RET"
             case "$key" in
                 mode)                     MODE_DEFAULT="$value"; in_actions=0 ;;
                 proximity_window_default) WINDOW_DEFAULT="$value"; in_actions=0 ;;
@@ -155,7 +194,7 @@ parse_block() {
             # New action entry: "  - name: foo"
             if [[ "$stripped" =~ ^[[:space:]]+-[[:space:]]+name:[[:space:]]+(.*)$ ]]; then
                 idx=$((idx + 1))
-                ACTION_NAMES[idx]="$(printf '%s' "${BASH_REMATCH[1]}" | unquote)"
+                unquote_str "${BASH_REMATCH[1]}"; ACTION_NAMES[idx]="$RET"
                 ACTION_PATTERNS[idx]=""
                 ACTION_GATING[idx]=""
                 ACTION_WINDOWS[idx]=""
@@ -164,7 +203,7 @@ parse_block() {
             # Action field: "    pattern: 'foo'"
             if [[ "$stripped" =~ ^[[:space:]]+([a-z_]+):[[:space:]]+(.*)$ ]] && [[ "$idx" -ge 0 ]]; then
                 key="${BASH_REMATCH[1]}"
-                value="$(printf '%s' "${BASH_REMATCH[2]}" | unquote)"
+                unquote_str "${BASH_REMATCH[2]}"; value="$RET"
                 case "$key" in
                     pattern)          ACTION_PATTERNS[idx]="$value" ;;
                     gating_token)     ACTION_GATING[idx]="$value" ;;
@@ -194,7 +233,7 @@ parse_whitelist() {
         [[ -z "${line// }" ]] && continue
         [[ "${line#"${line%%[![:space:]]*}"}" == \#* ]] && continue
         local stripped
-        stripped="$(printf '%s' "$line" | sed -E "s/  #.*$//")"
+        strip_inline_comment_str "$line"; stripped="$RET"
 
         # New entry: "- file: foo.md"
         if [[ "$stripped" =~ ^-[[:space:]]+file:[[:space:]]+(.*)$ ]]; then
@@ -207,7 +246,7 @@ parse_whitelist() {
             fi
             idx=$((idx + 1))
             last_entry_start=$linenum
-            WL_FILES[idx]="$(printf '%s' "${BASH_REMATCH[1]}" | unquote)"
+            unquote_str "${BASH_REMATCH[1]}"; WL_FILES[idx]="$RET"
             WL_ACTIONS[idx]=""
             WL_REASONS[idx]=""
             # Reject wildcard file patterns (Spec 327 R4: no wildcards)
@@ -219,7 +258,7 @@ parse_whitelist() {
         # Subsequent fields: "  action: ..." or "  reason: ..." or alternate "- file:" already matched above
         if [[ "$stripped" =~ ^[[:space:]]+([a-z_]+):[[:space:]]+(.*)$ ]] && [[ "$idx" -ge 0 ]]; then
             key="${BASH_REMATCH[1]}"
-            value="$(printf '%s' "${BASH_REMATCH[2]}" | unquote)"
+            unquote_str "${BASH_REMATCH[2]}"; value="$RET"
             case "$key" in
                 action) WL_ACTIONS[idx]="$value" ;;
                 reason) WL_REASONS[idx]="$value" ;;
@@ -236,26 +275,40 @@ parse_whitelist() {
     fi
 }
 
-# Check if (file, action) is in the whitelist
+# Check if (file, action) is in the whitelist.
+# Spec 504 perf fix: returns the reason via the global WL_REASON_OUT (set before return)
+# rather than printf-to-stdout-captured-via-$(...). The old command-substitution form
+# spawned a subshell on EVERY match, which dominated runtime on fork-expensive runtimes.
+WL_REASON_OUT=""
 is_whitelisted() {
     local file_rel="$1" action_name="$2"
     local i
+    WL_REASON_OUT=""
     for i in "${!WL_FILES[@]}"; do
         if [[ "${WL_FILES[i]}" == "$file_rel" && "${WL_ACTIONS[i]}" == "$action_name" ]]; then
-            printf '%s' "${WL_REASONS[i]}"
+            WL_REASON_OUT="${WL_REASONS[i]}"
             return 0
         fi
     done
     return 1
 }
 
-# Check whether a gating token appears within `window` lines BEFORE `match_line` in `file`.
+# Check whether a gating token appears within `window` lines BEFORE `match_line`.
+# Spec 504 perf fix: operates IN-MEMORY on the global FILE_LINES array (0-indexed, already
+# CR-stripped, populated once per file by the scan loop) instead of spawning `sed | grep`
+# per match. FILE_LINES[k] holds source line k+1. Scans lines [start, match_line] inclusive.
+# Returns 0 (gated) on the first line that matches gating_re, 1 (not gated) otherwise.
 has_gating_token_before() {
-    local file="$1" match_line="$2" window="$3" gating_re="$4"
+    local match_line="$1" window="$2" gating_re="$3"
     local start=$(( match_line - window ))
     [[ $start -lt 1 ]] && start=1
-    # Read lines [start, match_line] (inclusive); look for gating token
-    sed -n "${start},${match_line}p" "$file" | strip_cr | grep -E "$gating_re" >/dev/null 2>&1
+    local k
+    for (( k = start; k <= match_line; k++ )); do
+        if [[ "${FILE_LINES[$((k-1))]:-}" =~ $gating_re ]]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 # Spec 333: Write a JSON audit artifact when --evidence-dir is set.
@@ -381,6 +434,39 @@ VIOLATION_WHITELIST=()
 SCANNED_FILES=0
 START_TIME=$(date +%s)
 
+# Spec 504: deterministic work-unit counter + fail-loud cap state. WORK_UNITS increments once
+# per (file × action × matching-line) processed; if it exceeds SCAN_WORK_UNIT_CAP the scan stops
+# and CAP_TRIPPED is set so the output section emits a non-clean verdict (never PASS/exit-0).
+WORK_UNITS=0
+CAP_TRIPPED=0
+# FILE_LINES is the per-file in-memory line buffer (CR-stripped), read ONCE per file. The scan
+# matches and looks back for gating tokens against this array instead of re-spawning grep/sed.
+FILE_LINES=()
+
+# Spec 504 perf fix: cheap per-line literal pre-filter. The expensive part of an in-process scan
+# is running every action's dynamic ERE against every one of ~37k corpus lines (≈260k regex
+# compiles). But ~99% of lines contain none of the action keywords, so we first test a fast
+# literal substring (`[[ == *tok* ]]`, no regex compile) and only fall through to the full
+# per-action regex when a candidate token is present. PREFILTER_TOKENS is derived from the
+# parsed action patterns (the leading literal word of each, e.g. git / gh / rm) so it stays
+# correct if the AGENTS.md action set changes — no hardcoded keyword list. This is purely a
+# skip-fast optimization; it never suppresses a real match (any line a pattern matches must
+# contain that pattern's leading literal token).
+PREFILTER_TOKENS=()
+for i in "${!ACTION_PATTERNS[@]}"; do
+    _pat="${ACTION_PATTERNS[i]}"
+    [[ -z "$_pat" ]] && continue
+    # Leading literal token = pattern up to the first space or ERE metacharacter.
+    _tok="${_pat%%[ ([{\\^\$.*+?|]*}"
+    [[ -z "$_tok" ]] && continue
+    # De-dup
+    _seen=0
+    for _t in "${PREFILTER_TOKENS[@]:-}"; do
+        [[ "$_t" == "$_tok" ]] && { _seen=1; break; }
+    done
+    [[ $_seen -eq 0 ]] && PREFILTER_TOKENS+=("$_tok")
+done
+
 # If --scan-paths was given, replace the default roots
 if [[ -n "$SCAN_PATHS_OVERRIDE" ]]; then
     IFS=',' read -ra OVERRIDE_LIST <<< "$SCAN_PATHS_OVERRIDE"
@@ -395,32 +481,61 @@ if [[ -n "$SCAN_PATHS_OVERRIDE" ]]; then
 fi
 
 for root in "${SCAN_ROOTS[@]}"; do
+    [[ $CAP_TRIPPED -eq 1 ]] && break
     [[ -d "$root" ]] || continue
     while IFS= read -r -d '' file; do
+        [[ $CAP_TRIPPED -eq 1 ]] && break
         SCANNED_FILES=$((SCANNED_FILES + 1))
         rel="${file#"$REPO_ROOT/"}"
-        for i in "${!ACTION_NAMES[@]}"; do
-            action_name="${ACTION_NAMES[i]}"
-            pattern="${ACTION_PATTERNS[i]}"
-            gating_re="${ACTION_GATING[i]:-$GATING_DEFAULT}"
-            window="${ACTION_WINDOWS[i]:-$WINDOW_DEFAULT}"
-            [[ -z "$pattern" ]] && continue
 
-            # Find all matching line numbers
-            while IFS=: read -r linenum _; do
-                [[ -z "$linenum" ]] && continue
-                if has_gating_token_before "$file" "$linenum" "$window" "$gating_re"; then
+        # Spec 504 perf fix: read the whole file ONCE into FILE_LINES (CR-stripped), then match
+        # every line in-process. This eliminates the per-file `grep -nE` and per-match `sed | grep`
+        # subprocess fan-out that dominated runtime on fork-expensive (Windows/Git-Bash) runtimes.
+        FILE_LINES=()
+        while IFS= read -r _ln || [[ -n "$_ln" ]]; do
+            FILE_LINES+=("${_ln%$'\r'}")
+        done < "$file"
+
+        line_count=${#FILE_LINES[@]}
+        for (( li = 0; li < line_count; li++ )); do
+            line_text="${FILE_LINES[li]}"
+            linenum=$((li + 1))
+
+            # Spec 504 perf fix: cheap literal pre-filter — skip the per-action regex loop
+            # entirely unless the line contains at least one action-keyword token.
+            _candidate=0
+            for _tok in "${PREFILTER_TOKENS[@]:-}"; do
+                [[ -n "$_tok" && "$line_text" == *"$_tok"* ]] && { _candidate=1; break; }
+            done
+            [[ $_candidate -eq 0 ]] && continue
+
+            for i in "${!ACTION_NAMES[@]}"; do
+                action_name="${ACTION_NAMES[i]}"
+                pattern="${ACTION_PATTERNS[i]}"
+                [[ -z "$pattern" ]] && continue
+                # In-process ERE match (same semantics as the prior grep -nE "$pattern").
+                [[ "$line_text" =~ $pattern ]] || continue
+
+                # Work-unit accounting + deterministic fail-loud cap (Spec 504 R2/R3).
+                WORK_UNITS=$((WORK_UNITS + 1))
+                if [[ $WORK_UNITS -gt $SCAN_WORK_UNIT_CAP ]]; then
+                    CAP_TRIPPED=1
+                    break 3
+                fi
+
+                gating_re="${ACTION_GATING[i]:-$GATING_DEFAULT}"
+                window="${ACTION_WINDOWS[i]:-$WINDOW_DEFAULT}"
+                if has_gating_token_before "$linenum" "$window" "$gating_re"; then
                     continue  # gated → not a violation
                 fi
-                # Whitelist check
-                wl_reason=""
-                if wl_reason="$(is_whitelisted "$rel" "$action_name")"; then
+                # Whitelist check (Spec 504: in-process — no $(...) subshell per match).
+                if is_whitelisted "$rel" "$action_name"; then
                     # Whitelisted — record but mark
                     VIOLATION_FILES+=("$rel")
                     VIOLATION_LINES+=("$linenum")
                     VIOLATION_ACTIONS+=("$action_name")
                     VIOLATION_GATING_FOUND+=("false")
-                    VIOLATION_WHITELIST+=("$wl_reason")
+                    VIOLATION_WHITELIST+=("$WL_REASON_OUT")
                     continue
                 fi
                 VIOLATION_FILES+=("$rel")
@@ -428,7 +543,7 @@ for root in "${SCAN_ROOTS[@]}"; do
                 VIOLATION_ACTIONS+=("$action_name")
                 VIOLATION_GATING_FOUND+=("false")
                 VIOLATION_WHITELIST+=("")
-            done < <(grep -nE "$pattern" "$file" 2>/dev/null || true)
+            done
         done
     done < <(find "$root" -type f \( -name "*.md" -o -name "*.jinja" \) -print0)
 done
@@ -446,6 +561,24 @@ done
 # Spec 333: capture GATE output into a buffer so the artifact writer can record it.
 GATE_BUF=""
 RESULT_LABEL=""
+
+# Spec 504 R2/R3: deterministic work-unit cap tripped → FAIL-LOUD. Emit a non-clean verdict
+# (WARN in advisory, FAIL + non-zero in strict). NEVER PASS / exit 0. This short-circuits the
+# normal PASS/WARN/FAIL block below so a cap-trip can never be reported as a clean scan.
+if [[ $CAP_TRIPPED -eq 1 ]]; then
+    if [[ "$EFFECTIVE_MODE" == "strict" ]]; then
+        RESULT_LABEL="FAIL"
+    else
+        RESULT_LABEL="WARN"
+    fi
+    GATE_BUF="GATE [authorization-rule-lint]: $RESULT_LABEL - scan bound exceeded after $WORK_UNITS work units (cap=$SCAN_WORK_UNIT_CAP) over $SCANNED_FILES file(s) (mode=$EFFECTIVE_MODE). Scan halted before completing — verdict is NOT clean. Investigate a malformed/adversarial command body or raise FORGE_AUTH_LINT_WORK_CAP if the corpus legitimately grew."
+    echo "$GATE_BUF" >&2
+    EXIT_CODE_FINAL=0
+    [[ "$EFFECTIVE_MODE" == "strict" ]] && EXIT_CODE_FINAL=1
+    SUMMARY_JSON_AUTH="{\"actionable\":0,\"scanned_files\":${SCANNED_FILES},\"action_count\":${#ACTION_NAMES[@]},\"violations_total\":${#VIOLATION_FILES[@]},\"elapsed_seconds\":${ELAPSED},\"cap_tripped\":true,\"work_units\":${WORK_UNITS},\"work_unit_cap\":${SCAN_WORK_UNIT_CAP}}"
+    write_evidence_artifact "validate-authorization-rules" "$AGENTS_MD" "$EFFECTIVE_MODE" "$RESULT_LABEL" "$EXIT_CODE_FINAL" "$GATE_BUF" "$SUMMARY_JSON_AUTH"
+    exit $EXIT_CODE_FINAL
+fi
 
 if [[ -n "$JSON_OUTPUT" ]]; then
     JSON_BUF=$(
@@ -500,7 +633,8 @@ if [[ $ACTIONABLE -ne 0 && "$EFFECTIVE_MODE" == "strict" ]]; then
 fi
 
 # Spec 333: write evidence artifact (skipped silently if EVIDENCE_DIR is empty).
-SUMMARY_JSON_AUTH="{\"actionable\":${ACTIONABLE},\"scanned_files\":${SCANNED_FILES},\"action_count\":${#ACTION_NAMES[@]},\"violations_total\":${#VIOLATION_FILES[@]},\"elapsed_seconds\":${ELAPSED}}"
+# Spec 504: cap_tripped:false on the normal path — a completed scan, by construction.
+SUMMARY_JSON_AUTH="{\"actionable\":${ACTIONABLE},\"scanned_files\":${SCANNED_FILES},\"action_count\":${#ACTION_NAMES[@]},\"violations_total\":${#VIOLATION_FILES[@]},\"elapsed_seconds\":${ELAPSED},\"cap_tripped\":false,\"work_units\":${WORK_UNITS},\"work_unit_cap\":${SCAN_WORK_UNIT_CAP}}"
 write_evidence_artifact "validate-authorization-rules" "$AGENTS_MD" "$EFFECTIVE_MODE" "$RESULT_LABEL" "$EXIT_CODE_FINAL" "$GATE_BUF" "$SUMMARY_JSON_AUTH"
 
 exit $EXIT_CODE_FINAL

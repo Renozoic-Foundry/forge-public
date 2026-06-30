@@ -12,6 +12,8 @@ framework:
   # conflict resolution (Step L2b) rather than being silently overwritten.
   paths:
     - ".forge/"
+    - ".claude-plugin/"  # Spec 463 — plugin packaging slice 1 (manifest + SessionStart hook); FORGE-owned, overwrite on upgrade
+    - ".claude/skills/"  # Spec 461 — skills migration (3 auto-invocable + 7 dual-surface + 3 explicit-only-forever); FORGE-owned, overwrite on upgrade
     - ".claude/commands/approve.md"
     - ".claude/commands/bootstrap.md"
     - ".claude/commands/brainstorm.md"
@@ -57,15 +59,22 @@ framework:
     - "docs/process-kit/signal-quality-guide.md"  # Spec 267 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "docs/process-kit/onboarding-recovery.md"  # Spec 315 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "docs/process-kit/advisory-to-strict-flip-plan.md"  # Spec 332 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/parallelism-guide.md"  # Spec 475 — batch-lane contract section; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "docs/process-kit/consensus-protocol.md"  # Spec 395 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "docs/process-kit/final-draft-consensus-guide.md"  # Spec 395 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "docs/process-kit/lane-b-audit-conventions.md"  # Spec 395 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/signal-to-strategy-loop.md"  # Spec 458 — new file; Signal-to-Strategy Loop contract; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/scheduled-routines-guide.md"  # Spec 459 — new file; scheduled strategy-only (green) routines + loop contracts; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
+    - "docs/process-kit/command-to-skill-migration.md"  # Spec 461 — new file; command-to-skill migration runbook; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "docs/publications/"
     - "docs/compliance/"
     - ".devcontainer/"
     - ".claude/settings.json.template"
     - "docker-compose.nanoclaw.yml"
     - "docs/decisions/ADR-028-spec-status-source-of-truth.md"
+    - "scripts/verify-cross-tool-import.sh"  # Spec 453 — FORGE-shipped cross-tool @AGENTS.md import verifier
+    - "scripts/verify-cross-tool-import.ps1"  # Spec 453 — PS parity (overrides *.ps1 project-default below)
+    - "docs/process-kit/agents-md-primary-source-guide.md"  # Spec 453 — new file; covered by docs/process-kit/ wildcard above, listed explicitly for traceability
     - "scripts/validate-authorization-rules.sh"  # Spec 327 — FORGE-shipped framework linter
     - "scripts/validate-authorization-rules.ps1"  # Spec 327 — PS parity (overrides *.ps1 project-default below)
     - "scripts/auth-rules-whitelist.yaml"  # Spec 327 — operator-curated; framework-shipped stub
@@ -78,6 +87,8 @@ framework:
     - "scripts/safety-backfill-audit.sh"  # Spec 387 — Component C one-time audit (FORGE-shipped)
     - "scripts/safety-backfill-audit.ps1"  # Spec 387 — PS parity (overrides *.ps1 project-default below)
     - "scripts/migrate-to-derived-view.py"  # Spec 254 — Approach D one-shot migration; FORGE-shipped
+    - "scripts/migrate-spec-452-backfill-orphaned-signals.py"  # Spec 452 — EA/CI propagation engine + one-shot backfill; FORGE-shipped
+    - ".forge/lib/two-list-bypass-detect.ps1"  # Spec 411 — PS parity for the coordinated two-list bypass detector (overrides *.ps1 project-default below; .sh sibling covered by the .forge/ wildcard above)
 
 project:
   description: "Project-owned files — never touch during upgrade"

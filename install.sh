@@ -761,6 +761,66 @@ if [ -n "$INIT_PATH" ]; then
     init_project "$INIT_PATH" "$REPO_URL"
 fi
 
+# Step 9b: minisign for plugin signature verification (Spec 488)
+install_minisign() {
+    step "Installing minisign (plugin signature verification — Spec 488)..."
+    if command -v minisign >/dev/null 2>&1; then
+        printf "  ${GREEN}minisign already present.${NC}\n"
+    else
+        case "$PLATFORM" in
+            macos)        command -v brew >/dev/null 2>&1 && brew install minisign || warn "Install minisign: brew install minisign" ;;
+            linux)
+                case "$DISTRO" in
+                    debian)  sudo apt-get install -y minisign || warn "apt: minisign unavailable — see https://jedisct1.github.io/minisign/" ;;
+                    fedora)  sudo dnf install -y minisign || warn "dnf: minisign unavailable" ;;
+                    arch)    sudo pacman -S --noconfirm minisign || warn "pacman: minisign unavailable" ;;
+                    alpine)  sudo apk add minisign || warn "apk: minisign unavailable" ;;
+                    *)       warn "Install minisign manually: https://jedisct1.github.io/minisign/" ;;
+                esac ;;
+            windows-bash)
+                if command -v scoop >/dev/null 2>&1; then scoop install minisign
+                elif command -v winget >/dev/null 2>&1; then winget install jedisct1.Minisign -e --accept-source-agreements --accept-package-agreements
+                else warn "Install minisign: scoop install minisign (or winget install jedisct1.Minisign)"; fi ;;
+            *) warn "Install minisign manually: https://jedisct1.github.io/minisign/" ;;
+        esac
+    fi
+    # R9 hard-enforce: the integrity hook verifies (installed mode) only if minisign is present;
+    # absent, the hook DEGRADES (not bricks) — surface that clearly.
+    if command -v minisign >/dev/null 2>&1; then
+        printf "  ${GREEN}minisign ready — plugin payload signatures will be verified.${NC}\n"
+    else
+        warn "minisign not found after install (Spec 488 R9). The plugin integrity hook will DEGRADE"
+        warn "(warn, not block) until minisign is installed. Install it and re-run to enable verification."
+    fi
+    # Pin the forge-public pubkey ONLY against an out-of-band checksum (R5/AC12). Real-key
+    # provisioning is deferred (Spec 488); the pin runs when both vars are configured.
+    if [ -n "${FORGE_PUBKEY_URL:-}" ] && [ -n "${FORGE_PUBKEY_SHA256:-}" ]; then
+        local tmp_pub actual
+        tmp_pub="$(mktemp)"
+        if curl -fsSL "$FORGE_PUBKEY_URL" -o "$tmp_pub"; then
+            if command -v sha256sum >/dev/null 2>&1; then
+                actual="$(tr -d '\r' < "$tmp_pub" | sha256sum | awk '{print $1}')"
+            else
+                actual="$(tr -d '\r' < "$tmp_pub" | shasum -a 256 | awk '{print $1}')"
+            fi
+            if [ "$actual" = "$FORGE_PUBKEY_SHA256" ]; then
+                mkdir -p "$HOME/.forge"
+                cp "$tmp_pub" "$HOME/.forge/forge-public.pub"
+                printf "  ${GREEN}Pinned out-of-band-verified forge-public pubkey.${NC}\n"
+            else
+                warn "forge-public pubkey checksum MISMATCH — refusing to pin (Spec 488 R5/AC12)."
+            fi
+        else
+            warn "Could not fetch forge-public pubkey from \$FORGE_PUBKEY_URL."
+        fi
+        rm -f "$tmp_pub"
+    else
+        printf "  Pubkey pin deferred: set FORGE_PUBKEY_URL + FORGE_PUBKEY_SHA256 to pin the\n"
+        printf "        forge-public anchor (Spec 488 real-key provisioning pending).\n"
+    fi
+}
+install_minisign
+
 # Step 10: Completion summary
 step "Done!"
 echo ""

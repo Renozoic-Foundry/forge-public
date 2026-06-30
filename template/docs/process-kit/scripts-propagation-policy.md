@@ -52,6 +52,8 @@ Scripts mirrored to `template/scripts/` but absent from canonical `scripts/` (e.
 | safety-backfill-audit.ps1 | framework-internal | Spec 387 one-time audit over FORGE's pre-existing safety-schema declarations |
 | safety-backfill-audit.sh | framework-internal | Spec 387 one-time audit over FORGE's pre-existing safety-schema declarations |
 | smoke-test-runtime.sh | framework-internal | Spec 013 cross-platform smoke test exercising a rendered FORGE template |
+| .forge/tests/test_fresh_copier_copy_e2e.sh | framework-internal | Spec 451 — e2e fresh-bootstrap fixture; validates the FORGE template itself (meaningless in consumers) |
+| .forge/tests/test_copier_update_from_old_commit.sh | framework-internal | Spec 451 — e2e update-path fixture; validates the FORGE template itself |
 | smoke-test-template.sh | framework-internal | Spec 199 — verifies the Copier template renders cleanly with `--defaults` |
 | spec-344-sync-sentinels.sh | framework-internal | Spec 344 atomic sentinel sync across canonical mirror locations (one-shot) |
 | spec-370-sync-matrix-hygiene.sh | framework-internal | Spec 370 atomic sentinel sync into matrix.md mirrors (one-shot) |

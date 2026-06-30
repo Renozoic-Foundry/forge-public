@@ -1,0 +1,59 @@
+name: compliance
+display_name: "Regulatory Compliance (Lane B)"
+description: "Traceability matrices, V&V reports, compliance gates, and change impact analysis for regulated industries"
+version: 1
+category: compliance
+requires: []
+conflicts: []
+
+recommendation:
+  when: "Projects subject to regulatory frameworks (IEC 61508, EU 2023/1230, ISO 13485, IEC 62443, FDA 21 CFR Part 11)"
+  not_when: "Internal tools, prototypes, or projects without regulatory requirements"
+
+files:
+  - docs/compliance/
+  - .forge/templates/close-lane-b.md
+
+injects:
+  - target: .claude/commands/close.md
+    marker: compliance
+  - target: .forge/commands/close.md
+    marker: compliance
+  - target: .claude/commands/implement.md
+    marker: compliance
+  - target: .forge/commands/implement.md
+    marker: compliance
+  - target: CLAUDE.md.jinja
+    marker: compliance
+  - target: AGENTS.md.jinja
+    marker: compliance
+
+agents_md_sections:
+  - "Compliance profile rules"
+
+claude_md_sections:
+  - "Compliance profile rules"
+
+onboarding:
+  phase: features
+  prompt: "Enable regulatory compliance profiles (Lane B)?"
+  explain: |
+    Adds traceability matrices, V&V report generation, compliance gate
+    checks, and change impact analysis for regulated industries.
+
+    Supported frameworks: EU Machinery Regulation, ISO 13485, IEC 62443.
+    Custom profiles can be defined.
+
+    This adds conditional steps to /close and /implement that verify
+    evidence artifacts before allowing spec transitions. Specs become
+    immutable audit records when closed (Lane B sealing).
+
+    Skip this if: your project has no regulatory requirements. You can
+    always add compliance later by re-enabling this module.
+
+    Files added: docs/compliance/ directory (profiles, reports, verification)
+    CLAUDE.md/AGENTS.md sections: compliance rules added
+    Command modifications: close.md (seal + gate), implement.md (gate check)
+  default: false
+
+copier_variable: compliance_profile

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 _LIB_DIR = Path(__file__).resolve().parent
@@ -106,9 +105,6 @@ def render(specs_dir: Path, events_dir: Path, *, header: bool = True) -> str:
         )
         lines.append(
             "  Source: per-spec event streams under .forge/state/events/<spec-id>/"
-        )
-        lines.append(
-            f"  Rendered: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
         )
         lines.append("-->")
         lines.append("")

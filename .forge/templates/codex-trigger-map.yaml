@@ -1,0 +1,99 @@
+# Codex skill trigger phrases for FORGE commands
+# Used by forge-install to generate SKILL.md description fields
+commands:
+  implement:
+    action: "implement a spec, build a feature from a spec, or run the FORGE implementation workflow"
+    triggers: "'implement spec', 'build spec N', 'start implementing', '/implement'"
+  close:
+    action: "close a completed spec, validate deliverables, and capture retrospective signals"
+    triggers: "'close spec', 'finish spec N', 'validate and close', '/close'"
+  spec:
+    action: "create a new spec for a feature, bug fix, or process change"
+    triggers: "'create spec', 'new spec', 'write spec for', 'spec for', '/spec'"
+  now:
+    action: "check current project status, validation queue, and next recommended action"
+    triggers: "'project status', 'what should I do', 'what next', '/now'"
+  interview:
+    action: "explore a topic through Socratic questioning before committing to a spec"
+    triggers: "'help me think through', 'explore options for', 'interview about', '/interview'"
+  brainstorm:
+    action: "generate spec recommendations from roadmap, signals, and scratchpad"
+    triggers: "'brainstorm', 'what specs should I create', 'spec ideas', '/brainstorm'"
+  session:
+    action: "create or update a session log for today's work"
+    triggers: "'session log', 'log session', 'end session', '/session'"
+  note:
+    action: "add a scratchpad note for review at the next process checkpoint"
+    triggers: "'note', 'remember', 'save note', '/note'"
+  forge:
+    action: "manage FORGE project lifecycle — bootstrap or update"
+    triggers: "'forge init', 'forge stoke', 'bootstrap project', 'update forge', '/forge'"
+  onboarding:
+    action: "run first-session project customization (features, MCP servers, credentials)"
+    triggers: "'onboarding', 'set up project', 'configure project', '/onboarding'"
+  test:
+    action: "run the project test harness and capture evidence for a spec"
+    triggers: "'run tests', 'test spec', 'test harness', '/test'"
+  trace:
+    action: "trace requirements to implementation and verify coverage"
+    triggers: "'trace spec', 'trace requirements', 'check coverage', '/trace'"
+  bug:
+    action: "investigate and document a bug with triage and root cause analysis"
+    triggers: "'investigate bug', 'debug', 'triage bug', '/bug'"
+  score:
+    action: "score or re-score a spec using the priority scoring rubric"
+    triggers: "'score spec', 'prioritize', 'rank spec', '/score'"
+  matrix:
+    action: "re-evaluate backlog priorities after a spec closure"
+    triggers: "'update priorities', 'rerank backlog', 'priority matrix', '/matrix'"
+  retro:
+    action: "capture retrospective signals (content, process, architecture) after spec work"
+    triggers: "'retrospective', 'retro', 'capture signals', '/retro'"
+  harvest:
+    action: "extract reusable patterns and insights from completed work"
+    triggers: "'harvest patterns', 'extract insights', '/harvest'"
+  handoff:
+    action: "display full validation steps for context switch or session end"
+    triggers: "'handoff', 'end of day', 'context switch', '/handoff'"
+  evolve:
+    action: "run a process health check and evolve loop review"
+    triggers: "'evolve loop', 'process review', 'evolve loop', '/evolve'"
+  parallel:
+    action: "run multiple specs or tasks in parallel across agent tabs"
+    triggers: "'parallel work', 'run in parallel', 'multi-tab', '/parallel'"
+  tab:
+    action: "manage parallel agent tab claims and coordination"
+    triggers: "'claim tab', 'tab status', 'register tab', '/tab'"
+  skills:
+    action: "show all available FORGE commands grouped by workflow stage"
+    triggers: "'show commands', 'list skills', 'available commands', '/skills'"
+  config-change:
+    action: "document and track a configuration change with audit trail"
+    triggers: "'config change', 'change config', 'update configuration', '/config-change'"
+  insights:
+    action: "review and analyze accumulated signals and patterns"
+    triggers: "'show insights', 'analyze signals', 'pattern analysis', '/insights'"
+  revise:
+    action: "revise an existing spec based on feedback or new information"
+    triggers: "'revise spec', 'update spec', 'change spec', '/revise'"
+  spec-gate:
+    action: "check if a spec meets all requirements before implementation"
+    triggers: "'check spec gate', 'spec ready', 'gate check', '/spec-gate'"
+  scheduler:
+    action: "manage the evolve scheduler for automated process reviews"
+    triggers: "'scheduler', 'schedule review', 'evolve loop schedule', '/scheduler'"
+  validate:
+    action: "validate spec deliverables (deprecated — use /close instead)"
+    triggers: "'validate spec', '/validate'"
+  approve:
+    action: "approve a draft spec (deprecated — /implement auto-approves)"
+    triggers: "'approve spec', '/approve'"
+  bootstrap:
+    action: "bootstrap FORGE into a project (deprecated — use /forge init)"
+    triggers: "'bootstrap', '/bootstrap'"
+  configure-nanoclaw:
+    action: "configure NanoClaw async gate integration for this project"
+    triggers: "'configure nanoclaw', 'setup nanoclaw', '/configure-nanoclaw'"
+  nanoclaw:
+    action: "manage NanoClaw gate operations and status"
+    triggers: "'nanoclaw status', 'gate status', '/nanoclaw'"

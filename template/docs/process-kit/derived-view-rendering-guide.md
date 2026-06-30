@@ -32,6 +32,26 @@ python3 .forge/lib/render_spec_index.py
 python3 .forge/lib/render_backlog.py --output docs/backlog.md
 ```
 
+### Loud-fail completeness invariant (Spec 494)
+
+Determinism guarantees the *same* input renders the *same* output — it does **not** guarantee every
+source item reaches the output. A parser can produce a value that renders nothing and errors nothing
+(the silent-drop class: SIG-493-02 dropped backlog rows three ways; EA-309-P1 had a gate report PASS
+while every consumer link was broken). Spec 493 fixed one parser; Spec 494 makes **loud-fail** the
+universal renderer posture via `.forge/lib/render_invariant.py::assert_complete`:
+
+- `render_backlog` / `render_spec_index`: every spec file must render exactly one row. A parse failure
+  (e.g. an undecodable file) or a parsed row whose `Status:` falls in no emitted bucket is a drop →
+  the renderer exits non-zero (code 3) and names the dropped ID(s)/file(s) on stderr
+  (`GATE [render-completeness]: FAIL`).
+- `render_changelog`: every *recognized* event must render exactly one line (intentional event-type
+  filtering is not a drop). Forward-regression guard.
+
+The happy path is a silent no-op, so byte-identical determinism is preserved. This matters most under
+chained/parallel delivery (Spec 497), where no human eyes each rendered artifact between specs — a
+short table must fail the build, not pass silently. Regression fixture:
+`.forge/bin/tests/test-spec-494-renderer-invariant.{sh,ps1}`.
+
 ## Mode choice: `delete` vs `generated` vs `skip-canonical` vs `split-file`
 
 When a project migrates to Approach D, the canonical files (`docs/backlog.md`, `docs/specs/CHANGELOG.md`, `docs/specs/README.md`) become one of:
@@ -168,6 +188,15 @@ Two operators run `/close` simultaneously on different specs (say 380 and 381):
 4. Mode `delete`: no canonical file write at all. Pure event-stream + frontmatter operation.
 
 Either way: **structurally impossible to produce a merge conflict** on a shared tracking file in the canonical sense.
+
+**The one surface that *can* collide: the shared git index (Spec 494).** Event streams and frontmatter
+are disjoint, but a concurrent lane's *staged* files share one index. A bare `git commit` at `/close`
+would sweep them into the wrong spec's commit (Defect C — observed 2026-06-11 when Spec 435's commit
+captured Spec 421's staged files). `/close` Step 8a therefore stages by explicit path
+(`git add -- <declared ∪ generated>`, reusing the Spec 432 `_explicit_stage_paths` primitive, never
+`git add -A`) and commits **by explicit pathspec** (`git commit -m … -- <those paths>`), so only the
+closing spec's files are captured regardless of what else is staged. Fixture:
+`.forge/bin/tests/test-spec-494-staging-collision.{sh,ps1}`.
 
 ## Third-party tools
 

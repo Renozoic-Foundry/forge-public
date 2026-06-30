@@ -1,4 +1,5 @@
 # MCP Pinning and Integrity Policy
+<!-- Last updated: 2026-06-12 -->
 
 Last verified: 2026-04-17
 
@@ -27,8 +28,8 @@ This policy is FORGE's minimum supply-chain bar for **auto-enabled** MCP servers
 | `mcp-server-fetch` | PyPI | `2025.4.7` | Current latest; naturally aged (over a year old at pin time — no newer release since). Slow release cadence. |
 
 Hashes are stored in:
-- `template/.mcp-lock/npm/package-lock.json` (sha512 integrity field per entry, full transitive tree)
-- `template/.mcp-lock/python/requirements.lock` (sha256 `--hash=` lines per entry, full transitive tree)
+- `template/.mcp-lock/npm/package-lock.json` (sha512 integrity field per entry, full transitive tree) — and `.mcp-lock/npm/package-lock.json` at the FORGE repo root (Spec 474; keep byte-identical)
+- `template/.mcp-lock/python/requirements.lock` (sha256 `--hash=` lines per entry, full transitive tree) — and `.mcp-lock/python/requirements.lock` at the FORGE repo root (Spec 474; keep byte-identical)
 
 ## Per-package staleness thresholds
 
@@ -112,7 +113,7 @@ pip-compile --generate-hashes --output-file=requirements.lock --quiet requiremen
 grep -A 1 "mcp-server-fetch==" requirements.lock
 ```
 
-Commit the regenerated lockfiles along with an update to this doc's `Last verified:` date.
+Commit the regenerated lockfiles along with an update to this doc's `Last verified:` date. After regenerating under `template/.mcp-lock/`, re-copy the lockfiles to the root `.mcp-lock/` (Spec 474) so the two stay byte-identical — root drift would silently decouple FORGE's own sessions from the reviewed pins.
 
 ## Minimum tooling versions
 

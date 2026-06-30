@@ -190,6 +190,7 @@ a. **Check prerequisites**: Verify all specs in this wave have their prerequisit
      ```
    - If a prerequisite **succeeded**: the spec is cleared to run.
    - Independent specs in the same wave always run regardless of other specs' failures.
+   - **Declare the wave `cleared-set` (Spec 436)**: collect the spec IDs cleared to run in this wave into an explicit `cleared-set` list — the single source of truth for this wave's dispatch. Specs skipped because a prerequisite failed are recorded separately (excluded from `cleared-set`). The `cleared-set` is fixed before dispatch; Steps 7d and 8 read from it rather than re-deriving the dispatch list freehand.
 
 b. **Conflict pre-check (Spec 041)**: For each pair of specs in the wave, compare scoped files:
    - Apply the configured `conflict_resolution` strategy (halt/worktree/queue).
@@ -200,7 +201,7 @@ c. **Budget pre-check (Spec 042)**: If `swarm-budget.yaml` exists:
    - If would exceed ceiling: split wave into smaller sub-batches that fit within budget
    - Report budget status before launching
 
-d. **Execute wave via /parallel**: Invoke `/parallel <NNN> <MMM> ...` with all cleared specs in this wave.
+d. **Execute wave via /parallel**: the `/parallel` invocation argument list is **generated from the wave's cleared-set** (Spec 436) — iterate `cleared-set` to build `/parallel <NNN> <MMM> ...`; do not author spec IDs independently of `cleared-set`. This keeps the set handed to `/parallel` identical to the set Step 7a cleared (Invariant A).
    - All specs in the wave run in parallel.
    - Wait for all agents in the wave to complete before proceeding to the next wave.
 
@@ -218,6 +219,15 @@ f. **Propagate failures**: For each failed spec in this wave, mark all its depen
 g. Proceed to Wave N+1.
 
 ## [mechanical] Step 8 — Final scheduler report
+
+**Wave-accounting reconciliation gate (Spec 436)**: before emitting the report, reconcile every spec in the Step-4 wave plan against `Total N` and its final disposition. Verify the wave-accounting identity:
+
+- `Σ(completed + failed + skipped + blocked)` MUST equal `Total N` (the wave-plan total from Step 4), and
+- the union of specs dispatched across all waves MUST equal the union of every wave's `cleared-set` (the Invariant A roll-up).
+
+If any spec in the wave plan is unaccounted-for — present in the plan but absent from every disposition bucket (e.g. a `cleared-set` spec silently dropped before its `/parallel` invocation, or a wave that returned fewer results than it was handed) — **refuse to report** success: halt, list the unaccounted-for spec IDs, and surface the discrepancy instead of a misleading "complete" summary.
+
+This gate guards the **L3+ autonomous-dispatch path** (unattended multi-wave runs), where a silently-dropped spec would otherwise be invisible; on the L0–L2 operator-driven path the operator confirms each wave at Step 5, so the gate is advisory there (matching Spec 435's L3+/L0–L2 boundary). `/parallel`'s own pre-merge reconciliation (Spec 435) guards within a single wave's dispatch; this gate guards the cross-wave roll-up that `/parallel` structurally cannot see.
 
 Present:
 ```

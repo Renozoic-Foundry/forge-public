@@ -1,0 +1,27 @@
+# .forge/capabilities.yaml — FORGE capability registry (Spec 471)
+# Authoring convention: add one entry per shipped-but-inactive capability.
+# Each entry: id, title, pitch (<=120 chars, states the benefit), shipped_by
+# (spec #), recommended (bool), kind (settings-merge), detect (jq expr against
+# target returning non-empty when active), members (optional per-component
+# toggles), source (template file activation merges from), docs (pointer).
+# Capabilities ship INACTIVE; activation is an explicit operator one-touch
+# (/configure -> Capabilities, or the /onboarding batch question). Never auto-on.
+capabilities:
+  - id: lifecycle-hooks
+    title: Lifecycle hooks (session-start briefing + stop advisory)
+    pitch: "Auto-brief context at session start and run an advisory check at stop — no manual /now needed."
+    shipped_by: 460
+    recommended: true
+    kind: settings-merge
+    source: .claude/settings.json.template
+    docs: docs/process-kit/hook-coverage.md
+    detect: '.hooks.SessionStart // empty'
+    members:
+      - id: session-start
+        title: SessionStart briefing hook
+        event: SessionStart
+        detect: '.hooks.SessionStart // empty'
+      - id: stop-advisory
+        title: Stop advisory hook
+        event: Stop
+        detect: '.hooks.Stop // empty'

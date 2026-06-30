@@ -4,12 +4,19 @@ FORGE uses [Copier](https://copier.readthedocs.io/) to distribute template updat
 
 ## Version Scheme
 
-FORGE does not use semver tags yet. The canonical version is the git commit on the `main` branch of the upstream source (recorded in `.copier-answers.yml` as `_commit`). Consumer projects track which commit they last synced to.
+FORGE uses semantic version tags. Released tags to date: **v1.0.0**, **v2.0.0**, **v2.1.0**, with **v3.0.0** as the next MAJOR (the plugin-primary release). Each tag corresponds to a commit on the `main` branch of the upstream source; consumer projects also record the exact synced commit in `.copier-answers.yml` as `_commit`.
 
-When semver is adopted (planned), the scheme will follow:
+The scheme follows:
 - **MAJOR**: Breaking template changes (file renames, removed variables, restructured directories)
 - **MINOR**: New features, new files, new commands (backward-compatible)
 - **PATCH**: Bug fixes, documentation updates, process-only changes
+
+| Tag | Bump | Summary |
+|-----|------|---------|
+| v1.0.0 | — | First tagged release of the FORGE template. |
+| v2.0.0 | MAJOR | Template restructure and command-surface changes. |
+| v2.1.0 | MINOR | Additive commands and process refinements. |
+| v3.0.0 | MAJOR (pending cut) | Plugin-primary distribution; Copier `_min_copier_version` pin (Spec 294) and always-on signal capture (Spec 340). See migration note below. |
 
 ## What's Breaking
 
@@ -50,7 +57,7 @@ When conflicts occur during merge, `/forge stoke` pauses for manual resolution.
 
 ## Migration Notes
 
-When a breaking change ships, it will be documented here with migration steps.
+When a breaking change ships, it is documented here with migration steps.
 
 ### Format
 
@@ -64,4 +71,15 @@ Migration steps:
 2. <step>
 ```
 
-_(No breaking changes have been released yet.)_
+### v3.0.0 — plugin-primary release
+
+**Breaking**:
+- **Copier minimum-version pin** (Spec 294): `copier.yml` now sets `_min_copier_version`. Consumers on an older Copier must upgrade before `/forge stoke` / `copier update` will run.
+- **Always-on signal capture** (Spec 340): signal capture is no longer opt-in. Closing a spec records retro signals automatically.
+
+**Also in v3.0.0** (additive, non-breaking): the FORGE command/agent/skill/hook payload is now installable as a Claude Code plugin from a checkout (`claude plugin install ./`), alongside the existing Copier project-scaffolding path.
+
+Migration steps:
+1. Upgrade Copier to satisfy the new `_min_copier_version` pin: `pip install -U copier`.
+2. Run `/forge stoke` (Claude Code) or `copier update` (other IDEs) to pull the v3.0.0 template.
+3. Resolve any merge prompts per your `update-manifest.yaml` classifications.

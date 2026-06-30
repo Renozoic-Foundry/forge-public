@@ -1,0 +1,74 @@
+# Framework: FORGE
+# Loop contract — brainstorm-digests (Spec 459)
+#
+# Reuses the Spec 458 loop-contract shape (docs/process-kit/signal-to-strategy-loop.md
+# §1 "Loop contract (one page)"). One green, artifact-producing, lifecycle-neutral
+# routine. See docs/process-kit/scheduled-routines-guide.md for the prose contract.
+#
+# GREEN ROUTINE INVARIANT (Spec 459 Constraints): artifact-producing only. This
+# routine runs /brainstorm over NEW digests + fired watchlist triggers and emits
+# spec-candidate entries to the triage inbox. It MUST NOT create or advance specs,
+# expand autonomy, or modify shared systems. Forbidden actions are grep-verifiable.
+
+name: brainstorm-digests
+purpose: >
+  Run /brainstorm over unreviewed digests (docs/digests/, tracked in reviewed.md)
+  plus any fired watchlist triggers, and emit spec-candidate entries to the triage
+  inbox. Keeps discovery compounding so new external research turns into reviewable
+  spec candidates without manual re-invocation.
+
+trigger: scheduled            # cadence-driven; see cadence
+cadence: weekly               # operator-tunable via forge.routines.cadence (AGENTS.md)
+class: green                  # green = artifact-producing, lifecycle-neutral
+execution_mode: on-box        # on-box (default) | remote (InfoSec-approval-gated)
+pausable: true                # operator can pause without losing state
+
+inputs:
+  read_only: true
+  scope:
+    - docs/digests/                     # unreviewed digests (absent from reviewed.md)
+    - docs/digests/reviewed.md          # review tracker
+    - docs/sessions/watchlist.md        # trigger conditions
+    - docs/backlog.md                   # de-dupe against existing backlog
+    - docs/specs/README.md              # de-dupe against existing specs
+  selection: "digests absent from reviewed.md; watchlist items whose trigger has fired"
+
+allowed_actions:
+  - "Read unreviewed digests, the review tracker, watchlist, backlog, and spec index."
+  - "Extract actionable spec candidates (read-only analysis)."
+  - "Write spec-candidate entries to the triage inbox (docs/sessions/triage/)."
+  - "Append review markers to docs/digests/reviewed.md (existing artifact destination)."
+  - "Recommend (not create) a watchlist graduation or a /spec — operator decides."
+
+outputs:
+  triage_inbox: docs/sessions/triage/        # brainstorm-digests-<YYYY-MM-DD>.md
+  existing_artifact_destinations:
+    - docs/digests/reviewed.md                # append review markers only
+    - docs/sessions/watchlist.md              # may append a watchlist candidate (additive)
+  # NEVER creates a draft spec file or advances any lifecycle state.
+
+# --- Forbidden actions (Spec 459 AC2 — grep-verifiable) ---
+forbidden_actions:
+  - "/implement"                 # MUST NOT dispatch — no implementation
+  - "/close"                     # MUST NOT dispatch — no lifecycle close
+  - "git commit"                 # MUST NOT commit
+  - "git push"                   # MUST NOT push
+  - "autonomy config write"      # MUST NOT write autonomy level / auto_progression
+  - "budget config write"        # MUST NOT write budget ceilings / swarm budget
+  - "create draft spec file"     # MUST NOT create docs/specs/NNN-*.md (operator runs /spec)
+  - "spec lifecycle advance"     # MUST NOT change a spec's Status field
+
+stop_conditions:
+  - "All unreviewed digests have been reviewed and their candidates logged to triage."
+  - "No unreviewed digests and no fired watchlist triggers remain."
+  - "Operator pauses the routine (pausable: true)."
+  - "One brainstorm artifact set produced per run — do not loop into /spec or /implement."
+
+escalation_boundary: >
+  The routine STOPS at spec-candidate entries in the triage inbox. Creating a draft
+  spec (/spec) or advancing it (/implement, /close) is the operator's explicit
+  current-turn decision and is never performed by this routine.
+
+verification:
+  - "grep the forbidden_actions block lists /implement, /close, git commit, autonomy/budget writes, and 'create draft spec file'."
+  - "Run .forge/bin/tests/test-spec-459-brainstorm-routine.sh — asserts a triage entry appears and no lifecycle dispatch occurs."

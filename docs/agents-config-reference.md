@@ -29,7 +29,7 @@ These fields appear in the `forge:` YAML block under the **Runtime Configuration
 | `forge.lane` | enum | `A` | Active development lane. Currently only `A` is available. | Determines which feature set is active. |
 | `forge.gate.provider` | enum | `prompt` | Gate approval mechanism. Valid values: `prompt`, `pal`, `auto`. | `prompt`: chat-based approval. `pal`: hardware-authenticated (YubiKey). `auto`: use PAL if installed, fall back to prompt. |
 | `forge.gate.timeout` | integer (seconds) | `1800` | Maximum wait time for a gate approval before timing out. | After this duration, a pending gate approval times out and follows the configured fallback behavior. |
-| `forge.roles.separation` | enum | `context-scoped` | Role isolation level. Valid values: `none`, `context-scoped`, `full`. | `none`: all roles in main conversation (development shortcut, not recommended for production). `context-scoped` (default): DA and validator as isolated subagents, implementer in main context. `full`: all roles as isolated subagents (implementer uses worktree). |
+| `forge.roles.separation` | enum | `none` | Role isolation level. Valid values: `none`, `context-scoped`, `full`. | `none` (default): all roles run in the main conversation. `context-scoped`: DA and validator as isolated subagents, implementer in main context. `full`: all roles as isolated subagents (implementer uses worktree). |
 | `forge.roles.devils_advocate.enabled` | boolean | `true` | Enables or disables the Devil's Advocate gate globally. | When `false`, the DA review step is skipped across all specs and lanes. |
 | `forge.roles.devils_advocate.skip_lanes` | list of strings | `[hotfix]` | Lanes that bypass DA review. | Specs in listed lanes skip the DA gate even when DA is enabled. |
 | `forge.roles.devils_advocate.expiry_days` | integer | `7` | Days after which a spec modification triggers DA re-review. | If a spec is modified more than this many days after its last DA review, a new review is required. |
@@ -55,48 +55,12 @@ These fields appear in the `forge:` YAML block under the **Runtime Configuration
 | `forge.triggers.suppress_duplicates` | boolean | `true` | Prevents repeating the same trigger suggestion in a conversation. | Avoids noise from redundant suggestions within a single session. |
 | `forge.triggers.check_on_start` | boolean | `true` | Check triggers at conversation start. | When `true`, triggers are evaluated at the beginning of each session. |
 | `forge.triggers.trigger_map` | string (path) | `.forge/templates/context-trigger-map.yaml` | Path to the trigger condition map file. | Points to the YAML file defining which conditions activate which triggers. |
-| `forge.model_router.enabled` | boolean | `true` | Enables the model routing system. | When `false`, all commands use the default model tier. |
-| `forge.model_router.mode` | enum | `static` | Routing strategy. Valid values: `static`, `dynamic`. | `static`: uses the tier table from CLAUDE.md. `dynamic`: adjusts tier based on runtime signals. |
-| `forge.model_router.safety_floor` | enum | `sonnet` | Minimum model tier for code-modifying commands. | Prevents cost-saving downgrades for commands that edit source code. |
-| `forge.model_router.cost_tracking` | boolean | `true` | Log per-command costs to the metrics directory. | Enables cost visibility for `/evolve` regret-rate reporting. |
-| `forge.model_router.metrics_dir` | string (path) | `.forge/metrics` | Directory for cost and routing metrics. | Where per-command cost logs are written. |
-| `forge.model_router.escalation.auto_detect` | boolean | `true` | Detect poor outcomes and escalate model tier. | When `true`, the router upgrades to a higher tier if the current tier produces low-quality results. |
-| `forge.model_router.escalation.max_escalations` | integer | `1` | Maximum tier escalations per command invocation. | Prevents runaway escalation chains within a single command. |
-| `forge.model_router.regret_reporting` | boolean | `true` | Include regret rate in `/evolve` reports. | Surfaces how often the router's tier choice was suboptimal. |
-| `forge.model_router.metrics_retention_days` | integer | `30` | Days to keep metrics files before archiving. | Older metrics files are archived to prevent unbounded growth. |
 | `forge.dispatch_rules.enabled` | boolean | `false` | Enables intelligent role dispatch based on spec characteristics. | When `true`, CxO advisory roles are auto-invoked when spec characteristics match dispatch conditions. |
 | `forge.dispatch_rules.skip_threshold.effort` | integer | `1` | Effort score at or below which extra dispatch is skipped. | Low-effort specs matching all threshold conditions use DA only. |
 | `forge.dispatch_rules.skip_threshold.risk` | integer | `1` | Risk score at or below which extra dispatch is skipped. | Low-risk specs matching all threshold conditions use DA only. |
 | `forge.dispatch_rules.roles` | YAML block | See template | Maps CxO roles to trigger conditions. | Defines which conditions (e.g., `cross_cutting`, `security`, `high_risk`) invoke which advisory roles. |
 | `forge.dispatch_rules.evolve_loop` | YAML block | See template | Roles invoked during `/evolve --full`. | Controls which CxO roles participate in Evolve Loop steps (signal analysis, trust calibration, etc.). |
 | `forge.dispatch_rules.touchpoints` | list of strings | `[spec_review, da_gate, close_review, evolve_loop]` | Lifecycle points where dispatch fires. | Determines when in the spec lifecycle advisory roles are consulted. |
-
-### Role registry
-
-| Field | Type | Default | Description | Behavioral consequence |
-|-------|------|---------|-------------|----------------------|
-| `forge.role_registry` | list of objects | See template | Maps role instruction files to command contexts. | Commands read this block to determine which roles to activate. Adding an entry here wires a role into all matching contexts without changing command files. If absent, commands skip role invocation silently. |
-
-Each entry has:
-- `path` — relative path to the role instruction file (e.g., `.claude/agents/spec-author.md`)
-- `contexts` — list of command names where the role is invoked (e.g., `[spec]`, `[implement, close]`)
-
-#### Competitor role (Spec 274 — opt-in)
-
-The **Competitor** role role-plays a fictional rival organization's reaction to the proposal, framed as "leaked competitive intelligence." It provides an **outside-in adversarial perspective** (how would a competitor counter this?) to complement the existing inside-out adversarial roles (Devil's Advocate for risk, Maverick Thinker for convention).
-
-| Field | Value |
-|-------|-------|
-| Path | `.claude/agents/competitor.md` |
-| Contexts | `[brainstorm, spec]` |
-| Default state | **OFF** — registry entry is commented out in `template/AGENTS.md.jinja`. Uncomment to enable. |
-| Output | Structured JSON: `competitor_posture`, `likely_counter_moves`, `exploitable_weaknesses`, `defensive_recommendations`, `summary` (in the rival's voice). |
-| When to invoke | Direction-setting time (proposal commits to pricing, distribution, positioning, or a publicly visible surface). Skip for internal process / refactor specs. |
-| Constraints | Stay fictional (no real company names); no fabricated market data; speak *from* the rival, not *about* the rival. |
-
-**Rhetorical framing example.** For a proposal "we're adding a free tier," the Competitor role does NOT write *"the competitor would respond by..."* — it writes *"Team — the threat is strategic. Our pricing-power advantage erodes if we don't act inside the next two quarters. Counter-move: ship our own free tier with a 10× usage cap..."* — speaking from inside the rival's war room.
-
-**Note on dispatch**: as of Spec 274 ship, only `/consensus` iterates `forge.role_registry` to dispatch roles. `/brainstorm` and `/spec` (this role's listed contexts) do not yet read the registry. Wiring those commands is tracked as a deferred-scope follow-up; until that lands, this role can only be invoked manually via Claude Code's agent invocation syntax.
 
 ### Runtime and agent adapters
 
@@ -123,12 +87,34 @@ These fields appear in the `runtime:`, `agent:`, and `isolation:` YAML blocks.
 | `multi_agent.agent_tier_rules.write_specs_readme` | boolean | `false` | Whether parallel agents write to specs/README.md. | Must be `false` to prevent merge conflicts in the shared index. |
 | `multi_agent.agent_tier_rules.atomic_checkout` | boolean | `true` | Check for existing spec-started before claiming. | Prevents two agents from implementing the same spec concurrently. |
 
-### Spec Kit integration
+### Evolve, now, routines, reconcile, and implement blocks
+
+These blocks tune signal-driven review, the `/now` dashboard, scheduled routines, git-history reconciliation, and the live-smoke gate. They appear in the `forge:` YAML block under **Runtime Configuration**.
 
 | Field | Type | Default | Description | Behavioral consequence |
 |-------|------|---------|-------------|----------------------|
-| `spec_kit.enabled` | boolean | `false` | Enables Spec Kit MCP integration for guided spec creation. | When `true`, `/spec` offers guided creation via Spec Kit MCP tools. Requires the Spec Kit MCP server configured in `.mcp.json`. |
-| `spec_kit.fallback` | enum | `manual` | Fallback behavior when MCP is unavailable. Valid values: `manual`, `error`. | `manual`: falls back to FORGE template authoring. `error`: fails if MCP is unavailable (strict mode). |
+| `forge.now.watch_default_min_delay` | integer (seconds) | `60` | Lower bound for `/loop` dynamic re-runs of `/now --watch`. | Clamps how often a self-paced `/now` watch loop re-fires (upper bound 3600). |
+| `forge.now.unclosed_spec_cap` | integer | `3` | Threshold at which `/now` warns about implemented-but-unclosed specs. | When the count exceeds this, `/now` Step 1b flags the deferred-close pile-up (count, IDs, file-overlap pairs). |
+| `forge.evolve.signal_thresholds` | YAML block | See below | Per-signal counts that admit an `/evolve` review. | Single source read by both `/now` (recommend) and `/evolve --auto` (admit). Keys: `unreviewed_signals` (15), `open_evolve_scratchpad` (4), `error_autopsies` (3), `deferred_scope_items` (5), `spec_velocity` (5). |
+| `forge.evolve.admission_hysteresis` | boolean | `true` | Debounce on threshold crossings. | A count hovering at a boundary does not flap admit/skip. |
+| `forge.evolve.time_fallback_days` | integer | `30` | Soft time-based nudge for an overdue review. | Recommendation only — never a hard admission block. |
+| `forge.evolve.rewake_interval_days` | integer | `1` | `/evolve --auto` heartbeat cadence. | How often the scheduled signal-checking heartbeat re-wakes (`ScheduleWakeup` clamps the lower bound). |
+| `forge.evolve.scheduled_rewake` | boolean | `true` | Whether `/evolve` schedules a signal-checking heartbeat. | When `false`, the evolve review is manual-only. |
+| `forge.evolve.apply_cool_down_days` | integer | `7` | Minimum days between *applied* self-modifications (ADR-046). | Throttles auto-apply paths; the review itself has no calendar gate. |
+| `forge.routines.enabled` | boolean | `false` | Enables scheduled strategy-only routines. | Off by default; opt-in. Routines produce artifacts only — they never advance the lifecycle or expand autonomy. |
+| `forge.routines.cadence` | enum | `weekly` | Default routine cadence. | Per-routine overrides live in each `.forge/loops/<name>.contract.yml`. |
+| `forge.routines.execution_mode` | enum | `on-box` | Where routines run. Valid values: `on-box`, `remote`. | `on-box`: stays in the org boundary. `remote`: requires InfoSec approval. |
+| `forge.reconcile.stub_min_files` | integer | `3` | File-count threshold for `/reconcile` to draft a stub spec. | A git-history cluster touching at least this many distinct files routes to a draft stub spec. |
+| `forge.reconcile.stub_min_lines` | integer | `100` | Line-count threshold for `/reconcile` to draft a stub spec. | A cluster changing at least this many total lines routes to a stub spec; smaller clusters become memory notes. |
+| `forge.implement.live_keywords` | list of strings | See template | Test-Plan phrases that flag a live/smoke step. | When a spec's Test Plan matches a keyword, `/implement` Step 6e prompts the operator to execute (or defer) a real run before `/close`. |
+
+## Consensus tracking
+
+| Field | Type | Default | Description | Behavioral consequence |
+|-------|------|---------|-------------|----------------------|
+| `consensus_tracking.enabled` | boolean | `true` | Logs consensus outcomes in session JSON sidecars. | When `true`, accept/modify/reject outcomes are recorded per session. |
+| `consensus_tracking.acceptance_rate.formula` | string | `accepted / (accepted + modified + rejected)` | How the acceptance rate is computed. | Surfaced in `/evolve` and `/now`; never auto-escalates autonomy. |
+| `consensus_tracking.acceptance_rate.window_days` | integer | `30` | Lookback window for the acceptance rate. | Defines the rolling window over `docs/sessions/*.json`. |
 
 ## Autonomy levels
 
@@ -151,6 +137,12 @@ FORGE autonomy levels map to Claude Code's native permission modes. This mapping
 | L0-L1 | `default` | Human approves every tool call |
 | L2 | `auto` | Agent auto-executes safe tools; human approves risky ones |
 | L3-L4 | `bypassPermissions` | Agent operates freely within budget and kill-switch bounds |
+
+### Push-authorization gate across autonomy levels
+
+The close/push human-authorization boundary is backstopped by a `git push` permission-prompt gate: every push raises an in-session approval prompt, and chained delivery never pushes until the human `/close` gate. **At L0–L2 this gate is hard-enforced** — the approval prompt is the operator-provenance primitive and the agent cannot self-authorize a push.
+
+At **L3–L4**, the same controls are configured but the registration is editable by an agent operating at that level, so the hard guarantee is **designed, not yet enforced** — it lands fully when the server-managed trust root ships (a roadmap item). Until then, deferred-close chaining that removes the per-spec checkpoint is restricted to L1–L2. This is a known roadmap boundary, not an open hole: the ≤L2 enforcement, the approval-prompt forcing function, and the no-push-until-`/close` contract all ship today.
 
 ## Bounded autonomy
 
@@ -227,4 +219,4 @@ Three enforcement modes determine how gate approval happens:
 
 ---
 
-Last verified against Spec 263 on 2026-04-15.
+Last verified against Spec 507 on 2026-06-29.

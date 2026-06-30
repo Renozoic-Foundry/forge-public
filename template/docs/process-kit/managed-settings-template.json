@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_forge_note": "FORGE Authority Constitution managed-settings template (Spec 469, NC-2 slice 2; push gate added Spec 498). This is a TEMPLATE: an admin/operator installs it (or merges it) at the OS managed-settings path documented in docs/process-kit/authority-constitution-guide.md. Once installed via SERVER-MANAGED settings (Claude.ai admin console — the only documented cross-surface CLI+extension enforcement; the per-user file path is non-viable per the 469-Open-Q2 research), it is the agent-IMMUTABLE trust root that enforces the ADR-046 no-self-escalation invariant AND the Spec 498 git-push gate (the registered check-push-guard.sh cannot be removed and disableBypassPermissionsMode keeps the push permission prompt unbypassable at L3/L4). Until installed, the repo is at the hooks-only tier (bypassable at L3) and deferred-close chaining stays L1/L2-gated (Spec 498 §6.1 'designed, not enforced'). Verified against Claude Code managed-settings docs 2026-06-15: macOS /Library/Application Support/ClaudeCode/managed-settings.json, Linux /etc/claude-code/managed-settings.json, Windows C:\\Program Files\\ClaudeCode\\managed-settings.json.",
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "allowManagedPermissionRulesOnly": true,
+    "deny": [
+      "Edit(.forge/config/authority.yaml)",
+      "Write(.forge/config/authority.yaml)",
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Write(.claude/settings.local.json)",
+      "Edit(.forge/bin/check-authority-guard.sh)",
+      "Write(.forge/bin/check-authority-guard.sh)",
+      "Edit(.forge/bin/check-edit-gate.sh)",
+      "Write(.forge/bin/check-edit-gate.sh)",
+      "Edit(.forge/bin/check-commit-guard.sh)",
+      "Write(.forge/bin/check-commit-guard.sh)",
+      "Edit(.forge/bin/check-push-guard.sh)",
+      "Write(.forge/bin/check-push-guard.sh)",
+      "Edit(.forge/bin/lib/git-command-detect.sh)",
+      "Write(.forge/bin/lib/git-command-detect.sh)",
+      "Edit(.forge/bin/check-role-permissions.sh)",
+      "Write(.forge/bin/check-role-permissions.sh)",
+      "Bash(* .forge/config/authority.yaml*)",
+      "Bash(* .claude/settings.json*)",
+      "Bash(* .forge/bin/check-authority-guard.sh*)",
+      "Bash(* .forge/bin/check-push-guard.sh*)",
+      "Bash(* .forge/bin/lib/git-command-detect.sh*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .forge/bin/check-push-guard.sh",
+            "timeout": 3000,
+            "statusMessage": "Checking push gate (managed trust root)..."
+          }
+        ]
+      }
+    ]
+  }
+}

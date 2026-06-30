@@ -1,0 +1,177 @@
+---
+name: explore
+description: "Pre-spec investigation — produces research artifacts before committing to a full spec"
+disable-model-invocation: false
+---
+# Framework: FORGE
+# Model-Tier: sonnet
+Run a lightweight pre-spec investigation on a topic. Produces a research artifact at `docs/research/explore-<topic-slug>.md` before committing to a full spec.
+
+If $ARGUMENTS is `?` or `help`:
+  Print:
+  ```
+  /explore — Pre-spec investigation for topics that need research before committing to a spec.
+  Usage: /explore <topic>
+  Arguments:
+    topic (required) — the topic, question, or hypothesis to investigate.
+  Behavior:
+    - Creates a research artifact at docs/research/explore-<topic-slug>.md
+    - Investigates the topic: reads relevant files, searches codebase, checks external patterns
+    - Documents findings in a structured format (question, approach, findings, recommendation)
+    - Recommendation is one of: spec it, defer, drop
+    - Optionally graduates to a spec via /spec --from-explore <topic>
+  Where it fits:
+    /brainstorm     "What should I work on?"     → Agent looks inward at project signals
+    /interview      "Help me think through X"    → Agent asks questions, user discovers
+    /explore        "Is this idea viable?"       → Agent investigates, produces research artifact
+    /spec           "I know what I want"         → Agent writes the spec, fast
+  Lifecycle state: produces a `proposed` artifact — optional entry point before `draft`.
+  See: docs/process-kit/spec-driven-harness-loop.md
+  ```
+  Stop — do not execute any further steps.
+
+---
+
+## [mechanical] Step 1 — Parse topic
+
+Extract the topic from $ARGUMENTS. If no topic is provided, ask the user:
+"What topic or question would you like to investigate?"
+
+Generate a URL-safe slug from the topic (lowercase, hyphens for spaces, strip special characters).
+
+## [mechanical] Step 2 — Check for existing research
+
+Step 2 has two sub-checks. Run them in order — Step 2a fires first; Step 2b runs only when Step 2a finds no exact-slug match.
+
+### Step 2a — Exact-slug match (existing behavior)
+
+Check if `docs/research/explore-<topic-slug>.md` already exists.
+- If it exists: report "Existing research found at docs/research/explore-<topic-slug>.md" and ask whether to update it or start fresh. Stop here on operator selection — do not run Step 2b.
+- If not: proceed to Step 2b.
+
+<!-- spec-392-topic-overlap:start -->
+### Step 2b — Topic-overlap pre-check (Spec 392)
+
+Surface adjacent prior art before fresh investigation begins. CI-293 surfaced that 4 existing artifacts directly adjacent to topics raised were hit only mid-investigation — this pre-check lets the operator decide whether to read the existing artifact, extend it, or proceed fresh.
+
+**Inputs**
+- The prompt's topic — text from $ARGUMENTS.
+- All explore artifacts: `docs/research/explore-*.md`. If `docs/research/` is missing or contains no matching files: skip silently and proceed to Step 3.
+- Stopword list at `docs/process-kit/stopwords.txt` (lowercase tokens, lines starting with `#` are comments). Required — Spec 388 dependency.
+- Optional threshold in AGENTS.md (under `forge.explore.adjacency`):
+  - `keyword_threshold` (default `2`)
+
+**Overlap computation** for each candidate explore artifact:
+1. **Tokenize prompt** — lowercase the topic from $ARGUMENTS, split on whitespace and `[/_,.;:()\[\]"'!?]`, strip stopwords, dedupe to a set: `prompt_tokens`.
+2. **Tokenize candidate** — concatenate the candidate's first `# Explore: <topic>` heading (drop the `Explore:` prefix) plus the first 50 non-blank lines of body. Apply the same lowercase + split + stopword + dedupe → `candidate_tokens`.
+3. `match_count = |prompt_tokens ∩ candidate_tokens|`.
+4. Hit when `match_count ≥ keyword_threshold`.
+
+**Ranking**: sort hits by `match_count` descending. Tie-break on file mtime descending (newest first). Surface only top 3.
+
+**Surface**
+
+If 0 hits: skip silently and proceed to Step 3.
+
+If ≥1 hit: emit a data block, then a choice block:
+
+```
+## Adjacent prior art (Spec 392)
+The following existing explore artifacts overlap the prompt. This is data, not a recommendation — you decide.
+
+| Rank | Artifact | Title | Keywords |
+|------|----------|-------|----------|
+| 1 | <file> | <title> | <N matches> |
+| 2 | <file> | <title> | <N matches> |
+| 3 | <file> | <title> | <N matches> |
+```
+
+> **Choose** — type a number or keyword:
+> | # | Rank | Action | Rationale | What happens |
+> |---|------|--------|-----------|--------------|
+> | **1** | 1 | `read N` | Existing artifact already covers the topic | Open adjacent artifact (N is row number) and stop |
+> | **2** | 2 | `extend N` | Existing artifact partially covers; build on it | Run `/revise --explore <file>` against artifact N and stop |
+> | **3** | 3 | `fresh` | Adjacent artifacts surface different topics; proceed | Proceed to Step 3 with fresh investigation |
+> | **4** | — | `abort` | Stop without changes | Exit /explore |
+
+**Operator response handling**
+- `read N` → resolve N to the adjacency hit's file path, open it, exit /explore.
+- `extend N` → resolve N, invoke `/revise --explore <file>`, exit /explore.
+- `fresh` → proceed to Step 3 with fresh investigation as today.
+- `abort` → exit /explore without writing.
+
+**Fail-soft**: if ANY of the following errors occur during Step 2b, emit `WARN: topic-overlap pre-check skipped — <reason>` and proceed to Step 3 with normal fresh investigation. The pre-check MUST NEVER block /explore on its own failure:
+- `docs/process-kit/stopwords.txt` missing or unreadable
+- AGENTS.md threshold value present but non-numeric or out of `[0, 50]`
+- Total scan wall time exceeds 5 seconds
+
+Detection: active.
+
+See: docs/specs/392-explore-topic-overlap.md for rationale, /evolve loop-17 framing, and full AC set.
+<!-- spec-392-topic-overlap:end -->
+
+## [mechanical] Step 3 — Investigate
+
+Conduct a lightweight investigation of the topic:
+
+1. **Codebase search**: Search the project for files, patterns, and prior art related to the topic.
+2. **Spec and backlog check**: Search `docs/specs/README.md` and `docs/backlog.md` for existing specs or backlog items covering this topic.
+3. **Signal check**: Search `docs/sessions/signals.md` for related signals.
+4. **Process docs check**: Search `docs/process-kit/` for relevant documentation.
+5. **Research archive check**: Search `docs/research/` for prior research on related topics.
+
+Synthesize findings into a structured assessment.
+
+## [mechanical] Step 4 — Write research artifact
+
+Create `docs/research/explore-<topic-slug>.md` with the following structure:
+
+```markdown
+# Explore: <Topic>
+
+- Date: YYYY-MM-DD
+- Status: proposed
+- Investigator: Claude
+
+## Question / Hypothesis
+
+<What we are trying to determine. One or two sentences.>
+
+## Investigation Approach
+
+<What sources were checked and what methods were used.>
+- <source 1>
+- <source 2>
+
+## Findings
+
+- <finding 1>
+- <finding 2>
+- <finding 3>
+
+## Prior Art
+
+<Existing specs, signals, or research that relate to this topic.>
+
+## Recommendation
+
+**<spec it | defer | drop>**
+
+<One paragraph justification for the recommendation.>
+
+## References
+
+- <link or file path 1>
+- <link or file path 2>
+```
+
+## [decision] Step 5 — Present findings and next action
+
+Present a summary of findings and the recommendation to the user.
+
+> **Choose** — type a number or keyword:
+> | # | Action | What happens |
+> |---|--------|--------------|
+> | **1** | `/spec --from-explore <topic>` | Graduate to a full spec, pre-populated with explore findings |
+> | **2** | `stop` | Research complete — no further action needed |
+>

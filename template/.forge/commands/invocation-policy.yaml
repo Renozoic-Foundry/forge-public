@@ -1,0 +1,24 @@
+# Spec 491 — invocation surface policy (single source of truth)
+#
+# This manifest is the authoritative classification of FORGE's Claude-Code
+# invocation surface. It drives:
+#   - .forge/bin/forge-sync-skills.sh   (generates .claude/skills/<name>/SKILL.md)
+#   - .forge/bin/forge-sync-commands.sh (skips skill-form names — no .claude/commands mirror)
+#   - .forge/bin/forge-parity.sh        (Surface 5 drift gate + --verify-policy)
+#
+# Three disjoint sets (no name appears twice):
+#   commands              — stay .claude/commands/<name>.md; NEVER model-invokable;
+#                           advance autonomously only via auto_progression chains.
+#   skills_model_invokable — .claude/skills/<name>/SKILL.md, disable-model-invocation: false
+#                           (read-only / additive / reversible — safe to auto-fire at ANY level).
+#   skills_explicit        — .claude/skills/<name>/SKILL.md, disable-model-invocation: true
+#                           (un-namespaced ergonomics but never opportunistically auto-fired).
+#
+# LEVEL-INVARIANT (Spec 491 R6): disable-model-invocation is decided by an invocable's
+# safety profile and does NOT change across autonomy levels (L0–L4). L4 raises the
+# auto_progression ceiling; it never flips a flag here. Priority-1 boundaries apply at L4.
+#
+# Keep this format simple + greppable: one space-separated bracketed list per key.
+commands: [close, implement, spec, forge, forge-init, forge-stoke, parallel, reconcile, config-change, configure, configure-nanoclaw, nanoclaw, onboarding, scheduler, tab, session]
+skills_model_invokable: [now, note, brainstorm, dependency-audit, explore, insights, trace, test, signal-to-strategy]
+skills_explicit: [consensus, decision, evolve, interview, matrix, revise, synthesize]

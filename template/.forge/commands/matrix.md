@@ -57,7 +57,14 @@ If $ARGUMENTS is `?` or `help`:
 7. **Dependency analysis** (Spec 087): For each non-closed spec, read its `Dependencies:` frontmatter field (comma-separated spec IDs) or the `Depends` column in the backlog table. Classify each spec:
    - **Blocked**: has a dependency on a spec that is NOT `closed`. List which dependency is unmet.
    - **Ready**: all dependencies are `closed` (or no dependencies). Can be implemented now.
-   - **Parallel-safe batch**: ready specs whose `Implementation Summary → Changed files` lists have no overlapping paths. These can be implemented simultaneously in parallel worktrees.
+   - **Parallel-safe batch**: ready specs whose `Implementation Summary → Changed files` lists have no overlapping paths **and** that do not both plausibly touch a member of the always-shared / cross-cutting file set (Spec 478). These can be implemented simultaneously in parallel worktrees.
+     - **Always-shared set (Spec 478)**: the canonical cross-cutting set is defined in `docs/process-kit/parallelism-guide.md` § "Always-shared / cross-cutting file set" (the Spec 237 orchestrator-only table **plus** the update-manifest pair `.forge/update-manifest.yaml` + `template/.forge/update-manifest.yaml`). Reference that single source — do NOT hard-code a second list here. A spec is **manifest-touching** if its declared Changed-files include any `template/` path (it will trigger `/implement` Step 4e) or it declares a manifest path explicitly. Two specs that are declared-file disjoint but both manifest-touching (or where one declares an always-shared member) are NOT fully disjoint — surface a soft-overlap warning rather than declaring them parallel-safe. This does not block batching (additive manifest entries merge cleanly); it prevents a false zero-overlap guarantee.
+
+   **Completion-evidence isolation (Spec 501).** This classification reads *other* specs' status only as a **dependency gate** — never as evidence that the spec under assessment is itself complete. Whether spec *X* is complete or close-ready is decided **solely** from *X*'s own ACs and its own `Status:` field, read from `docs/specs/<X>-*.md` (authoritative per Spec 028). A different spec's number, status, or closure is NEVER completion evidence for *X*.
+   - **Dependency vs. unrelated discriminator (the operational rule).** Spec *Y* is a *dependency* of *X* **only if** *Y*'s number appears in *X*'s own `Dependencies:`/`Depends:` frontmatter (the field this step already reads). When such a *Y* becomes `closed`, that legitimately moves *X* **Blocked → Ready** — but it MUST NOT be read as *X* itself being complete/closeable. Any *other* spec *Y* whose number/closure is in play — because *X*'s body once referenced it, it shares a neighboring number, or it is the prior occupant of a **reused/recycled** number that now points to an unrelated closed spec — is **unrelated** for completion purposes: it is not in *X*'s `Dependencies:` field, so its closure is never *X*'s dependency-satisfaction and never *X*'s completion. A reused/recycled dependency number MUST NOT silently satisfy *X*'s dependency or imply *X* is done — surface it via the Spec 501 advisory below rather than treating the closed number as evidence.
+   - **Advisory (Spec 501, non-blocking).** When *X* would be treated as complete or close-ready on the basis of *another* spec's closure or a reused/neighboring spec number, emit one advisory line:
+     `Spec <X> appears complete only via Spec <Y>'s closure — judge <X> from its own ACs/status, not Spec <Y>.`
+     The advisory does not auto-edit status, does not gate ranking, and does NOT fire for a legitimate frontmatter-declared dependency (by the discriminator above, that *Y* is not unrelated). Every spec ID reasoned over here is a canonical numeric ID (matching `^[0-9]{3,}$`) already sourced from FORGE's own frontmatter / derived-state helpers — never an identifier parsed out of spec **body** prose, and never fed into a shell expansion, `grep` pattern, or file glob.
 
    Present a dependency summary before the ranked tables:
    ```
@@ -65,7 +72,9 @@ If $ARGUMENTS is `?` or `help`:
    Blocked: Spec NNN (waiting on NNN), ...
    Ready: Spec NNN, NNN, NNN
    Parallel batch: Specs NNN + NNN (no shared files)
+   Soft-overlap (Spec 478): Specs NNN + NNN are declared-file disjoint but both manifest-touching (`.forge/update-manifest.yaml`) — parallel-OK, expect an additive merge touch.
    ```
+   (Omit the Soft-overlap line when no always-shared overlap exists.)
    If no specs have dependencies defined, skip this section silently.
 
 7e. **Vet-pending advisory (Spec 395 AC 12)**: Scan `docs/specs/[0-9][0-9][0-9]-*.md` files for frontmatter containing `Consensus-Status: vet-pending`. Compare today's date against the universal SLA date `2026-06-02` (set by Spec 395 Backfill section).
@@ -78,7 +87,23 @@ If $ARGUMENTS is `?` or `help`:
    a. Read the project's CLAUDE.md — extract the project description and mission statement (the first paragraph or "## What this project is" section).
    b. Read AGENTS.md — check for `forge.strategic_scope` config under `## Project Context`. **Use the yaml-aware helper at `.forge/lib/strategic-scope.py`** to read the value (NOT regex on raw text — fragile against block-scalar variants per Spec 382 AC6):
       ```bash
-      strategic_scope_value=$(.forge/bin/forge-py .forge/lib/strategic-scope.py read AGENTS.md 2>/dev/null || echo "")
+      # Capture exit code AND stderr separately so a helper *crash* is surfaced, not swallowed (Spec 419).
+      # Discriminator: non-zero exit WITH stderr = real failure (crash / missing PyYAML / Python <3.10 / bad
+      # usage — all emit stderr). Non-zero exit with EMPTY stderr = forge.strategic_scope simply absent
+      # (read_scope → None) = the expected b2 fall-through below, NOT a failure.
+      _scope_err="${TMPDIR:-${TEMP:-/tmp}}/forge-strategic-scope-err.$$"
+      strategic_scope_value=$(.forge/bin/forge-py .forge/lib/strategic-scope.py read AGENTS.md 2>"$_scope_err")
+      strategic_scope_rc=$?
+      strategic_scope_stderr=$(cat "$_scope_err"); rm -f "$_scope_err"
+      if [ "$strategic_scope_rc" -ne 0 ] && [ -n "$strategic_scope_stderr" ]; then
+        echo "⚠ Step 8 — strategic-scope.py FAILED (exit $strategic_scope_rc) — helper CRASH, not an unconfigured-scope skip:"
+        printf '%s\n' "$strategic_scope_stderr" | sed 's/^/      /'
+        echo "      → Helper: .forge/lib/strategic-scope.py | Strategic-fit eval is being skipped due to FAILURE, not configuration. Do NOT treat the backlog as fully vetted — investigate (missing PyYAML, Python <3.10, file/encoding error, or helper bug) before trusting the ranking."
+        strategic_scope_value=""
+      fi
+      # NOTE (Spec 419 known limitation): a *malformed* YAML block is swallowed by strategic-scope.py read_scope
+      # (catches yaml.YAMLError → returns None → exit 1, empty stderr), so it is indistinguishable from "absent"
+      # here and is NOT surfaced. Distinguishing it needs a dedicated helper exit code — out of scope (SIG-419-A).
       ```
    b1. **SKIP-FOR-NOW sentinel check (Spec 382)**: if the value equals literal `SKIP-FOR-NOW` (verifiable via `.forge/bin/forge-py .forge/lib/strategic-scope.py is-sentinel AGENTS.md`), emit the one-line warning and skip the strategic-fit eval entirely:
       ```
@@ -156,7 +181,8 @@ If $ARGUMENTS is `?` or `help`:
       - Within a sprint, specs in different lanes have no dependency conflicts and no file overlap — they can execute concurrently.
       - Within a lane, specs may be sequential (dependency chain) or parallel (independent, no file overlap).
 
-   e. **File-scope isolation check**: For specs assigned to the same sprint in different lanes, read each spec's `Implementation Summary → Changed files` and check for overlapping paths. If overlap is detected, flag it: "File overlap between Spec NNN and NNN on <path> — cannot run in parallel. Move one to a later sprint or sequential lane."
+   e. **File-scope isolation check**: For specs assigned to the same sprint in different lanes, read each spec's `Implementation Summary → Changed files` and check for overlapping paths. If a **declared** path overlaps, flag it as a hard conflict: "File overlap between Spec NNN and NNN on <path> — cannot run in parallel. Move one to a later sprint or sequential lane."
+      - **Always-shared / cross-cutting scan (Spec 478)**: Declared-file disjointness alone does NOT establish parallel-safety, because `/implement` touches cross-cutting files implicitly. After the declared-path check, also test each same-sprint cross-lane pair against the **always-shared set** defined in `docs/process-kit/parallelism-guide.md` § "Always-shared / cross-cutting file set" (the Spec 237 orchestrator-only table plus the update-manifest pair `.forge/update-manifest.yaml` + `template/.forge/update-manifest.yaml`). Reference that canonical set — do NOT duplicate it here. If both specs plausibly touch an always-shared file (both declare a `template/` path → both touch the manifest pair via `/implement` Step 4e; or either explicitly declares a member of the set), surface a **soft-overlap warning** — do NOT silently declare them disjoint: "Soft overlap (Spec 478): Spec NNN and NNN both touch <always-shared path> implicitly — parallel-safe with an expected additive merge touch, not zero-overlap." This warns without blocking (additive shared-file edits merge cleanly per Req 3). A hard declared-path overlap still blocks; a soft always-shared overlap only annotates.
 
    f. **Token cost flagging** (Spec 158): For any spec with `Token-Cost: $$$` in its frontmatter, add a note: "High token cost — consider whether a cheaper approach exists before implementing."
 
@@ -188,7 +214,8 @@ If $ARGUMENTS is `?` or `help`:
 
    i. The operator can select a sprint to begin. Report: "Selected Sprint N. Starting with Spec NNN — run `/implement NNN` or `/parallel NNN NNN` for parallel lanes."
 
-   j. **Execute-all choice block (Spec 362)**: After the sprint plan table, count "dependency-clean parallel-safe lanes" — lanes whose specs are all `draft`/`approved` (not blocked by un-closed dependencies) AND have no file overlap with any other lane's specs across the entire plan (not just within their own sprint). If this count is **≥ 2**, emit a choice block; if **< 2**, skip silently (the existing single-lane suggestion in the Notes column is sufficient — Req 7).
+   j. **Execute-all choice block (Spec 362)**: After the sprint plan table, count "dependency-clean parallel-safe lanes" — lanes whose specs are all `draft`/`approved` (not blocked by un-closed dependencies) AND have no **declared-file** overlap with any other lane's specs across the entire plan (not just within their own sprint). If this count is **≥ 2**, emit a choice block; if **< 2**, skip silently (the existing single-lane suggestion in the Notes column is sufficient — Req 7).
+      - **Always-shared / cross-cutting note (Spec 478)**: An always-shared overlap (per the canonical set in `docs/process-kit/parallelism-guide.md` § "Always-shared / cross-cutting file set" — the Spec 237 orchestrator-only table plus the update-manifest pair) is a **soft** overlap: it does NOT disqualify a lane from the execute-all batch (additive shared-file edits merge cleanly), but it MUST be surfaced. When constructing the batch, if any two included lanes both plausibly touch an always-shared file, add a one-line note above the choice block: "Soft-overlap (Spec 478): lanes <L> and <M> both touch <always-shared path> — batch is parallel-safe with an expected additive merge touch." Only a hard **declared-file** overlap excludes a lane from the batch.
 
       ```
       Execute multiple lanes? Spec 362 added a /parallel --batch path that
@@ -208,6 +235,7 @@ If $ARGUMENTS is `?` or `help`:
       - Lanes appear as bundles in the constructed command IN DEPENDENCY-RESPECTING ORDER. Sprint 1 dependency-clean lanes go first, then Sprint 2 lanes whose dependencies are scheduled in Sprint 1 (so they'll close before Sprint 2 dispatches), then Sprint 3, etc.
       - Each lane becomes one single-quoted bundle string: `'NNN MMM'` (space-separated spec IDs).
       - Lanes whose dependencies are NOT yet closed AND NOT scheduled earlier in the constructed batch are EXCLUDED from the command.
+      - **Completion-evidence isolation (Spec 501).** A lane's spec is treated as ready-to-run **solely** from its own `draft`/`approved` `Status:` (read from its own file) — never because a neighboring or reused spec number is `closed`. No spec is dropped from (or kept out of) the batch on the basis of another spec's closure being read as that spec's own completion: a closed unrelated/recycled number is NOT evidence that the spec under assessment is "already done." The only legitimate cross-spec read here is a frontmatter-declared dependency that has closed (which makes the lane dependency-clean per the rule above) — that does NOT mark the lane's own spec complete. If a lane's spec would be excluded as "already done" on the basis of another spec's closure, emit the Spec 501 advisory (`Spec <X> appears complete only via Spec <Y>'s closure — judge <X> from its own ACs/status, not Spec <Y>.`) and keep the lane judged by its own status.
       - The operator's selection of `execute-all` is the operator's confirmation to run the displayed command verbatim — `/matrix` does not auto-execute.
 
 ### Step 11b — Review Router (Spec 159)
@@ -225,6 +253,7 @@ e. BLOCK is advisory — the operator decides whether to adjust the plan.
    - Any spec that moved rank since the last update
    - Any `proposed` spec that is now blocked or unblocked by a recently completed spec
    - **Blocked specs** that cannot be implemented until their dependencies close
+   - **Completion-evidence isolation (Spec 501).** Any "complete", "done", or "ready to close" language in this narrative MUST reflect only each spec's own ACs/status (read from its own file, authoritative per Spec 028) — never another spec's number, status, or closure. Do NOT narrate spec *X* as complete because a related, neighboring, or reused spec number *Y* closed: a closed *Y* is, at most, a frontmatter-declared dependency that **unblocks** *X* (Blocked → Ready) — which is not the same as *X* being complete. When *X* would be narrated as complete on the basis of *another* spec's closure or a reused/neighboring number, emit the advisory instead: `Spec <X> appears complete only via Spec <Y>'s closure — judge <X> from its own ACs/status, not Spec <Y>.` (non-blocking; does not auto-edit status). The only spec IDs reasoned over are canonical numeric IDs (`^[0-9]{3,}$`) from FORGE's own frontmatter / derived-state — never body-parsed identifiers, and never fed into a shell expansion, `grep`, or glob.
 12a. **Pre-flight recommendation (Spec 321)**: For the top-ranked draft spec from Step 12, read its frontmatter `Consensus-Review:` and parse the `Priority-Score:` HTML comment for E and R values (format: `<!-- BV=N E=N R=N SR=N → ... -->`). If `Consensus-Review: true` AND (`R >= 3` OR `E >= 3`), emit one inline advisory alongside the top-rank presentation:
 
     > **Pre-flight recommendation**: Spec NNN is flagged `Consensus-Review: true` with R=<N> / E=<N>. Run `/consensus NNN` before `/implement` — CI-210 documents concrete rework avoidance on similar specs (Spec 294 saved ~45 files of rework). _(Advisory only — operator can skip.)_

@@ -13,10 +13,13 @@ If $ARGUMENTS is `?` or `help`:
   Print:
   ```
   /implement — Implements a spec (FORGE Solve Loop). Auto-approves draft specs inline.
-  Usage: /implement <spec-number|next>
+  Usage: /implement <spec-number|next> [--goal-mode] [--abort]
   Arguments:
     spec-number — e.g. /implement 021
     next        — auto-picks the highest-ranked draft spec from the backlog and starts immediately
+    --goal-mode — wrap the pass in a /goal block with an evidence-derived exit (Spec 464);
+                  hard cap 20 turns; exit on validator-exit-0 + Status: closed + gate-emissions log.
+    --abort     — short-circuit an active --goal-mode run immediately.
   Behavior:
     - draft spec → auto-approved inline (evidence gate: completeness), then in-progress → implemented
     - in-progress spec → implemented directly
@@ -30,6 +33,56 @@ If $ARGUMENTS is `?` or `help`:
 ---
 
 **Gate Outcome Format**: Read `.forge/templates/gate-outcome-format.md` and emit the structured format at every evidence gate.
+
+---
+
+## [mechanical] Goal mode — `--goal-mode` (Spec 464)
+
+If `$ARGUMENTS` contains `--goal-mode`, wrap the implementation pass in a native `/goal` block that
+runs until an **evidence-derived** exit condition holds or the hard cap fires.
+
+**`--abort`**: if `$ARGUMENTS` contains `--abort`, short-circuit any active `--goal-mode` run
+immediately, print the structured failure summary (below), and exit non-zero. `--abort` always wins.
+
+### Evidence-derived exit condition (CISO R1 + MT R1 — three structured signals, ALL required)
+
+The `/goal` evaluator runs at **each turn boundary**. The exit condition is satisfied **only when ALL
+three** of these structured signals hold:
+
+1. **validator exit code** — the validator subprocess (per `forge.implement.validator`, e.g.
+   `bash .forge/bin/validate.sh`) returns **exit code 0** when invoked at the goal-evaluation point.
+2. **spec frontmatter `Status: closed`** — the spec file's frontmatter `Status:` field, **re-read from
+   disk** at goal-evaluation time, equals `closed`. (Not a cached value; not a prose mention.)
+3. **gate-emission log** — the **filesystem gate-emissions log** at
+   `tmp/evidence/SPEC-NNN-YYYYMMDD/gate-emissions.log` (written by `/implement` as it emits each gate)
+   contains all expected `GATE [<name>]: PASS` lines for the spec's `Change-Lane`. The source is this
+   **filesystem log file** — NOT the session transcript and NOT any conversational context reachable
+   via prompt injection (digests, session logs, spec body). The per-Lane required-gate list and the
+   log path/write-timing convention are documented in
+   `docs/process-kit/native-loop-adoption-guide.md` § Per-Lane required-gate list.
+
+**Prose-match exit is FORBIDDEN.** The evaluator MUST NOT satisfy the exit by matching prose strings
+(for example the phrase "all ACs PASS", or any sentence in the spec body / `## Evidence` section).
+Operator-writable evidence sections are out of band for the exit decision — the evaluator pulls
+structured signals (validator exit code, on-disk `Status:`, filesystem gate log) only.
+
+### 20-turn hard cap and structured failure summary
+
+`--goal-mode` is bounded by a **hard cap of 20 turns** OR operator `/implement --abort`, whichever
+fires first. The cap is **non-configurable** (an operator-chosen safety bound; revisit only when
+insights data accumulates — it is NOT derived from empirical run data).
+
+On cap-fire (or `--abort`) without the exit condition satisfied, print a **structured failure summary**
+and exit non-zero:
+```
+GOAL-MODE FAILED — Spec NNN (cap=20 turns reached | aborted)
+  evidence signals NOT satisfied:
+    - validator exit code: <0 | non-zero (value)>
+    - spec Status: closed: <yes | no (current: <value>)>
+    - gate-emission log complete: <yes | no>
+  ACs lacking PASS markers: <list, or "none">
+  gate emissions missing: <list of GATE [name] not found in the filesystem log, or "none">
+```
 
 ---
 
@@ -172,6 +225,47 @@ Before reading the full spec body in Step 1, this gate verifies the spec has eit
 8. **Vet-pending advisory passthrough (Req 5)** — if frontmatter contains `Consensus-Status: vet-pending`, the gate behaves identically to the rules above (it is **prompt-not-block**: the gate fires only if `Consensus-Close-SHA` AND `Consensus-Exempt` are both absent). Vet-pending is surfaced as a one-line advisory in `/now` and `/matrix` after the 30-day SLA, not at /implement.
 
 9. **Provisional sunset (Req 9)** — this gate ships PROVISIONAL for 90 days post-Spec-395 close. At sunset, `/evolve` presents trigger-rate, drift recurrence, and operator-friction data; operator decides whether to make permanent, tighten the qualifier, loosen to advisory, or remove. The `Provisional-Until:` field on Spec 395 records the sunset date; `/now` surfaces a reminder starting D-7.
+
+### [mechanical] Step 0e — Spec-vs-HEAD assertion gate (Spec 450)
+
+Claude-authored spec artifacts can assert state that no longer exists at HEAD — stale Implementation Summaries, renamed enforcement layers, obsolete step references (root cause of patterns EA-131…134/CI-353, SIG-437-D, SIG-428/429/438). This gate diffs spec-asserted state against repo-actual state BEFORE implementation begins. It runs on every /implement invocation, after Step 0d passes and before Step 1.
+
+**Exemption check first**: if the spec frontmatter contains `Spec-vs-HEAD-Exempt: <rationale>`:
+- Rationale < 30 chars → `GATE [spec-vs-head]: FAIL — Spec-vs-HEAD-Exempt rationale must be ≥ 30 chars (got: N).` HALT.
+- **Lane B counter-sign** (mirrors Step 0d): when `docs/compliance/profile.yaml` is present AND the spec scores BV≥4 AND R≥3, the rationale MUST contain a `[reviewed-by: <second-operator-identity>]` token. Absent token → `GATE [spec-vs-head]: FAIL — Lane B Spec-vs-HEAD-Exempt requires [reviewed-by: <identity>] counter-sign for BV≥4 + R≥3 specs.` HALT.
+- Otherwise: emit `GATE [spec-vs-head]: PASS+ADVISORY — gate bypassed via Spec-vs-HEAD-Exempt (single-use, consumed).` Then **consume the exemption**: remove the `Spec-vs-HEAD-Exempt:` line from the spec frontmatter and append to `docs/sessions/activity-log.jsonl`:
+  ```json
+  {"timestamp":"<ISO 8601>","event_type":"spec-vs-head-exempt-used","spec_id":"<NNN from spec filename>","rationale":"<text>","agent_id":"<id>"}
+  ```
+  The removal is a frontmatter-lifecycle write (same class as `Status:`/`DA-Reviewed:` writes) — it does NOT touch spec body sections. The exemption cannot silently persist across invocations. Skip checks 1–3; proceed to Step 1.
+
+**Check 1 — Enforcement-Layers existence (GAP-LAYER)**: Read the spec's `Enforcement-Layers:` frontmatter field (optional; absent or empty = no multi-layer enforcement asserted — skip this check silently). For each comma-separated `<file-path>:<symbol>` entry:
+   a. **Symbol grammar (injection guard)**: `<symbol>` must match `^[A-Za-z_][A-Za-z0-9_. -]{0,127}$`. Entries failing the grammar are recorded as GAP-LAYER (malformed) and are NEVER interpolated into any shell command.
+   b. Assert `<file-path>` exists at HEAD.
+   c. Assert a fixed-string search returns ≥1 match: `grep -nF '<symbol>' <file-path>` — fixed-string only, no regex interpolation of spec-derived content.
+   On any miss: record a GAP-LAYER advisory naming the unresolved entry.
+
+**Check 2 — Implementation Summary surface liveness (GAP-SURFACE)**: Parse the spec's `## Implementation Summary` section. Within the `Changed files:` bullet block, each list-item line (`^\s*-\s+`, path optionally backtick-quoted) is a path entry.
+   - Entries annotated `(new)` are files this spec will create — skip their existence check. The `(new)` annotation is a declaration of intent, not a bypass mechanism; marking an existing file `(new)` to evade the check is a process violation.
+   - Every UNANNOTATED path must exist at HEAD. Unannotated glob entries (e.g., `dir/test_prefix_*.py`) must match ≥1 file at HEAD; globs marked `(new)` are likewise skipped.
+   On any miss: record a GAP-SURFACE advisory naming the unresolved path.
+
+**Check 3 — Step/section references (GAP-STEP — WARN-only)**: Scan the spec body for the regex `(?<![\w/])/[a-z-]+\s+Step\s+[0-9]+[a-zA-Z+]*` (the `+` in the trailing character class matches FORGE's step-extension suffix convention, e.g. `/close Step 2d++++`; the lookbehind keeps the match off mid-path slashes). EXCLUDE the `## Revision Log` and `## Evidence` sections from the scan — historical-context references are not liveness assertions. For each match, verify the referenced command file exists (`.claude/commands/<cmd>.md`) AND contains a matching step identifier. On miss: record a GAP-STEP advisory naming the unresolved reference.
+
+**Gate outcome**:
+- No advisories → `GATE [spec-vs-head]: PASS — <N> layer(s) / <M> surface(s) / <K> step ref(s) verified at HEAD.` Proceed to Step 1.
+- GAP-STEP only → `GATE [spec-vs-head]: WARN — step-reference advisories (non-blocking): <list>.` Proceed to Step 1. GAP-STEP is WARN because prose references to other commands' steps have a high historical-context false-positive rate — rot surfaces but does not halt.
+- Any GAP-LAYER or GAP-SURFACE → FAIL with the actionable list:
+  ```
+  GATE [spec-vs-head]: FAIL — spec asserts state not present at HEAD.
+  GAP-LAYER: <each unresolved Enforcement-Layers entry, or none>
+  GAP-SURFACE: <each unresolved Implementation Summary path, or none>
+  GAP-STEP (advisory): <each unresolved step reference, or none>
+  Remediation: (a) /revise NNN to drop obsolete references; (b) re-add the referenced surfaces (rare — usually means /implement started against a stale spec); or (c) add Spec-vs-HEAD-Exempt: <≥30-char rationale> to the spec frontmatter to bypass once (single-use; consumed and logged).
+  ```
+  HALT — do not proceed to Step 1.
+
+This gate MUST NOT auto-rewrite spec body sections — it emits advisories with actionable lists only (the single-use exemption-line removal above is the sole, narrow frontmatter exception). Backwards compatibility: specs without `Enforcement-Layers:` skip Check 1 silently; Checks 2 and 3 apply to ALL specs unconditionally.
 
 ---
 
@@ -397,6 +491,12 @@ If enabled:
    ```
    YYYY-MM-DD HH:MM | <role> | spec-NNN | <recommendation> | advisory | mode: dispatch
    ```
+
+6. **Role-value instrumentation (Spec 305)** — for each dispatched role, also append one `role-dispatch` record to the shared score-audit sink:
+   ```bash
+   bash .forge/lib/score-audit.sh record-dispatch NNN implement <role> <recommendation> <confidence> "<key concern>"
+   ```
+   Map the role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence verbatim. Best-effort: the helper always exits 0 — never block /implement. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
 
 ### [mechanical] Step 2c — Acceptance Criteria Vague-Language Scan (Spec 171)
 
@@ -762,16 +862,62 @@ This step closes the recurring SHA-pingpong defect class (≥3 occurrences in cl
 
 **Why end-of-Step-6**: by this point all implementation work is done and any inline DA-disposition edits to Scope/AC have landed. The post-implementation checklist (Step 7) and the `/close` Step 2 verification will both read the recomputed hash. /close's spec-integrity gate (Spec 089) is unchanged — it still verifies against the stored `Approved-SHA:`; the fix moves the *write side* of the timing, not the read side.
 
+### [mechanical] Step 6e — Live-smoke gate (Spec 403)
+
+Synthetic fixtures can pass while real-world variants break (root cause of SIG-387-01: Test Plan #3 caught a real audit-regex defect that 12 fixtures + the validator all missed; adjacent SIG-390-01, SIG-401-01). This gate detects when a spec's Test Plan calls for a *live*/*smoke*/*dry-run-against-the-repo* step and requires the operator to actually execute it (or explicitly defer) before `/close` can succeed. It is operator-driven and additive — it never replaces fixture-based testing and never auto-executes anything.
+
+1. **Load the keyword set**: read `forge.implement.live_keywords:` from `AGENTS.md`. If the field is absent, use the default set: `live dry-run`, `smoke test`, `against the live repo`, `against FORGE-self`, `against the codebase`, `production data sample`.
+
+2. **Scan the Test Plan**: read the spec's `## Test Plan` section (including any `### Cross-platform coverage` subsection). For each line, do a case-insensitive substring match against every keyword in the set.
+   - **No match**: skip silently. Mark `[x] Live-smoke gate (Spec 403) — no live-keyword steps in Test Plan`. Proceed to Step 7.0. **This is the common case.**
+   - **One or more matches**: continue to step 3.
+
+3. **Prompt per matched step** (operator confirmation required — never auto-execute): for each matched Test-Plan line emit:
+   ```
+   Live-smoke step detected: "<matched step text>"
+   Execute now and capture output? (yes/no/defer)
+   ```
+   - `yes`: run the step. Capture stdout/stderr verbatim.
+   - `no` / `defer`: record the deferral; do NOT block `/implement` (the gate re-fires at `/close`). Operator may proceed.
+
+4. **Capture evidence**: if any step was executed (`yes`), append the captured output to the spec's `## Evidence` section under a `### Live-smoke evidence` subsection:
+   ```
+   ### Live-smoke evidence (Spec 403)
+   - Step: "<matched step text>"
+   - Executed: YYYY-MM-DD HH:MM
+   - Output:
+   ```
+   <verbatim captured output, fenced>
+   ```
+   ```
+   If every matched step was deferred, do NOT create the `### Live-smoke evidence` section — its absence is exactly what the `/close` gate keys on.
+
+5. **Gate outcome**:
+   - All matched steps executed with captured output → `GATE [live-smoke]: PASS — <N> live-smoke step(s) executed; evidence captured.` Proceed to Step 7.0.
+   - One or more steps deferred → `GATE [live-smoke]: DEFERRED — <N> live-smoke step(s) deferred. /close will FAIL until ### Live-smoke evidence is present (re-run /implement Step 6e, or execute the step and record output).` Proceed to Step 7.0 (non-blocking at /implement per the spec constraint — the gate fires at /close).
+
+**Constraints (Spec 403)**: this gate MUST NOT auto-execute live-smoke steps (operator confirmation is mandatory) and MUST NOT block `/implement` on the prompt — `defer` is always a valid answer that lets implementation proceed; the enforcement point is `/close`.
+
+### [mechanical] Step 7.0 — Unconditional Status edit (Spec 450)
+
+Before rendering the post-implementation checklist below (and before any `## Implementation Summary` section is rendered in chat), perform the status transition mechanically. This is NOT a checklist item — it is an unconditional Edit that always executes:
+
+1. Edit the spec file: replace `Status: in-progress` with `Status: implemented`.
+
+This substep closes the SIG-437-D self-heal pattern (3 occurrences in 14 days: /close 423, 434, 437) where the declarative checklist item "Spec status updated to `implemented`" had no mechanical step performing the edit. The checklist item below now VERIFIES the edit landed; it no longer performs it.
+
 7. After implementation, run the post-implementation checklist and emit gate outcomes:
    - [ ] All acceptance criteria satisfied — state which file/function satisfies each
    - [ ] Tests written or updated for changed behavior
    - [ ] Test output is green (run tests via the project's configured test command)
-   - [ ] Spec status updated to `implemented`
+   - [ ] Live-smoke gate — see Step 6e (active detection — Spec 403)
+   - [ ] Spec status updated to `implemented` — performed mechanically by Step 7.0; verify the edit landed
    - [ ] docs/specs/README.md index updated
    - [ ] docs/specs/CHANGELOG.md entry added
    - [ ] README.md update check — see Step 7a (active detection — Spec 180)
    - [ ] Harness run saved to `tmp/` if harness-relevant behavior changed
    - [ ] Template/own-copy sync verified — see Step 7b (active detection — Spec 180)
+   - [ ] New-command mirror sync — see Step 7b+ (active detection — Spec 479)
    - [ ] Authorization-rule lint gate — see Step 7c (active detection — Spec 327)
    - [ ] AGENTS.md prose↔YAML drift detector — see Step 7d (active detection — Spec 330)
 
@@ -837,6 +983,55 @@ Scan the changed files list (from `git diff --name-only` against the spec baseli
 
   - If `sync`: for each drifted file, copy the changes to the other side.
   - If `skip`: append to the spec's Revision Log: `YYYY-MM-DD: Template/own-copy sync check: skipped — drift noted as intentional for <files>.`
+
+### [mechanical] Step 7b+ — New-Command Mirror Sync (Spec 479)
+
+Step 7b above detects drift between an existing template/own-copy *pair*. It cannot
+catch a **brand-new canonical command** because only one side exists — there is no
+counterpart to compare against. This step closes that gap: when `/implement` creates a
+NEW canonical command, it generates the agent-dir mirror in the same lane/commit, so
+`forge-sync-commands.sh --check` passes on the merged tree without a post-merge sync
+(root cause of SIG-PARALLEL-C: Spec 458 created `.forge/commands/signal-to-strategy.md`
+with no `.claude/commands/` mirror).
+
+**Detection (gate — no-op for the common case)**: from the changed-files set
+(`git diff --name-only` against the spec baseline, plus untracked files via
+`git status --porcelain`), identify any NEW file matching `.forge/commands/<name>.md`
+or `.claude/commands/<name>.md` whose counterpart in the sibling agent dir does NOT
+already exist:
+- A new `.forge/commands/<name>.md` with no `.claude/commands/<name>.md` → mirror needed.
+- A new `.claude/commands/<name>.md` with no `.forge/commands/<name>.md` → canonical missing
+  (author it first under `.forge/commands/`, then this step mirrors it).
+
+- If **no new one-sided command file is detected**: skip silently. Mark
+  `[x] New-command mirror sync — no new command files`. **This is the common case —
+  zero overhead, no sync invocation.**
+
+- If a **new one-sided command file is detected**:
+  1. **Sync-script presence check**: if `.forge/bin/forge-sync-commands.sh` does NOT
+     exist (consumer projects may not ship it), skip with a one-line note:
+     "New-command mirror sync: forge-sync-commands.sh absent — skipped (mirror must be
+     generated by the consumer's own tooling)." Never block `/implement`. Mark `[x]`
+     with the note.
+  2. **Run the sync** (canonical → agent dirs):
+     ```bash
+     bash .forge/bin/forge-sync-commands.sh
+     ```
+     **Safety (Requirement 1 — assumption verified)**: `forge-sync-commands.sh` regenerates
+     ALL mirrors, but it is safe to run mid-`/implement`. For a brand-new command the mirror
+     does not yet exist, so it is written cleanly. For every OTHER command, the Spec 329
+     refuse-overwrite guard applies: if an existing mirror body diverges from canonical and
+     `--force` is not passed, the script halts with exit 2 and a per-file diff rather than
+     clobbering in-flight edits. It therefore never silently overwrites unrelated work. If
+     the run exits 2 (an unrelated mirror is mid-edit and not yet synced), do NOT pass
+     `--force`; instead scope to the new command only by syncing just its mirror (copy the
+     canonical frontmatter + body to the sibling agent dir, matching the script's
+     new-mirror path), and note the scoped fallback in the gate outcome.
+  3. **Include the generated mirror in the implementation's changes** — it is part of this
+     spec's deliverable and must be committed in the same lane.
+  4. Emit: `GATE [new-command-mirror-sync]: PASS — generated mirror(s) for <name>; forge-sync-commands.sh --check clean.`
+     Run `bash .forge/bin/forge-sync-commands.sh --check` to confirm and include the
+     `OK:` line as evidence.
 
 ### [mechanical] Step 7c — Authorization-Rule Lint Gate (Spec 327)
 
@@ -940,6 +1135,19 @@ The current default mode is `advisory`. Operator flips to `strict` (via `--mode=
       echo '{"timestamp":"<ISO 8601>","event_type":"spec-implemented","payload":{"changed_files":<count>,"ac_pass":<N>,"ac_total":<M>}}' >> .forge/state/events/NNN/spec-implemented.jsonl
       ```
       Append-only; conflict-free. Consumed by `render_changelog.py` to surface the implementation event in the chronological log.
+   e. **Implement-time telemetry + evidence flush (Spec 497)**: persist this spec's telemetry to durable state **now**, so `/close` (run immediately or deferred) reviews on-disk evidence and loses nothing. This sub-step is **unconditional** — it fires even when the spec stops at `implemented` without a `/close` (AC1). Logic lives in the Spec 495 substrate (`telemetry.sh`) + the Spec 497 readers (`token_usage.py`); these are thin call sites.
+      - i. **Security verdicts → durable ledger**: for each security-relevant gate emitted during this `/implement` run (Step 7c authorization-rule-lint, Step 7d AGENTS.md drift, and any Lane B gate), record the verdict to the tracked ledger:
+        ```bash
+        bash .forge/lib/telemetry.sh record-security-gate <gate-name> <PASS|FAIL> <exit_code>
+        ```
+        (PowerShell: `pwsh .forge/lib/telemetry.ps1 record-security-gate <gate-name> <PASS|FAIL> <exit_code>`.) The verdict is derived from the gate's OWN exit code, never an operator-writable field. This writes `.forge/state/security-gate.jsonl` (tracked via `!`-negation), so the verdict trail is durable **without** a `/close`. Advisory — always exits 0, never blocks.
+      - ii. **Token usage (Spec 496 GO / ADR-496)**: if the runtime exposes the on-disk transcript path (a `Stop`/`SessionEnd` hook's `transcript_path`, or `$CLAUDE_TRANSCRIPT_PATH`), capture per-session token counts:
+        ```bash
+        forge-py .forge/lib/token_usage.py record --spec NNN --transcript "$transcript_path"
+        ```
+        This writes the **token-only** record `{input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, total_tokens}` to the per-spec event stream. Per ADR-316 + ADR-496 it stores **token counts only — never a cost (USD) figure**. `/session` folds the latest record into the durable `token_usage` field of the session sidecar. If no transcript path is available in the host runtime, skip silently (advisory) — the `Stop`-hook capture path covers it.
+      - iii. **Idempotency**: after the flush, touch a one-shot marker `.forge/state/events/NNN/telemetry-flushed`. If the marker already exists, do NOT re-append (a later `/close`-time capture also checks it) — this prevents double-counting in the acceptance-rate denominator (DA finding: idempotent implement-time flush).
+      - Emit: `GATE [implement-time-capture]: PASS — telemetry flushed to durable state (security verdicts: <N>; token record: <yes|skipped>).`
 
 ### [mechanical] Step 9d — Post-Implementation Value Demo (Spec 261)
 
@@ -1004,6 +1212,18 @@ This gate is advisory — it does NOT block /close. Consensus review is optional
 ---
 
 ## Next Action
+
+**Batch-lane contract guard (Spec 475)**: check for `.forge/state/batch-lane.json` in the current working tree. Skip silently if no marker exists — single-tab sessions see the normal choice block below. If the marker exists and is fresh (<24h; stale markers warn-and-proceed as normal single-tab): do NOT emit the choice block below and do NOT recommend pick-next, /close, deferred-scope promotion, or new specs. Emit ONLY:
+
+```
+Lane complete — Spec NNN is at `implemented` (the lane terminal state).
+1. Write a mini session log to docs/sessions/parallel-NNN.md (work done, decisions, issues, est. tokens).
+2. /tab close
+3. Report back in the orchestrator tab. /close runs in the orchestrator after merge.
+(Batch-lane contract: /close, deferred-scope promotion, /spec stub creation, and pick-next recommendations are forbidden in this lane — SIG-BATCH-A/B.)
+```
+
+Then STOP. The remainder of this section applies only when no fresh marker is present.
 
 Implementation complete. **Do not run `/close` automatically.** A human must review the deliverables before closing.
 

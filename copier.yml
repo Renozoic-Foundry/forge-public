@@ -21,6 +21,19 @@ _exclude:
   - "docs/sessions/**"
   - "docs/specs/[0-9]*-*.md"
   - ".mcp.json"
+  # Spec 489 — phase D: the framework ships via the SIGNED PLUGIN, not the Copier render.
+  # In Copier 9.x _exclude applies to BOTH copy AND update — intended: consumers get framework
+  # files AND updates from the installed plugin, not from copier (deprecation window ≥ tag+90d).
+  # The detective audit (.forge/check-neither-path.*) lives at .forge/ ROOT — deliberately NOT
+  # under these excluded subdirs — so it survives the shrink and can fire in the neither-path state.
+  # The split-file migration task (above) guards on forge-py presence and skips cleanly here.
+  - ".claude/commands/**"
+  - ".claude/agents/**"
+  - ".forge/bin/**"
+  - ".forge/lib/**"
+  - ".forge/templates/**"
+  - ".forge/modules/**"
+  - ".forge/adapters/**"
 
 # Spec 441 hotfix — consumer-owned top-level files.
 # Spec 427's original intent was "stoke does not clobber consumer-owned
@@ -86,6 +99,13 @@ _tasks:
       - |-
         command -v sh >/dev/null 2>&1 || { echo "ERROR: POSIX sh required on PATH. Install Git for Windows option 3 (Unix tools on PATH) OR launch from Git Bash. See docs/process-kit/cross-platform-python-guide.md § Windows prerequisite detail." >&2; exit 2; }
         test -f .forge/migrations/spec-398.applied && exit 0
+        # Spec 489 / SIG-489-02 — phase-D render-shrink: the framework (incl. .forge/bin/forge-py)
+        # ships via the SIGNED PLUGIN, not the Copier render, so forge-py is absent in a phase-D
+        # render. The split-file migration cannot run here AND is unnecessary: a fresh phase-D
+        # consumer renders directly in the current (split-file) format, and an existing consumer
+        # already applied spec-398 pre-phase-D. Skip when forge-py is absent. (Pre-phase-D renders
+        # still have forge-py present -> guard passes -> migration runs unchanged.)
+        test -f .forge/bin/forge-py || exit 0
         # Spec 427 Req 10 / AC 9: skip the dirty-tree guard when running inside
         # /forge stoke's copier-direct invocation. Stoke runs its OWN dirty-tree
         # guard pre-apply (Req 4); duplicating the check here causes false

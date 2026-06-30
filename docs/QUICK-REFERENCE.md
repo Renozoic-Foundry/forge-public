@@ -45,6 +45,7 @@
 | `/interview` | Socratic elicitation for thinking through problems | sonnet |
 | `/spec` | Create a new spec from a description | sonnet |
 | `/matrix` | Display and re-rank the backlog priority matrix | haiku |
+| `/reconcile` | Ingest git history committed outside FORGE — draft stub specs (large clusters) / memory notes (small changes) | sonnet |
 
 ### Implementation
 
@@ -78,7 +79,15 @@
 | `/synthesize` | Synthesize accumulated project artifacts into refined documents | sonnet |
 | `/decision` | Record an architecture decision (ADR) | sonnet |
 | `/consensus` | Multi-role structured review with vote tally and divergence signal | sonnet |
+| `/signal-to-strategy` | Turn external research signals into scored FORGE advantage hypotheses | sonnet |
 | `/dependency-audit` | Audit project dependencies for risk | sonnet |
+
+**Role-value rollup (Spec 305)** — not a slash command; a helper subcommand:
+`bash .forge/lib/score-audit.sh role-audit [--json]` (PowerShell: `pwsh .forge/lib/score-audit.ps1 role-audit`)
+rolls up which advisory roles fired across `/spec`/`/implement`/`/close`/`/consensus`, their
+recommendations, and operator acceptance (per-role dispatch count, acceptance %, avg concerns,
+stage distribution). Reads the shared gitignored sink `.forge/state/score-audit.jsonl`. See
+`docs/process-kit/role-dispatch-schema.md`.
 
 ### Typical Workflow
 

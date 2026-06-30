@@ -28,6 +28,16 @@ $DefaultRoots = @(
 )
 $MinActions = @('git_push', 'git_push_force', 'git_reset_hard', 'git_checkout_dashes', 'gh_pr_create', 'gh_pr_merge', 'rm_rf')
 
+# Spec 504: deterministic work-unit cap (a backstop, NOT the perf fix). One work unit is counted
+# per (file × action × matching-line) processed in the scan body. If the running total exceeds
+# this limit the gate trips FAIL-LOUD (WARN in advisory, FAIL + non-zero in strict) and NEVER
+# exits 0 / emits PASS. This is a deterministic iteration count, NOT a wall-clock timeout, so the
+# AC-3 fail-loud test is reproducible / non-flaky. The threshold value is IDENTICAL to the .sh
+# variant's SCAN_WORK_UNIT_CAP (AC-5 cap-semantics equivalence) — do not change one without the
+# other (the test asserts threshold equality across variants). FORGE_AUTH_LINT_WORK_CAP is a
+# test-only override that lets AC-3 drive the cap deterministically (same env var as the .sh).
+$ScanWorkUnitCap = if ($env:FORGE_AUTH_LINT_WORK_CAP) { [int]$env:FORGE_AUTH_LINT_WORK_CAP } else { 1000000 }
+
 function Show-Usage {
     @'
 validate-authorization-rules.ps1 — Spec 327 lint gate (PowerShell parity)
@@ -213,16 +223,18 @@ function Test-Whitelisted {
 }
 
 function Test-GatingTokenBefore {
+    # Spec 504 perf fix: operate on the already-loaded in-memory $Lines array (the file content
+    # read ONCE per file in the scan loop) instead of re-running Get-Content per match. This is
+    # the .ps1 analog of removing the .sh's per-match `sed | grep` fan-out.
     param(
-        [string]$FilePath,
+        [string[]]$Lines,
         [int]$MatchLine,
         [int]$Window,
         [string]$GatingRegex
     )
     $start = [Math]::Max(1, $MatchLine - $Window)
-    $lines = Get-Content -LiteralPath $FilePath
-    for ($i = $start - 1; $i -lt $MatchLine -and $i -lt $lines.Count; $i++) {
-        if ($lines[$i] -match $GatingRegex) { return $true }
+    for ($i = $start - 1; $i -lt $MatchLine -and $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i] -match $GatingRegex) { return $true }
     }
     return $false
 }
@@ -341,11 +353,18 @@ if ($ScanPaths) {
 }
 
 # Scan
-$violations = @()
+$violations = [System.Collections.Generic.List[object]]::new()
 $scannedFiles = 0
 $startTime = Get-Date
 
-foreach ($root in $ScanRoots) {
+# Spec 504 R2/R3: deterministic work-unit counter + fail-loud cap state. $workUnits increments
+# once per (file × action × matching-line) processed; if it exceeds $ScanWorkUnitCap the scan stops
+# (labeled break) and $capTripped is set so the output section emits a non-clean verdict (never
+# PASS / exit 0). The threshold and cap-trip verdict/exit semantics are IDENTICAL to the .sh (AC-5).
+$workUnits = 0
+$capTripped = $false
+
+:scan foreach ($root in $ScanRoots) {
     if (-not (Test-Path $root)) { continue }
     $files = if ((Get-Item $root).PSIsContainer) {
         Get-ChildItem -LiteralPath $root -Recurse -File -Include '*.md', '*.jinja' -ErrorAction SilentlyContinue
@@ -355,6 +374,8 @@ foreach ($root in $ScanRoots) {
     foreach ($file in $files) {
         $scannedFiles++
         $rel = $file.FullName.Substring($RepoRoot.Length + 1) -replace '\\', '/'
+        # Spec 504 perf fix: read each file ONCE into $content; Test-GatingTokenBefore reuses this
+        # in-memory array instead of re-reading the file per match.
         $content = Get-Content -LiteralPath $file.FullName
         for ($lineIdx = 0; $lineIdx -lt $content.Count; $lineIdx++) {
             $lineNum = $lineIdx + 1
@@ -362,19 +383,26 @@ foreach ($root in $ScanRoots) {
             foreach ($action in $script:Actions) {
                 if (-not $action.pattern) { continue }
                 if ($lineText -match $action.pattern) {
+                    # Work-unit accounting + deterministic fail-loud cap (Spec 504 R2/R3).
+                    $workUnits++
+                    if ($workUnits -gt $ScanWorkUnitCap) {
+                        $capTripped = $true
+                        break scan
+                    }
+
                     $gatingRe = if ($action.gating_token) { $action.gating_token } else { $script:GatingDefault }
                     $window = if ($action.proximity_window) { [int]$action.proximity_window } else { $script:WindowDefault }
-                    if (Test-GatingTokenBefore -FilePath $file.FullName -MatchLine $lineNum -Window $window -GatingRegex $gatingRe) {
+                    if (Test-GatingTokenBefore -Lines $content -MatchLine $lineNum -Window $window -GatingRegex $gatingRe) {
                         continue
                     }
                     $wl = Test-Whitelisted -RelPath $rel -ActionName $action.name
-                    $violations += [ordered]@{
+                    $violations.Add([ordered]@{
                         file               = $rel
                         line               = $lineNum
                         action             = $action.name
                         gating_token_found = $false
                         whitelist_entry    = $wl
-                    }
+                    })
                 }
             }
         }
@@ -387,6 +415,20 @@ $actionable = ($violations | Where-Object { -not $_.whitelist_entry }).Count
 # Spec 333: capture GATE output into a buffer for the audit artifact.
 $gateBuf = ''
 $resultLabel = ''
+
+# Spec 504 R2/R3: deterministic work-unit cap tripped → FAIL-LOUD. Emit a non-clean verdict
+# (WARN in advisory, FAIL + non-zero in strict). NEVER PASS / exit 0. Short-circuits the normal
+# PASS/WARN/FAIL block below so a cap-trip can never be reported as a clean scan. Verdict + exit
+# semantics are IDENTICAL to the .sh variant (AC-5 cap-semantics equivalence).
+if ($capTripped) {
+    $resultLabel = if ($EffectiveMode -eq 'strict') { 'FAIL' } else { 'WARN' }
+    $gateBuf = "GATE [authorization-rule-lint]: $resultLabel - scan bound exceeded after $workUnits work units (cap=$ScanWorkUnitCap) over $scannedFiles file(s) (mode=$EffectiveMode). Scan halted before completing - verdict is NOT clean. Investigate a malformed/adversarial command body or raise FORGE_AUTH_LINT_WORK_CAP if the corpus legitimately grew."
+    [Console]::Error.WriteLine($gateBuf)
+    $exitCodeFinal = if ($EffectiveMode -eq 'strict') { 1 } else { 0 }
+    $summaryJson = "{`"actionable`":0,`"scanned_files`":$scannedFiles,`"action_count`":$($script:Actions.Count),`"violations_total`":$($violations.Count),`"elapsed_seconds`":$elapsed,`"cap_tripped`":true,`"work_units`":$workUnits,`"work_unit_cap`":$ScanWorkUnitCap}"
+    Write-EvidenceArtifact -LinterName 'validate-authorization-rules' -InputFile $AgentsMd -ModeValue $EffectiveMode -ResultLabel $resultLabel -ExitCodeValue $exitCodeFinal -StdoutBuf $gateBuf -SummaryJson $summaryJson
+    exit $exitCodeFinal
+}
 
 if ($Json) {
     $out = '['
@@ -424,7 +466,8 @@ if ($Json) {
 $exitCodeFinal = 0
 if ($actionable -gt 0 -and $EffectiveMode -eq 'strict') { $exitCodeFinal = 1 }
 
-$summaryJson = "{`"actionable`":$actionable,`"scanned_files`":$scannedFiles,`"action_count`":$($script:Actions.Count),`"violations_total`":$($violations.Count),`"elapsed_seconds`":$elapsed}"
+# Spec 504: cap_tripped:false on the normal path — a completed scan, by construction.
+$summaryJson = "{`"actionable`":$actionable,`"scanned_files`":$scannedFiles,`"action_count`":$($script:Actions.Count),`"violations_total`":$($violations.Count),`"elapsed_seconds`":$elapsed,`"cap_tripped`":false,`"work_units`":$workUnits,`"work_unit_cap`":$ScanWorkUnitCap}"
 Write-EvidenceArtifact -LinterName 'validate-authorization-rules' -InputFile $AgentsMd -ModeValue $EffectiveMode -ResultLabel $resultLabel -ExitCodeValue $exitCodeFinal -StdoutBuf $gateBuf -SummaryJson $summaryJson
 
 exit $exitCodeFinal

@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FORGE Gate State",
+  "description": "Persistent gate outcome tracking per spec. Written at each gate checkpoint, read by chain decision logic and /close validation.",
+  "type": "object",
+  "required": ["schema_version", "spec_id", "gates"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "spec_id": {
+      "type": "string",
+      "pattern": "^[0-9]{3}[a-z]?$"
+    },
+    "spec_title": {
+      "type": "string"
+    },
+    "change_lane": {
+      "type": "string",
+      "enum": ["hotfix", "small-change", "standard-feature", "process-only"]
+    },
+    "current_status": {
+      "type": "string",
+      "enum": ["draft", "in-progress", "implemented", "closed", "deprecated"],
+      "description": "Latest known spec lifecycle status"
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate_name", "status", "timestamp"],
+        "properties": {
+          "gate_name": {
+            "type": "string",
+            "description": "Gate identifier (e.g., completeness, delivery, test-execution, post-implementation)"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PASS", "FAIL", "CONDITIONAL_PASS"]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Human-readable explanation of the gate outcome"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Session log ID when this gate was evaluated (e.g., 2026-03-14-001)"
+          },
+          "command": {
+            "type": "string",
+            "description": "Command that triggered this gate (e.g., /implement, /close)"
+          },
+          "challenge_nonce": {
+            "type": "string",
+            "description": "If gate required YubiKey auth (Spec 033), the challenge nonce used"
+          }
+        }
+      }
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

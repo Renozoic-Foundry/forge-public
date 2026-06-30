@@ -1,0 +1,43 @@
+{
+  "name": "forge",
+  "version": "0.1.0",
+  "description": "FORGE — spec-driven, evidence-gated development workflow. Ships the FORGE command, agent, skill, and hook payload as a Claude Code plugin installable from a local checkout (claude plugin install ./), alongside the existing Copier distribution.",
+  "author": {
+    "name": "Renozoic Foundry"
+  },
+  "homepage": "https://github.com/Renozoic-Foundry/forge-public",
+  "license": "MIT",
+  "keywords": [
+    "forge",
+    "spec-driven",
+    "evidence-gated",
+    "workflow",
+    "process"
+  ],
+  "commands": [
+    "./.claude/commands"
+  ],
+  "agents": [
+    "./.claude/agents/cco.md",
+    "./.claude/agents/cefo.md",
+    "./.claude/agents/cfo.md",
+    "./.claude/agents/ciso.md",
+    "./.claude/agents/cmo.md",
+    "./.claude/agents/competitor.md",
+    "./.claude/agents/coo.md",
+    "./.claude/agents/cqo.md",
+    "./.claude/agents/creso.md",
+    "./.claude/agents/cro.md",
+    "./.claude/agents/cto.md",
+    "./.claude/agents/cxo.md",
+    "./.claude/agents/devils-advocate.md",
+    "./.claude/agents/implementer.md",
+    "./.claude/agents/maverick-thinker.md",
+    "./.claude/agents/spec-author.md",
+    "./.claude/agents/validator.md"
+  ],
+  "skills": [
+    "./.claude/skills"
+  ],
+  "hooks": "./.claude-plugin/hooks/hooks.json"
+}

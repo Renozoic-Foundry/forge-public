@@ -1,0 +1,45 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Force LF line endings for bash scripts (cross-platform safety)
+*.sh text eol=lf
+
+# Force LF on .shellcheckrc — validate-bash.sh parses key=value pairs and would
+# otherwise pass `--shell=bash\r` to shellcheck on Windows (Spec 313).
+.shellcheckrc text eol=lf
+
+# Force LF line endings for Markdown so cross-level sync (Spec 270) sees byte-identical
+# canonical/mirror content on Windows (autocrlf=true would otherwise produce CRLF in the
+# working tree and break --check).
+*.md text eol=lf
+
+# Force LF on Copier .jinja command/agent mirrors so the cross-level byte-compare
+# (forge-sync-cross-level.sh --check) is stable under autocrlf=true. These mirror
+# LF-pinned canonical *.md sources; without this pin they materialize as CRLF in the
+# working tree on Windows and flag phantom drift (Spec 482, SIG-480-CRLF class).
+*.jinja text eol=lf
+
+# Spec 488 — plugin payload signing: pin payload line endings so the signed manifest
+# (LF-normalized sha256 per file) verifies identically on a Windows CRLF checkout (R3).
+# The manifest builder already strips CR before hashing; these pins are belt-and-suspenders
+# and satisfy R3's "payload paths carry eol=lf" requirement for the .json payload members
+# (plugin.json, hooks.json) and the generated manifest itself.
+*.json text eol=lf
+.claude-plugin/payload-manifest.txt text eol=lf
+
+# Spec 517 — the minisign detached signature is binary: NO eol conversion on any platform.
+# Under `* text=auto` git would auto-detect the ASCII .minisig as text and CRLF it on a
+# Windows checkout, corrupting minisign's read. `binary` (= -text -diff) keeps the signature
+# bytes identical to what was signed, so verification holds cross-platform (forge-public PR #12
+# Windows verify failure root cause; pairs with the payload-manifest.txt eol=lf pin above).
+*.minisig binary
+
+# Spec 482 line-ending review (SIG-480-CRLF): the cross-level byte-compare
+# (forge-sync-cross-level.sh --check) is normalization-stable because every file
+# class it compares is pinned to eol=lf above — `.forge/commands/*.md`,
+# `docs/process-kit/*.md` (both *.md), `.claude/agents/*.md` (*.md), and the *.sh
+# scripts. With autocrlf=true these would otherwise materialize as CRLF in the
+# working tree and flag phantom drift. `.ps1` parity scripts are intentionally NOT
+# pinned: they are not in the cross-level byte-compare set, so their working-tree
+# EOL never affects --check. Verified by scripts/check-portability.sh (autocrlf
+# class) and .forge/bin/tests/test-spec-482-portability.sh (Test 3 / Test 4).

@@ -1,0 +1,33 @@
+name: publications
+display_name: "Publications & Content Templates"
+description: "HTML templates for articles, slide decks, metrics dashboards, and showcase pages"
+version: 1
+category: publishing
+requires: []
+conflicts: []
+
+recommendation:
+  when: "Projects that publish articles, presentations, or dashboards from project data"
+  not_when: "Internal-only projects with no publishing needs"
+
+files:
+  - docs/publications/
+
+injects: []
+
+onboarding:
+  phase: features
+  prompt: "Enable publication templates (articles, decks, dashboards)?"
+  explain: |
+    Adds HTML templates for generating articles, slide decks, metrics
+    dashboards, and showcase pages from your project data.
+
+    Templates: article.html, deck.html, metrics.html, showcase.html
+    Plus a registry (REGISTRY.md) and trigger definitions (TRIGGERS.md).
+
+    Skip this if: you don't plan to publish content about your project.
+    These are easy to add later.
+
+    Files added: docs/publications/ directory (6 files)
+    No command modifications.
+  default: false

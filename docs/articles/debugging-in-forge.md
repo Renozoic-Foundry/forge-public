@@ -2,7 +2,7 @@
 
 **How an AI-first development framework turns every debugging conversation into a process improvement engine.**
 
-*the maintainer — April 2026*
+*Renozoic Foundry — April 2026*
 
 ---
 

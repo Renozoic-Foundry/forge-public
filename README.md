@@ -27,6 +27,12 @@ Recent changes since the last published refresh — split by audience. Each item
 
 ### User-facing changes
 
+- **Install FORGE as a Claude Code plugin** — the FORGE command, agent, skill, and hook payload now installs directly from a checkout with `claude plugin install ./`, alongside the existing Copier project scaffolding. One signing-ready package instead of hand-wired command directories (Specs 463, 487–491).
+- **Hands-off chained delivery with a push safety gate** — `/implement` can flow from one spec to the next without an intervening `/close`, while every `git push` still raises an in-session approval prompt so the human stays the release authority (Specs 494–498).
+- **`/evolve` fires when signals warrant, not on a calendar** — the Evolve Loop is admitted by accumulated signal thresholds (unreviewed signals, error autopsies, deferred scope) instead of a fixed cadence, so process review happens when there is actually something to review (Spec 500).
+- **`/consensus` — structured multi-role review on demand** — gather Devil's Advocate, Maverick Thinker, Competitor, and C-suite perspectives on a contentious spec in one pass before you commit (Spec 179).
+- **`/signal-to-strategy` — turn research into scored advantage hypotheses** — convert external research signals into ranked, testable strategy bets that feed the backlog (Spec 458).
+- **`/reconcile` — ingest work done outside FORGE** — scans git history for commits with no matching spec, clusters them by related files, and (routed by size) drafts retroactive stub specs for large clusters or operator memory notes for small ambient changes. Keeps the spec corpus a faithful map of the codebase on shared / mixed-team repos. Purely additive — stubs are `draft` and never auto-advance (Spec 486).
 - **Aging-draft surface in `/now`** — drafts past their `valid-until` date now appear in the daily report so they don't silently rot (Spec 363).
 - **Tab-lane awareness in choice blocks** — when a tab is active, post-action menus filter or annotate options to match lane scope (Spec 351). Single-tab sessions stay quiet — no active-tabs noise (Spec 352).
 - **Active-tab marker** — lifecycle commands (`/implement`, `/close`, `/session`) now self-identify their registry row from `.forge/state/active-tab-*.json`, eliminating ambiguous "which tab am I?" prompts (Spec 353).
@@ -89,6 +95,19 @@ irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install
 The install script handles prerequisites (Python, Git, Copier), detects Claude Code, and provides environment-appropriate next steps. Safe to run multiple times.
 
 > **IDE reload required:** If your IDE is already open when you run the install script, reload the window so it picks up the new `/forge-bootstrap` command (VS Code: `Ctrl+Shift+P` → "Developer: Reload Window").
+
+### Install as a Claude Code plugin
+
+Claude Code users can install the FORGE command, agent, skill, and hook payload directly from a `forge-public` checkout — the primary install path for the framework surface:
+
+```bash
+git clone https://github.com/Renozoic-Foundry/forge-public.git
+cd forge-public
+# In Claude Code, from the checkout:
+claude plugin install ./
+```
+
+The plugin ships the slash commands, agent roles, skills, and hooks. To lay down the per-project spec / session / process-kit structure, use the Copier path below (`/forge-bootstrap` or `copier copy`). The two are complementary: the plugin provides the framework surface, Copier scaffolds an individual project.
 
 ### Bootstrap your project
 
@@ -181,9 +200,9 @@ These capabilities are built into every FORGE project out of the box:
 - **AI-generated specs** — Describe what you need; AI produces the full spec in seconds. Human approves; AI implements with evidence at every gate.
 - **Evidence gates** — Every lifecycle transition requires proof. Structured PASS/FAIL outcomes. Gate failures produce actionable feedback.
 - **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
-- **Role-separated agents** — 17 roles (Spec Author, Devil's Advocate, Implementer, Validator, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO, Maverick Thinker) with runtime tool restrictions via `.claude/agents/`.
+- **Role-separated agents** — 17 roles (Spec Author, Devil's Advocate, Implementer, Validator, Maverick Thinker, Competitor, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **30 slash commands** — Full lifecycle coverage with command chaining and model tiering (Haiku for display, Sonnet for code).
+- **32 slash commands** — Full lifecycle coverage with command chaining. Model tiering is advisory; the IDE model picker is the real selector (Spec 316). See [command reference](docs/command-reference.md) for the full list.
 - **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
 
 ### Enhancing features (opt-in)
@@ -313,11 +332,15 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 434 specs across 111 sessions, validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 512 specs across 138 sessions (2026-03-13 through 2026-06-29), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for prerequisites, development setup, spec lifecycle, and how to open a PR.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for prerequisites, development setup, spec lifecycle, and how to open a PR. The canonical source repository is [Renozoic-Foundry/forge-public](https://github.com/Renozoic-Foundry/forge-public).
+
+## Security
+
+To report a vulnerability, use GitHub's **private vulnerability reporting** on [Renozoic-Foundry/forge-public](https://github.com/Renozoic-Foundry/forge-public) (Security tab → Report a vulnerability). Do not open a public issue for security reports. See [SECURITY.md](SECURITY.md) for the full policy and response timelines.
 
 ## Compliance Disclaimer
 

@@ -38,11 +38,12 @@ The mechanical criteria are necessary but not sufficient. The subjective layer i
 1. **Spec closed**: Spec 330 is at `Status: closed`. (Satisfied by /close 330 on 2026-04-26.)
 2. **Mechanical clean**: `bash scripts/validate-agents-md-drift.sh --mode=strict; echo $?` returns `0` against the current `AGENTS.md`.
 3. **Alias-map audit complete**: `scripts/agents-md-action-aliases.yaml` `ignore_prose:` and `ignore_block:` lists have each entry annotated with a removal-rationale comment (per Spec 330 AC 9a) — no silent escape hatches.
-4. **Triage decision tree available** (recommended, not blocking): Spec 334 (process-kit page on prose↔block model + triage decision tree) is at `Status: closed`. This is the COO-consensus disposition from /close 330: "sequencing 334 before 332's flip" (CHANGELOG 2026-04-26). Spec 334 hardens operator decision-making at the flip moment by documenting the decision tree operators consult before flipping. Treated as a **soft prerequisite** here — recommended but not strictly blocking.
+4. **No coordinated two-list bypass** (Spec 411): `bash .forge/lib/two-list-bypass-detect.sh; echo $?` returns `0` against `scripts/agents-md-action-aliases.yaml`. This is the runtime counterpart to criterion 3's annotation audit — criterion 3 verifies each ignore entry is *justified*; this verifies no action is suppressed on **both** `ignore_prose:` and `ignore_block:`. A coordinated pair silently neutralizes drift detection for that action and is invisible to the drift detector itself (both sides are dropped before comparison), so the annotation audit alone cannot catch it. The detector also runs automatically inside `validate-agents-md-drift.{sh,ps1}` (fatal exit 2 on bypass), so criterion 2's strict run enforces it transitively; this line names it as a hard prerequisite per Spec 411.
+5. **Triage decision tree available** (recommended, not blocking): Spec 334 (process-kit page on prose↔block model + triage decision tree) is at `Status: closed`. This is the COO-consensus disposition from /close 330: "sequencing 334 before 332's flip" (CHANGELOG 2026-04-26). Spec 334 hardens operator decision-making at the flip moment by documenting the decision tree operators consult before flipping. Treated as a **soft prerequisite** here — recommended but not strictly blocking.
 
 **Subjective criterion (operator decides):**
 
-5. **Operator judgment**: Same shape as Spec 327 criterion 4.
+6. **Operator judgment**: Same shape as Spec 327 criterion 4.
 
 The Spec 330 criteria are stricter on the alias-map audit (criterion 3) because the drift detector is a **foundation gate for Gate 327** — the prose↔block sync underpins the authorization model itself. Per CISO consensus at /consensus 330: "advisory default carries forward the Spec 327 known weakness for an integrity check that is itself a foundation of the authorization model."
 
@@ -117,6 +118,7 @@ A flip-back is a normal operational event, not a failure of the gate. The adviso
 - **Spec 334** — Process-kit page on prose↔block model + triage decision tree (recommended soft prerequisite for Spec 330 flip per COO consensus disposition).
 - **Spec 331** — `forge:<x>:start/end` shared parser library (CTO + MT compositional debt; tangentially related — the linters consume the sentinel block parsed via this pattern).
 - **Spec 333** — Drift detector evidence persistence (CISO request for audit-trail artifact; tangentially related).
+- **Spec 411** — Coordinated two-list bypass detector (mandatory criterion 4 for the Spec 330 flip; closes the `ignore_prose` + `ignore_block` silent-neutralization vector flagged at /consensus 332 round 1).
 
 ## Current observed baseline (plan-filing time, 2026-04-28)
 
@@ -126,5 +128,6 @@ For traceability, the strict-mode dry-run results captured at /implement 332:
 |------|---------|------|------|------|
 | Spec 327 | `bash scripts/validate-authorization-rules.sh --mode=strict` | strict | 0 | 122 command files clean across 7 actions |
 | Spec 330 | `bash scripts/validate-agents-md-drift.sh --mode=strict` | strict | 0 | 7 actions in prose, 7 in block, 0 drift |
+| Spec 411 | `bash .forge/lib/two-list-bypass-detect.sh` | n/a | 0 | 4 prose-ignores, 0 block-ignores, 0 coordinated bypass (criterion 4) |
 
 Both gates would pass in strict mode today. The mandatory criteria above remain the gating contract — operator subjective judgment is the final layer before the flip.

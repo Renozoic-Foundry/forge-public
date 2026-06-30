@@ -24,37 +24,17 @@
     "  }"
   ],
 
+  "//hooks-phase-d": [
+    "Spec 489 (phase D): the six FRAMEWORK gate-hooks (check-role-permissions, check-edit-gate,",
+    "check-authority-guard, check-commit-guard, check-session-start, check-stop) are registered by",
+    "the SIGNED PLUGIN's hooks.json (Spec 487/488) and are NO LONGER rendered here. The single",
+    "residual RENDERED hook below is the Spec 489 detective audit: it fails loud at SessionStart when",
+    "NEITHER the plugin NOR rendered gate-hooks are enforcing (the 'neither path enforcing' state).",
+    "It lives at .forge/check-neither-path.sh (.forge/ ROOT, not under the excluded .forge/{bin,lib})",
+    "so it survives the Copier-shrink. PostToolUse stays as a consumer-owned test-command placeholder."
+  ],
+
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .forge/bin/check-role-permissions.sh",
-            "timeout": 5000,
-            "statusMessage": "Checking FORGE role permissions..."
-          },
-          {
-            "type": "command",
-            "command": "bash -c 'FILE=\"$CLAUDE_FILE_PATH\"; if [[ \"$FILE\" == template/* || \"$FILE\" == scripts/* || \"$FILE\" == copier.yml ]]; then if [[ ! -f .forge/state/implementing.json ]]; then echo \"EDIT-GATE: No active /implement session. Run /implement <spec> before editing $FILE\" >&2; exit 1; fi; fi; exit 0'",
-            "timeout": 3000,
-            "statusMessage": "Checking edit-gate..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .forge/bin/check-commit-guard.sh",
-            "timeout": 3000,
-            "statusMessage": "Checking commit guard..."
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -66,12 +46,14 @@
         ]
       }
     ],
-    "Stop": [
+    "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "<!-- customize: replace with your project's test command -->"
+            "command": "bash .forge/check-neither-path.sh",
+            "timeout": 5000,
+            "statusMessage": "FORGE enforcement-path audit (Spec 489)..."
           }
         ]
       }

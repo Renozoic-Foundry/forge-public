@@ -30,6 +30,16 @@ If $ARGUMENTS is `?` or `help`:
 
 ---
 
+## [mechanical] Step 0-bl — Batch-lane contract guard (Spec 475)
+
+Check for `.forge/state/batch-lane.json` in the current working tree. Skip silently if no marker exists — single-tab sessions are unaffected.
+
+If the marker exists and is fresh (<24h): REFUSE new spec creation:
+`New specs are not created inside batch lane worktrees (batch <batch_id>, lane spec <spec_id>). Capture the candidate with /note instead — the orchestrator creates specs after merge (prevents spec-number collisions across lanes; the lane-born Specs 471-473 avoided collision by luck, not mechanism).`
+STOP — do not execute any further steps. Note: `/revise` of this lane's ASSIGNED spec remains allowed — only NEW spec creation is forbidden here.
+
+If the marker is stale (>24h): emit `⚠ Stale batch-lane marker — proceeding as single-tab. Delete .forge/state/batch-lane.json if this lane is no longer part of a batch.` and proceed.
+
 ## [mechanical] Step 0a — Evolve Loop Boundary Check (Spec 191)
 Read `docs/sessions/context-snapshot.md`. If a `## Active evolve loop` section exists with `status: in-progress`:
 - Stop and report: "Evolve loop in progress (started <started>). Solve-loop commands (/implement, /spec, /close) are blocked until the evolve loop completes. Return to the /evolve session and use the exit gate to choose your next action."
@@ -114,6 +124,7 @@ If $ARGUMENTS does not contain `--guided`: continue with Step 1 below.
    - TC = highest applicable indicator (e.g., 3 files but manual verification → `$$`)
    - TC is operator-judgment input — calibrate against memory of similar past specs (Spec 316: FORGE no longer collects per-invocation cost data).
 6. Write the spec file at `docs/specs/NNN-<slug>.md` by filling in the template:
+   **Drafting convention (Spec 465)** — apply `docs/process-kit/implementation-patterns.md` § Spec drafting prompts: minimal-slice directive (no length targets) + assumption-verification tokens on every claim about existing code state. Applies equally to delegated/subagent drafting prompts.
    - Set `Status: draft`
    - Set `Change-Lane:` based on the description (infer; ask only if genuinely ambiguous)
    - Set `Trigger:` in the frontmatter
@@ -163,6 +174,12 @@ e. **Present consolidated Review Brief**:
    ```
 
 f. If any perspective recommends BLOCK, flag the spec but do NOT auto-block — the operator decides. BLOCK is advisory.
+
+g. **Role-value instrumentation (Spec 305)** — after presenting the Review Brief, append one `role-dispatch` record per selected role to the shared score-audit sink:
+   ```bash
+   bash .forge/lib/score-audit.sh record-dispatch <NNN> spec <role> <recommendation> <confidence> "<key concern>"
+   ```
+   Map each role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence (`HIGH|MEDIUM|LOW`) verbatim. Best-effort: the helper always exits 0 — never block /spec. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
 
 ---
 
@@ -305,6 +322,66 @@ Detection: active.
 See: docs/specs/388-spec-adjacency-scan.md for rationale, /consensus loop-17 framing, and full AC set.
 
 <!-- spec-388-adjacency-scan:end -->
+
+---
+
+<!-- spec-466-draft-time-pass:start -->
+### [mechanical] Step 6g — Pre-/consensus draft-time role pass (Spec 466)
+
+After the spec draft is written and scored (Steps 6b–6f complete), optionally run a **draft-time pass**: two focused subagent reviews (MT structural-reframe + CISO trust-boundary) against the draft, applying findings while the draft is still cheap to change — before it enters `/consensus` round 1. In the 2026-06-11 batch these two concern classes each recurred across 4–5 of 5 specs but only surfaced at R1, costing 7 auto-revisions. This pass is **provisional** (see Sunset below).
+
+**Lane gating (Constraint — SIG-436-D ceremony-proportionality).** Run the draft-time pass ONLY when EITHER condition holds:
+- `Change-Lane: standard-feature`, OR
+- this draft is part of a **batch draft** (>1 spec drafted in one fan-out / delegated drafting run).
+
+Otherwise SKIP silently. In particular, a **single `small-change`, `hotfix`, or `process-only` draft is exempt** — do not run the pass and do not record anything. (This spec, Spec 466, is itself a single `small-change` draft and is exempt — it would not trigger its own pass.)
+
+**The two lens prompts (run each as an isolated read-only subagent against the draft file; ≤15 lines each):**
+
+MT lens (structural reframe):
+```
+You are a Maverick-Thinker reviewing a FORGE spec DRAFT before it enters consensus.
+Read: docs/specs/NNN-<slug>.md
+ONE question: is there a structural reframe that SHRINKS or RE-SLICES this spec?
+- Can the scope collapse to a smaller slice that still earns its keep against Architectural Principle 5 (minimal by default)?
+- Does the draft honor the Spec 465 minimal-slice convention (docs/process-kit/implementation-patterns.md § Spec drafting prompts), or does it pad scope?
+- Could two requirements be one, or could a requirement be dropped entirely?
+You are READ-ONLY (Read/Glob/Grep/Bash-read only). Do not modify any file.
+Output JSON: {"findings":[{"reframe":"<1-line>","applies":true|false}],"recommendation":"REFRAME|KEEP"}.
+"No reframe needed" IS a valid answer — do not invent one.
+```
+
+CISO lens (trust boundary):
+```
+You are a CISO reviewing a FORGE spec DRAFT before it enters consensus.
+Read: docs/specs/NNN-<slug>.md
+ONE question: does any mechanism in this spec TRUST an operator-writable surface?
+- Does a gate, check, or claim rely on a value an operator (or any non-privileged actor) can edit (frontmatter field, config key, log line, file path) without a counter-signing or verification step?
+- Is any "verified" / "approved" / "sealed" state derived from a writable artifact rather than an immutable anchor (git SHA, hash, append-only log)?
+You are READ-ONLY (Read/Glob/Grep/Bash-read only). Do not modify any file.
+Output JSON: {"findings":[{"surface":"<1-line>","writable":true|false}],"recommendation":"HARDEN|CLEAR"}.
+"No writable-trust surface" IS a valid answer — do not invent one.
+```
+
+**Apply findings**: for each lens finding with `applies/writable: true`, revise the draft in place to address it (shrink scope / re-slice for MT; add a verification anchor or counter-sign for CISO) before the draft is presented for final approval. Findings the operator declines are left unaddressed but still counted as surfaced.
+
+**Record in the Revision Log** (exactly this format — one line):
+```
+YYYY-MM-DD: draft-time pass (Spec 466): MT <n> findings applied, CISO <n> findings applied.
+```
+Worked example (Spec 458, dry-run 2026-06-14):
+```
+2026-06-14: draft-time pass (Spec 466): MT 1 findings applied, CISO 0 findings applied.
+```
+(`<n>` is the count of findings actually applied to the draft; a clean lens records `0`.)
+
+**Sunset / evaluation hook (provisional).** This pass is PROVISIONAL. It is evaluated at the **first `/evolve` after 3+ batch drafts have used it**. Measure: the consensus-R1 **MT-reframe rate** with the pass active versus the **5/5 baseline** (CI-371). `/evolve` decides: keep, harden into a gate, or remove. The pass adds NO frontmatter field and does NOT block `/consensus` when skipped.
+
+Detection: active.
+
+See: docs/specs/466-pre-consensus-draft-time-role-pass.md for the full AC set and SIG-436-D framing.
+
+<!-- spec-466-draft-time-pass:end -->
 
 ---
 

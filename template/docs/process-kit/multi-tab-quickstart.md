@@ -79,23 +79,30 @@ If you find yourself confused about which file holds the source of truth, the ru
 
 ## Dispatch mode comparison
 
-When `/parallel` runs, it creates worktrees and a branch per spec — but the **dispatch mechanism** (how agents actually fan out into the worktrees) is a separate decision. There are three plausible modes. The multi-tab pattern is the canonical recommendation; `EnterWorktree` is a solo-session alternative; the `Agent + isolation: "worktree"` variant is evaluated but not yet shipped.
+When `/parallel` runs, it creates worktrees and a branch per spec — but the **canonical dispatch mechanism** (how agents fan out into the worktrees) is **conditional on the configured autonomy level** (read from AGENTS.md, Spec 021). Per ADR-451 and Spec 454, substrate canonicity tracks the autonomy level: multi-tab is canonical at L0–L2 (the supervised/interactive level where most operators work today); native `Agent` + `isolation: "worktree"` fan-out is canonical at L3+ (autonomous, agent-parallel). `EnterWorktree` is a solo-session alternative at any level. Both modes stay available at every level — only the canonical label moves with the autonomy level.
 
-| Mode | Concurrency | Mechanism | When to use | Status |
-|------|-------------|-----------|-------------|--------|
-| **Multi-tab** | True parallel (N tabs run independently) | Operator opens N Claude Code tabs, one per worktree. Each tab `cd`s into its worktree, runs `/tab <label> feature NNN`, then `/implement NNN`. Tabs coordinate through the registry (Specs 351/352/353). | Genuine concurrent execution across 2+ specs — the common case for `/parallel`. | **Canonical.** Recommended default. |
-| **`EnterWorktree`** | Serialized (one worktree at a time per session) | The `EnterWorktree` tool switches the current session into a worktree; `ExitWorktree` returns to the parent. One worktree per session at any moment. | Solo session that needs to dip into one worktree, do focused work, then return. Single-spec dispatch. Not parallel-dispatch. | **Alternative** for solo-session work. |
-| **`Agent` + `isolation: "worktree"`** | True parallel (N sub-agents from one parent) | Would spawn the `Agent` tool with `isolation: "worktree"` per worktree, fanning out from one parent session. | Hypothetical — would let a single tab orchestrate a parallel run without operator-launched tabs. | **Evaluated, not shipped.** Requires a sub-agent dispatch path that does not exist in `/parallel` Step 6 today. File a separate spec if you need it (see Spec 405 Origin § option (b)). |
+| Autonomy level | Canonical dispatch mode |
+|----------------|-------------------------|
+| **L0–L2** (supervised / interactive) | **Multi-tab** (Specs 351/352/353) |
+| **L3+** (autonomous / agent-parallel) | **Native `Agent` + `isolation: "worktree"`** (Claude Code >= 2.1.154) |
 
-The earlier prose in `/parallel` Step 6 referencing `EnterWorktree` as the fan-out mechanism was inaccurate — `EnterWorktree` is single-session by design and never performed multi-agent fan-out. Spec 405 corrected the docs without changing operational semantics.
+| Mode | Concurrency | Mechanism | When canonical | Status |
+|------|-------------|-----------|----------------|--------|
+| **Multi-tab** | True parallel (N tabs run independently) | Operator opens N Claude Code tabs, one per worktree. Each tab `cd`s into its worktree, runs `/tab <label> feature NNN`, then `/implement NNN`. Tabs coordinate through the registry (Specs 351/352/353). | **L0–L2** — the supervised/interactive default. | **Canonical at L0–L2**; fallback at L3+. |
+| **`Agent` + `isolation: "worktree"`** | True parallel (N sub-agents from one parent) | One parent session spawns the `Agent` tool with `isolation: "worktree"` + `worktree.baseRef` per spec, fanning out without operator-launched tabs. Parent runs the conflict pre-flight, inspects each worktree before merge, and emits per-spec gate outcomes — same governance as multi-tab. | **L3+** — autonomous agent-parallel execution. | **Canonical at L3+** (Spec 454, Claude Code >= 2.1.154); alternative at L0–L2. |
+| **`EnterWorktree`** | Serialized (one worktree at a time per session) | The `EnterWorktree` tool switches the current session into a worktree; `ExitWorktree` returns to the parent. One worktree per session at any moment. | — (solo-session, any level) | **Solo-session alternative.** Not parallel-dispatch. |
 
-**Choosing between multi-tab and `EnterWorktree`**:
+**L3+ permission posture**: native worktree-isolated fan-out requires Edit/Write scoped to the worktree path (e.g. `.worktrees/spec-NNN/**`) only — do NOT globally auto-allow writes or disable permission prompts. The minimal worktree-scoped grant is sufficient with Claude Code >= 2.1.154 (reinforced subagent-isolation guard).
 
-- Have 2+ specs that need to run truly in parallel? → multi-tab.
-- Have one spec, want to enter its worktree from your current session for focused work? → `EnterWorktree`.
-- Wish you could fan out from a single tab without opening more? → no shipped path today; file a spec.
+Spec 454 (2026-06-07) made the canonical dispatch mode autonomy-conditional, refining Spec 405 (which made multi-tab canonical) — 405's decision holds at L0–L2, and native isolation becomes canonical at L3+. The earlier `/parallel` Step 6 prose that referenced `EnterWorktree` as the fan-out mechanism was inaccurate (`EnterWorktree` is single-session by design); Spec 405 corrected it and Spec 454 replaced the L3+ fan-out path with native `Agent` isolation.
 
-The multi-tab decision tree (when to open a second tab, lane choice, sync points) lives earlier in this guide. The mode-comparison table above answers the orthogonal question: **given that you're running `/parallel`, how does dispatch happen?**
+**Choosing your dispatch mode**:
+
+- At **L0–L2** with 2+ specs to run in parallel? → multi-tab (canonical).
+- At **L3+** (autonomous)? → native `Agent` + `isolation: "worktree"` fan-out (canonical) — one parent session spawns the worktree-isolated sub-agents.
+- Want one spec, entered from your current session for focused solo work? → `EnterWorktree` (any level).
+
+The multi-tab decision tree (when to open a second tab, lane choice, sync points) lives earlier in this guide. The mode-comparison table above answers the orthogonal question: **given that you're running `/parallel`, how does dispatch happen at your autonomy level?**
 
 ---
 

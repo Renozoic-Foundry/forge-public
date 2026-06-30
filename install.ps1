@@ -637,6 +637,51 @@ if ($Init) {
     Initialize-Project -Path $Init -RepoUrl $RepoUrl
 }
 
+# Step 9b: minisign for plugin signature verification (Spec 488)
+function Install-Minisign {
+    Write-Step "Installing minisign (plugin signature verification - Spec 488)..."
+    if (Get-Command minisign -ErrorAction SilentlyContinue) {
+        Write-Info "minisign already present."
+    } elseif (Get-Command scoop -ErrorAction SilentlyContinue) {
+        scoop install minisign
+    } elseif (Get-Command winget -ErrorAction SilentlyContinue) {
+        winget install jedisct1.Minisign -e --accept-source-agreements --accept-package-agreements
+    } else {
+        Write-Warn "Install minisign: scoop install minisign (or winget install jedisct1.Minisign)"
+    }
+    # R9 hard-enforce: the integrity hook verifies only if minisign is present.
+    if (Get-Command minisign -ErrorAction SilentlyContinue) {
+        Write-Info "minisign ready - plugin payload signatures will be verified."
+    } else {
+        Write-Warn "minisign not found after install (Spec 488 R9). The plugin integrity hook will DEGRADE (warn, not block) until minisign is installed."
+    }
+    # Pin the forge-public pubkey ONLY against an out-of-band checksum (R5/AC12). Deferred until both vars are set.
+    if ($env:FORGE_PUBKEY_URL -and $env:FORGE_PUBKEY_SHA256) {
+        $tmpPub = New-TemporaryFile
+        try {
+            Invoke-WebRequest -Uri $env:FORGE_PUBKEY_URL -OutFile $tmpPub.FullName -UseBasicParsing
+            $bytes = [System.IO.File]::ReadAllBytes($tmpPub.FullName)
+            if ($bytes -contains 13) { $bytes = [byte[]]@($bytes | Where-Object { $_ -ne 13 }) }
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            $actual = (-join (($sha.ComputeHash($bytes)) | ForEach-Object { $_.ToString('x2') }))
+            if ($actual -eq $env:FORGE_PUBKEY_SHA256) {
+                New-Item -ItemType Directory -Force -Path "$HOME/.forge" | Out-Null
+                Copy-Item $tmpPub.FullName "$HOME/.forge/forge-public.pub" -Force
+                Write-Info "Pinned out-of-band-verified forge-public pubkey."
+            } else {
+                Write-Warn "forge-public pubkey checksum MISMATCH - refusing to pin (Spec 488 R5/AC12)."
+            }
+        } catch {
+            Write-Warn "Could not fetch forge-public pubkey from `$env:FORGE_PUBKEY_URL."
+        } finally {
+            Remove-Item $tmpPub.FullName -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        Write-Host "  Pubkey pin deferred: set FORGE_PUBKEY_URL + FORGE_PUBKEY_SHA256 to pin the forge-public anchor (Spec 488 real-key provisioning pending)."
+    }
+}
+Install-Minisign
+
 # Completion summary
 Write-Host ""
 Write-Step "Done!"

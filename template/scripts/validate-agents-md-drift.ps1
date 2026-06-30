@@ -281,6 +281,26 @@ function Get-BlockActions {
 # ---- main ----
 
 Parse-AliasMap
+
+# Spec 411: coordinated two-list bypass check. Runs BEFORE Get-BlockActions / Test-AliasTargets /
+# drift computation so a coordinated bypass is reported as itself — not masked by the dangling-target
+# exit-2 and not confused with unrelated drift against the live AGENTS.md. Fatal alias-map integrity
+# error (same class as the empty/dangling-target rejections): exit 2, regardless of -Mode. Invoked as
+# a child process so the detector's own `exit` cannot terminate this parent.
+$bypassDetector = Join-Path $RepoRoot '.forge/lib/two-list-bypass-detect.ps1'
+if (Test-Path $bypassDetector) {
+    $pwshExe = (Get-Process -Id $PID -ErrorAction SilentlyContinue).Path
+    if (-not $pwshExe) { $pwshExe = 'pwsh' }
+    $bypassOut = & $pwshExe -NoProfile -File $bypassDetector -AliasMap $AliasMapPath *>&1
+    if ($LASTEXITCODE -ne 0) {
+        $bypassOut | ForEach-Object { [Console]::Error.WriteLine($_) }
+        [Console]::Error.WriteLine("ERROR: coordinated two-list bypass in $AliasMapPath (Spec 411) — drift detection would be silently neutralized for the listed action(s). Resolve the ignore_prose + ignore_block pair before this gate can pass.")
+        exit 2
+    }
+} else {
+    [Console]::Error.WriteLine("WARN: validate-agents-md-drift: two-list bypass detector not found at $bypassDetector — Spec 411 coordinated-bypass check skipped")
+}
+
 $blockActions = Get-BlockActions
 Test-AliasTargets -BlockActions $blockActions   # Spec 330 AC 9b — reject dangling alias targets
 $proseActions = Get-ProseActions

@@ -9,6 +9,49 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 
 ---
 
+## v3.0.0 — 2026-06-30
+
+**MAJOR bump — breaking changes; migration required.** The plugin-primary distribution pivot lands: FORGE now installs as a Claude Code plugin, with Copier reduced to project scaffolding. Three MAJOR drivers; aggregate MAJOR.
+
+**Audit**: `ADR-501-v2.1.0-to-v3.0.0-audit.md` (private forge repo). Base resolved v2.1.0 → v3.0.0 via the Spec 505 Path C resolver (immutable tag graph; fail-loud).
+
+**Signed payload**: the plugin payload is minisign-signed (key `6269A10FAAA740E1`). The detached `.minisig` carries the trusted comment `tier=forge-public version=3.0.0`. See the v3.0.0 GitHub Release notes for the pubkey, the out-of-band SHA-256 (`2820bebb…a187`), and `FORGE_PUBKEY_URL` / `FORGE_PUBKEY_SHA256` install-time verification.
+
+### Breaking changes (MAJOR drivers)
+
+| Spec | Surface | Breaking change | Migration |
+|------|---------|-----------------|-----------|
+| **489** | S1 / render | **Plugin-primary migration (headline).** The Copier render is shrunk to scaffolding-only; the rendered functional hooks are removed — the signed plugin is the sole enforcer. `copier update` no longer renders framework files (`.forge/bin`, `lib`, commands, agents); CLAUDE.md/AGENTS.md doctrine still renders. | Install the plugin (`claude plugin install ./` from a forge-public checkout). A tag-anchored deprecation window + rollback snapshot ship with the release. |
+| **294** | S1 | `copier.yml` pins `_min_copier_version: 9.3.0` — consumers on older Copier are blocked at the next `copier update`. | `pip install -U copier` (≥ 9.3.0) before stoking. |
+| **340** | S2 | `/close` auto-captures retro signals — the per-signal confirm/edit/skip prompt is removed with no opt-in. | None required; capture is automatic at close, curation moves to `/evolve`. |
+
+### New features (since v2.1.0)
+
+- **Install as a Claude Code plugin** — `claude plugin install ./` ships the command/agent/skill/hook surface, signed and verifiable (Specs 463, 487–491).
+- **Hands-off chained delivery with a push safety gate** — `/implement` can flow spec→spec without an intervening `/close`, while every `git push` still raises an in-session approval prompt so the human stays the release authority (Specs 494–498).
+- **Signal-based `/evolve`** — the Evolve Loop is admitted by accumulated signal thresholds rather than a fixed calendar (Spec 500).
+- **`/consensus`** — structured multi-role review (Devil's Advocate, Maverick Thinker, Competitor, C-suite) on demand before committing to a spec (Spec 179).
+- **`/signal-to-strategy`** — convert external research signals into scored, testable advantage hypotheses that feed the backlog (Spec 458).
+- **`/reconcile`** — ingest work committed outside FORGE into the spec corpus (Spec 486).
+- **Hardened release tooling** — `cut-release.sh` resolves the base from the immutable local+remote tag graph and fails loud instead of defaulting to v0.0.0 (Spec 505); PowerShell parity (Spec 515).
+
+### Surface change — Spec 491 command/skill consolidation (MINOR, preserved invocation)
+
+Spec 491 consolidated the command/skill duals to **skill-only**. The un-namespaced invocations (`/now`, `/implement`, `/consensus`, `/evolve`, etc.) are **unchanged**. Removed: the namespaced `/forge:<name>` alias forms for 13 names (`/forge:brainstorm`, `/forge:consensus`, `/forge:decision`, `/forge:dependency-audit`, `/forge:evolve`, `/forge:explore`, `/forge:insights`, `/forge:interview`, `/forge:matrix`, `/forge:note`, `/forge:revise`, `/forge:synthesize`, `/forge:trace`). If you call the `/forge:<name>` namespaced form in scripts/keybindings, switch to the un-namespaced `/name`.
+
+### Updating from v2.1.0
+
+```bash
+pip install -U copier                       # 1. Copier >= 9.3.0 (Spec 294 pin)
+git clone https://github.com/Renozoic-Foundry/forge-public.git
+cd forge-public && claude plugin install ./ # 2. Install the FORGE plugin (Claude Code)
+/forge stoke                                # 3. Update scaffolding; pass --allow-major for the v2.1.0 -> v3.0.0 MAJOR drift
+```
+
+Full per-spec window classification (485–500 + the v3.0.0 readiness cluster): see ADR-501 and the canonical audit doc.
+
+---
+
 ## v2.1.0 — 2026-04-21
 
 MINOR bump. Two new operator-facing Surface-2 choice blocks; zero breaking changes; no migration required.

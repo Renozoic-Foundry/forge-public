@@ -81,11 +81,11 @@ If the gate halts (fail-closed): operator must set `Change-Lane:` explicitly bef
       The helper exposes a `next-revise-round` subcommand that derives the next round from the audit log:
 
       ```bash
-      next_round=$(bash .forge/lib/score-audit.sh next-revise-round "$spec_id")
-      bash .forge/lib/score-audit.sh record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" "$next_round"
+      next_round=$(bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh next-revise-round "$spec_id")
+      bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" "$next_round"
       ```
 
-      (PowerShell parity: invoke `pwsh .forge/lib/score-audit.ps1 record-predicted ...` with the same arguments.)
+      (PowerShell parity: invoke `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-predicted ...` with the same arguments.)
 
       If none of BV/E/R/SR/TC changed in this revision, do NOT call `record-predicted` — the audit log only records score-change events. The helper is advisory; failures emit a WARN to stderr but never block `/revise`.
 

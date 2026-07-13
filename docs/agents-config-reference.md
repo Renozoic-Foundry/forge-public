@@ -219,4 +219,4 @@ Three enforcement modes determine how gate approval happens:
 
 ---
 
-Last verified against Spec 507 on 2026-06-29.
+Last verified against Spec 507 on 2026-06-29. | STALE: re-verify — Spec 531 changed AGENTS.md config (/close 2026-07-09, Spec 509)

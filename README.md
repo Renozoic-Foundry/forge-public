@@ -98,7 +98,19 @@ The install script handles prerequisites (Python, Git, Copier), detects Claude C
 
 ### Install as a Claude Code plugin
 
-Claude Code users can install the FORGE command, agent, skill, and hook payload directly from a `forge-public` checkout — the primary install path for the framework surface:
+Claude Code users can install the FORGE command, agent, skill, and hook payload from the plugin marketplace — the primary install path for the framework surface:
+
+```bash
+claude plugin marketplace add Renozoic-Foundry/forge-public
+```
+
+then, inside Claude Code:
+
+```
+/plugin install forge@forge
+```
+
+Or directly from a `forge-public` checkout:
 
 ```bash
 git clone https://github.com/Renozoic-Foundry/forge-public.git
@@ -202,7 +214,7 @@ These capabilities are built into every FORGE project out of the box:
 - **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
 - **Role-separated agents** — 17 roles (Spec Author, Devil's Advocate, Implementer, Validator, Maverick Thinker, Competitor, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **32 slash commands** — Full lifecycle coverage with command chaining. Model tiering is advisory; the IDE model picker is the real selector (Spec 316). See [command reference](docs/command-reference.md) for the full list.
+- **33 slash commands** — Full lifecycle coverage with command chaining. Model tiering is advisory; the IDE model picker is the real selector (Spec 316). See [command reference](docs/command-reference.md) for the full list.
 - **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
 
 ### Enhancing features (opt-in)
@@ -332,7 +344,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 512 specs across 138 sessions (2026-03-13 through 2026-06-29), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 541 specs across 151 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

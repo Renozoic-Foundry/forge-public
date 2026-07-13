@@ -24,6 +24,7 @@ This is not a regression suite. A full regression exists in the automated test s
 | Spec created or updated | D |
 | Spec just moved to `implemented` | F (evolve loop trigger) |
 | Monthly | F (full KPI review) |
+| Deliverable is an HTML/visual artifact | H |
 
 <!-- customize: add project-specific trigger rows above (e.g., "Vision tags → E") -->
 
@@ -244,3 +245,46 @@ See [shadow-validation-guide.md](shadow-validation-guide.md) for strategy detail
 2. Confirm:
    - [ ] Specs proposed this session appear in the table
    - [ ] No spec moved to `implemented` without its row updated
+
+---
+
+## H. Render-time visual verification (Spec 545)
+
+> **Trigger:** the spec's deliverable is an HTML or other visual/rendered artifact
+> (a report, dashboard, generated page, or similar). This section is self-contained —
+> a spec's "Human validation steps" line can reference `H` on its own.
+
+File-exists or markup-lints checks do not confirm an HTML/visual artifact actually
+**renders** correctly. This section closes that gap with a render-time check that
+records a real observation, not an assumption.
+
+### Quick Check (always run)
+- [ ] Artifact opened in the render target (browser) (H1)
+- [ ] Layout, content, and theme confirmed (H1)
+- [ ] Outcome recorded via the fixture (H2)
+
+### H1. Open the artifact and check it
+
+1. Open the artifact in the render target (a browser, for HTML artifacts).
+2. Confirm:
+   - [ ] Layout renders as expected — no broken CSS, no unintended overflow/clipping
+   - [ ] Content matches the spec's expected copy/data
+   - [ ] Theme (light/dark, if applicable) renders correctly
+
+### H2. Record the outcome
+
+Run the fixture to record the check in the shared evidence-ledger convention
+(the same `tmp/evidence/SPEC-NNN-browser-*/manifest.json` family used by Spec 093/540
+browser evidence — one manifest convention, not a second parallel one):
+
+```bash
+.forge/bin/forge-visual-verify.sh <spec-number> <artifact-path>
+```
+
+The fixture walks through the H1 checklist interactively and writes the manifest
+entry. Pass `--result pass|fail --notes "<text>"` to record a result non-interactively
+(e.g., from a script or CI step where no operator is present to answer prompts).
+
+- [ ] Manifest entry written under `tmp/evidence/SPEC-NNN-browser-*/manifest.json`
+- [ ] If the check failed, the finding is documented in the spec's Evidence section
+      before `/close` proceeds (see `/close` Step 2b2 — visual evidence gate)

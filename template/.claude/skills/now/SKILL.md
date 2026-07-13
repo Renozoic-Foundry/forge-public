@@ -21,11 +21,11 @@ If $ARGUMENTS is `?` or `help`:
     (none)   — single pass: review state once and recommend the next action.
     --watch  — open a model-paced /loop dynamic over /now that re-runs until a
                meaningful state change or /loop end (Spec 464). Status cue at arming + each wake.
-  Reads: .forge/lib/derived_state.py --get-backlog (live frontmatter source), docs/sessions/ (latest log + JSON sidecar), CLAUDE.md, docs/specs/README.md
+  Reads: ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog (live frontmatter source), docs/sessions/ (latest log + JSON sidecar), CLAUDE.md, docs/specs/README.md
   Reports: validation queue, active work, next recommended spec, evolve loop status, blockers.
           Also: count of drafts past `valid-until:` (Spec 363) — silent on zero.
   Prefers JSON handoff sidecars for structured context; falls back to markdown parsing.
-  See: CLAUDE.md (operating loop, spec lifecycle), .forge/lib/derived_state.py (canonical programmatic source — Spec 439), docs/backlog.md (operator-visible artifact)
+  See: CLAUDE.md (operating loop, spec lifecycle), ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py (canonical programmatic source — Spec 439), docs/backlog.md (operator-visible artifact)
   ```
   Stop — do not execute any further steps.
 
@@ -207,7 +207,7 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
 
 ---
 
-1. **Validation queue (priority check, Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json` and scan the parsed JSON for any specs with status `implemented` (not yet `closed`). For each one found, list it as needing human validation.
+1. **Validation queue (priority check, Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-spec-index --format=json` and scan the parsed JSON for any specs with status `implemented` (not yet `closed`). For each one found, list it as needing human validation.
    - If any `implemented` specs exist, present them as the **priority recommended action**:
      ```
      ## Validation queue
@@ -258,10 +258,10 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    - This takes priority over recommending new implementation work.
 
 <!-- parallel: steps 2-5 are independent reads — run them simultaneously -->
-2. **Backlog top-of-queue (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as JSON; the array contains one row per backlog entry with keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`. Identify the highest-ranked spec with status `draft` or `approved`. (Helper internalizes mode-detection + parsing — Spec 399 helper-as-contract; do NOT open canonical files directly in any rendering mode.)
+2. **Backlog top-of-queue (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as JSON; the array contains one row per backlog entry with keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`. Identify the highest-ranked spec with status `draft` or `approved`. (Helper internalizes mode-detection + parsing — Spec 399 helper-as-contract; do NOT open canonical files directly in any rendering mode.)
 3. Read docs/sessions/ and find the most recent session log. Check its "Spec triggers" and "Process improvement items" sections for any open items (unchecked boxes).
 4. Read CLAUDE.md post-implementation checklist and identify any items that appear outstanding based on recent session context.
-5. **Spec index — stale drafts (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as JSON; identify any spec listed as `draft` that has been sitting without movement.
+5. **Spec index — stale drafts (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as JSON; identify any spec listed as `draft` that has been sitting without movement.
 6. **Session log auto-create**: Check `docs/sessions/` for a log file matching today's date. If none exists, create a stub from `docs/sessions/_template.md` with today's date and the next session number (scan existing files to determine NNN). Report: "Created session log: `docs/sessions/YYYY-MM-DD-NNN.md`."
 7. **Scratchpad review**: Read `docs/sessions/scratchpad.md` for any open notes — list all unresolved items grouped by tag (`[validate]`, `[session]`, `[evolve]`, untagged).
 7b. **Pending explorations**: Scan `docs/research/` for files matching `explore-*.md`. For each file, check the `Status:` field. If any have `Status: proposed`, report:
@@ -303,7 +303,7 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
 
 ### Capability surfacing (Spec 471)
 
-8e. **Optional-capability count surface (Spec 471)**: Call `bash .forge/bin/forge-capability.sh pending`. This prints a bare integer — the number of registry capabilities that are inactive AND not dismissed (the single source `/now` quotes; do not recompute it here).
+8e. **Optional-capability count surface (Spec 471)**: Call `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh pending`. This prints a bare integer — the number of registry capabilities that are inactive AND not dismissed (the single source `/now` quotes; do not recompute it here).
    - If the count is greater than zero, emit exactly one line in this format: `N optional capability(ies) available — /configure → Capabilities`.
    - Emit nothing otherwise (count zero, or the helper unavailable).
    - This surface is count-only — never enumerate individual capabilities, never emit a per-capability row. It mirrors the unreviewed-digests / aging-drafts count pattern. Activation and dismissal happen via `/configure → Capabilities` (the sole write path); `/now` never edits `.claude/settings.json` or the registry.
@@ -318,6 +318,12 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
      - <path> — last verified: <date> (<N> days ago) against <source-url>
      ```
      Include a trailing hint: "Revalidate by reading `docs/process-kit/runbook.md` § Process-Kit Doc Freshness Convention."
+   - **Public-doc stamp check (Spec 509)**: additionally run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh check` (skip silently if the helper is absent). Each emitted line is a public doc whose Spec 278 marker was stamped STALE at `/close` because a closing spec changed a documented surface (the surface→doc resolution is the Spec 511 canonical mapping, owned by the helper — do not re-inline it here). If any lines emitted, append to the same report:
+     ```
+     ## Public docs stamped stale at /close
+     - <doc>:<line> — <stale annotation>
+     ```
+     Re-verify by refreshing the doc and updating its marker.
    - If none flagged, skip silently.
    - This is advisory only — it does not block subsequent commands.
 
@@ -345,7 +351,7 @@ This step is silent on clean pass. It is NOT dismissible by a flag — the advis
    <last review date, overdue flag>
 
    ## Consensus acceptance rate (30d)
-   <one-line figure from forge-py .forge/lib/acceptance_rate.py, or "n/a">
+   <one-line figure from forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py, or "n/a">
 
    ## Session identity
    <confirmed operator name from Step 0b.f>
@@ -359,7 +365,7 @@ Then report:
 - **Evolve loop check**: state the date of the last evolve loop review (from the most recent session log's `Last evolve loop review:` field) and flag if it's overdue (> 30 days)
 - **Active tabs**: any other Claude Code tabs with active claims (from step 8) — warn about potential conflicts
 - **Blockers**: anything that must be resolved before the next spec can start
-- **Consensus acceptance rate (Spec 497 — read side of Spec 495 / Spec 258 AC#5)**: run `forge-py .forge/lib/acceptance_rate.py` and surface its one-line rolling-30-day figure (e.g., `Consensus acceptance rate (last 30d): 80% (4/5 accepted; 1 modified, 0 rejected)`). When it reports `n/a` (no rated decisions in the window), surface that verbatim — never a divide error. This is the rate the operator's `consensus_tracking` config (AGENTS.md) defines: `accepted / (accepted + modified + rejected)`.
+- **Consensus acceptance rate (Spec 497 — read side of Spec 495 / Spec 258 AC#5)**: run `forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py` and surface its one-line rolling-30-day figure (e.g., `Consensus acceptance rate (last 30d): 80% (4/5 accepted; 1 modified, 0 rejected)`). When it reports `n/a` (no rated decisions in the window), surface that verbatim — never a divide error. This is the rate the operator's `consensus_tracking` config (AGENTS.md) defines: `accepted / (accepted + modified + rejected)`.
 
 If no outstanding items exist and the backlog is current, recommend the single highest-value next action. **Frame the recommendation as the four-part operator summary** (Spec 497 — lean by default; honors `forge.output.verbosity`; see `docs/process-kit/operator-summary-guide.md`):
 ```
@@ -453,8 +459,8 @@ Check whether any session-log EA/CI entries are missing from the persistent logs
 # Spec 473 recency cap: scan only the last 30 days of session logs so this
 # advisory check on the highest-frequency command stays O(recent), not
 # O(project age). Compute the cutoff as today minus 30 days (ISO YYYY-MM-DD).
-SINCE=$(.forge/bin/forge-py -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=30)).isoformat())")
-.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --dry-run --since="$SINCE"
+SINCE=$(${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=30)).isoformat())")
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --dry-run --since="$SINCE"
 ```
 
 Read the final `DONE | dry-run:` summary line:

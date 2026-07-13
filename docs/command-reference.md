@@ -2,7 +2,7 @@
 
 Auto-generated reference for all FORGE slash commands, derived from source files in `.forge/commands/`.
 
-**Total commands: 32**
+**Total commands: 33**
 
 ## Session and orientation
 
@@ -67,4 +67,4 @@ See [QUICK-REFERENCE.md](QUICK-REFERENCE.md) for detailed usage patterns and wor
 
 ---
 
-*Last verified against Spec 214.*
+*Last verified against Spec 214.* | STALE: re-verify — Spec 509 changed a slash-command surface (/close 2026-07-02, Spec 509)

@@ -11,7 +11,7 @@ Each phase builds on the previous. No phase can be skipped — the evidence gate
 **All four autonomy phases are delivered as template infrastructure.** FORGE operates at **L3 autonomy** in daily use (trusted autonomy with async close review) with infrastructure for L4 in place. 507 specs across 136 sessions (2026-03-13 through 2026-06-29); 442 closed.
 
 **What works today:**
-- Spec-driven development with evidence gates (32 active slash commands)
+- Spec-driven development with evidence gates (33 active slash commands)
 - Agent role separation (Spec 099) — configurable `none` (default) / `context-scoped` / `full`; DA and validator can run as isolated subagents
 - OCI container isolation for permission enforcement
 - Budget tracking (time-based) with dynamic model routing (Spec 085)

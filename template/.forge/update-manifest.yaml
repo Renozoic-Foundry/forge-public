@@ -117,6 +117,7 @@ merge:
     - "CLAUDE.md"
     - "AGENTS.md"
     - ".gitignore"
+    - ".gitattributes"  # Spec 529 — FORGE union-merge attrs + consumer-added entries coexist
     - ".mcp.json"
     - ".mcp-lock/"  # Spec 284 — vendored hash-verified lockfiles for MCP servers. Operator may add entries; never strip.
 

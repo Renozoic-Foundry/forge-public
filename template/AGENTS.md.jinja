@@ -129,7 +129,7 @@ CLI entry point (Windows: `bin\forge.ps1`).
 | Group | Commands |
 |-------|----------|
 | Planning & Discovery | /explore /interview /brainstorm /spec /decision /revise /matrix |
-| Implementation & Testing | /implement /test /trace /tab /parallel |
+| Implementation & Testing | /implement /test /trace /tab /parallel /debug |
 | Review & Validation | /close /evolve |
 | Session | /now /session /note /insights |
 | Lifecycle | /forge /onboarding /scheduler |
@@ -145,7 +145,9 @@ Signals feed `docs/sessions/signals.md` (input to `/matrix` re-scoring):
 
 ### Two hard rules — no exceptions
 
-1. **Every change has a matching spec.** No implementation without one.
+1. **Every change has a matching spec.** No implementation without one. (Presentation/
+   visualization artifacts are deliverables of a conversation, not changes to the
+   system — rule 1 does not apply to them; see the exemption under the spec gate below.)
 2. **Every session ends with a session log.** No exceptions.
 
 ### Architectural Principles
@@ -166,9 +168,47 @@ Signals feed `docs/sessions/signals.md` (input to `/matrix` re-scoring):
 **Scope confirmation rule**: Before creating or implementing a spec, confirm the change
 target and scope. If ambiguous, ask — do not assume.
 
+#### Presentation/visualization artifact exemption
+
+Presentation and visualization artifacts — slide decks, HTML one-pagers, diagrams,
+dashboards produced as **communication output of a conversation** — are **spec-exempt**:
+they are deliverables of the conversation, not changes to the system, so hard rule 1
+does not apply to them.
+
+**Tiebreaker (decidable)**: the artifact is **gated** (spec required) when it bundles
+executable script whose output is consumed by another process or build step, or when it
+modifies process or product surfaces. Script that only affects the artifact's own
+rendering (client-side, self-contained, no external I/O) stays exempt. When ambiguous,
+ask — do not assume.
+
+Worked examples:
+- **Exempt**: a standalone HTML status one-pager summarizing sprint state — pure
+  communication artifact, self-contained rendering only.
+- **Gated**: a dashboard page that ships a script consumed by the build — it wires into
+  the process surface; spec required.
+
 **Edit-gate rule**: Implementation files are editable only during an active
 `/implement` execution. Outside it, edit only spec documents (`docs/specs/`), tracking
 files, and session files (`docs/sessions/`).
+
+### Spec-authoring pitfall rules
+
+Authoring guidance ported from painful retros — rules for writing specs and code, not
+enforcement gates:
+
+1. **verify-before-build**: before writing code that depends on runtime state (element
+   dimensions, scroll containers, API response shapes, DB column types), verify the
+   assumption with a diagnostic step (log / curl / SELECT) — never assume from names,
+   docs, or structure alone. `/debug` owns the post-failure sibling rule
+   (verify-before-fix).
+2. **Redirect reachability**: a middleware redirect or override that displaces a default
+   route must not make previously reachable pages unreachable. Redirect/override specs
+   MUST carry an AC of the form "user can still navigate to <original destination> via
+   <mechanism>".
+3. **Content-heavy page wireframe**: specs involving page layout or content sections
+   include a section-level wireframe (numbered sections, title + one line each — text is
+   fine) in the draft, presented before implementation. Prevents mid-implementation
+   scope pivots.
 
 ### Spec lifecycle
 
@@ -191,6 +231,88 @@ files, and session files (`docs/sessions/`).
 
 **Hotfix rule**: a `hotfix` edits only files within the scope of an already-open spec.
 Unrelated edits are never permitted under a hotfix without their own spec.
+
+## Model steering (Fable 5 verified)
+
+The six steering snippets below are Anthropic's verified prompt additions for Claude
+Fable 5, quoted verbatim from the official model-migration guide (§ "Migrating to
+Claude Fable 5 → Behavioral shifts"; source verified 2026-07-07). Prior-model
+prescriptive scaffolding degrades Fable 5 output quality — these snippets are the
+shared steering vocabulary and live **here once**, in the multi-runtime contract read
+by Codex, Cursor, Gemini, and Aider. They are deliberately NOT in CLAUDE.md.
+
+> **Claude Code overlap note:** the Claude Code harness system prompt already carries
+> several of these near-verbatim (anti-overplanning, autonomous-pipeline,
+> assessment-not-fix, grounded-progress, long-run readability). Do not re-add them to
+> CLAUDE.md — that double-pays tokens for steering the harness already provides.
+> Re-verify this overlap against the harness system prompt before pruning or
+> extending this section.
+
+**1. Anti-overplanning**
+
+> When you have enough information to act, act. Do not re-derive facts already
+> established in the conversation, re-litigate a decision the user has already made,
+> or narrate options you will not pursue in user-facing messages. If you are weighing
+> a choice, give a recommendation, not an exhaustive survey. This does not apply to
+> thinking blocks.
+
+**2. No-tidying**
+
+> Don't add features, refactor, or introduce abstractions beyond what the task
+> requires. A bug fix doesn't need surrounding cleanup and a one-shot operation
+> usually doesn't need a helper. Don't design for hypothetical future requirements -
+> do the simplest thing that works well. Avoid premature abstraction. Avoid
+> half-finished implementations either. Don't add error handling, fallbacks, or
+> validation for scenarios that cannot happen. Trust internal code and framework
+> guarantees. Only validate at system boundaries (user input, external APIs). Don't
+> use feature flags or backwards-compatibility shims when you can just change the code.
+
+**3. Grounded progress claims**
+
+> Before reporting progress, audit each claim against a tool result from this
+> session. Only report work you can point to evidence for; if something is not yet
+> verified, say so explicitly. Report outcomes faithfully: if tests fail, say so with
+> the output; if a step was skipped, say that; when something is done and verified,
+> state it plainly without hedging.
+
+**4. Assessment-not-fix boundary**
+
+> When the user is describing a problem, asking a question, or thinking out loud
+> rather than requesting a change, the deliverable is your assessment. Report your
+> findings and stop. Don't apply a fix until they ask for one. Before running a
+> command that changes system state — restarts, deletes, config edits — check that
+> the evidence actually supports that specific action. A signal that pattern-matches
+> to a known failure may have a different cause.
+
+**5. Autonomous-pipeline reminder**
+
+> You are operating autonomously. The user is not watching in real time and cannot
+> answer questions mid-task, so asking 'Want me to…?' or 'Shall I…?' will block the
+> work. For reversible actions that follow from the original request, proceed without
+> asking. Offering follow-ups after the task is done is fine; asking permission after
+> already discussing with the user before doing the work is not. Before ending your
+> turn, check your last paragraph. If it is a plan, an analysis, a question, a list
+> of next steps, or a promise about work you have not done ('I'll…', 'let me know
+> when…'), do that work now with tool calls. End your turn only when the task is
+> complete or you are blocked on input only the user can provide.
+
+**6. Long-run readability addendum**
+
+> Terse shorthand is fine between tool calls (that's you thinking out loud, and
+> brevity there is good). Your final summary is different: it's for a reader who
+> didn't see any of that. If you've been working for a while without the user
+> watching - overnight, across many tool calls, since they last spoke - your final
+> message is their first look at any of it. Write it as a re-grounding, not a
+> continuation of your working thread: the outcome first, then the one or two things
+> you need from them, each explained as if new. When you write the summary at the
+> end, drop the working shorthand. Write complete sentences. Spell out terms instead
+> of abbreviating them. Don't use arrow chains, hyphen-stacked compounds, or labels
+> you made up earlier — the reader doesn't have the context to decode them. Open with
+> the outcome: one sentence on what happened or what you found. Then the supporting
+> detail. If you have to choose between short and clear, choose clear.
+
+These snippets steer without prescribing steps (goal + constraints + boundaries, not
+procedures). Per-command bodies must not restate them.
 
 ## Git workflow
 

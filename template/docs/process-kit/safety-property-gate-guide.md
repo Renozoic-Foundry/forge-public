@@ -36,34 +36,90 @@ specs, plus a one-time backfill audit (30-day SLA) over pre-existing safety-sche
 ## The registry file
 
 `.forge/safety-config-paths.yaml` lists the paths whose new entries trigger Component A's
-prompt. Initial pattern set (per Spec 387 R1a):
+prompt. Current pattern set (per Spec 387 R1a, refined by Spec 542 R2):
 
 ```yaml
 patterns:
-  - AGENTS.md
+  - "AGENTS.md::## Boundaries (authorization, safety)"
   - CLAUDE.md
   - .forge/onboarding.yaml
   - .mcp.json
   - .forge/safety-config-paths.yaml
-  - template/AGENTS.md.jinja
+  - "template/AGENTS.md.jinja::## Boundaries (authorization, safety)"
   - template/CLAUDE.md.jinja
   - "template/**/*.yaml"
 ```
 
 Two key properties:
 
-- **Self-monitoring**: the registry file is itself in the registry (entry 5). Any modification
-  to the registry triggers Component A's prompt — adding/removing patterns gets the same
-  scrutiny as adding/removing safety properties.
+- **Self-monitoring**: the registry file is itself in the registry. Any modification to the
+  registry triggers Component A's prompt — adding/removing patterns gets the same scrutiny
+  as adding/removing safety properties.
 - **Bootstrap fallback**: the first-time addition of `.forge/safety-config-paths.yaml` to a
   project (or its deletion) is detected by a hardcoded fallback in `/close.md` that runs
   independently of registry contents. This handles the chicken-and-egg case.
+
+### Region-scoped entries (Spec 542 R2)
+
+An entry may take the form `<file>::<heading>` instead of a bare file path. The entry then
+fires only when the diff's changed lines fall inside the section that starts at `<heading>`
+in `<file>` (through the next markdown heading of equal-or-lesser depth, or EOF, as the file
+reads at HEAD) — not anywhere else in the file. Whole-file entries (no `::`) keep matching
+regardless of where in the file the diff lands; that form is still valid and is the right
+choice for files that are entirely config (`.mcp.json`, `.forge/onboarding.yaml`).
+
+This closes a false-positive class: `AGENTS.md` and `template/AGENTS.md.jinja` mix a large
+amount of prose (Mission, role mapping, process narrative) with the actual safety-relevant
+material (the Boundaries section — authorization gates, autonomy levels, the machine-readable
+authorization-rules block). Before Spec 542, a documentation-only prose edit anywhere in
+`AGENTS.md` fired the gate; scoping the entry to `## Boundaries (authorization, safety)` means
+only edits that land in or after that heading (until the next `##`) fire it.
+
+Consumers that enumerate whole files rather than matching a specific diff — e.g. the backfill
+audit's wide-net scan (Component C), which sweeps a file for undeclared safety-named tokens
+regardless of which section they're in — use `safety_config_registry_files` /
+`Get-SafetyConfigRegistryFiles`, which strips the `::<heading>` suffix and returns the bare
+file glob. Region scoping only narrows Component A's `/close`-time diff match; it does not
+narrow what Component C audits.
+
+### Per-spec diff attribution (Spec 542 R1)
+
+Component A's detection step resolves the diff to the spec-under-review's own footprint, not
+the cumulative `baseline..HEAD` window. In a multi-spec session (parallel batches, deferred-
+close chaining) the cumulative window can include sibling specs' changes, so a spec that never
+touched a registered path could still see the gate fire because *another* spec in the same
+window did.
+
+`safety_config_spec_files <spec-num> <baseline> <head> <spec-file>` (`Get-SafetyConfigSpecFiles`
+in PowerShell) resolves the spec's own files in two steps:
+
+1. **Commits tagged with the spec number** — every commit in `baseline..head` whose message
+   matches `Spec <NUM>` (word-boundary, so "Spec 54" doesn't match "Spec 540") is diffed
+   individually and the changed files are unioned. This is the primary path once a spec has
+   started committing (per the Spec 494 explicit-path commit convention, commit messages
+   reference the spec ID).
+2. **Implementation Summary fallback** — if no tagged commits are found (e.g. before the first
+   commit lands), the spec body's `## Implementation Summary` backtick-quoted file list is used.
+
+If neither source yields data, the caller falls back to the cumulative `baseline..HEAD` diff
+and emits a WARN naming the limitation:
+
+```
+GATE [safety-property]: WARN — per-spec diff attribution unavailable for Spec NNN (no commits
+tagged 'Spec NNN', no Implementation-Summary file list). Falling back to the cumulative
+baseline..HEAD diff, which may attribute sibling-spec changes in this window to this gate run.
+```
+
+The gate still runs in the fallback case — it never silently skips — but the WARN makes the
+attribution gap visible instead of a false positive masquerading as a clean true-positive fire.
 
 ## The prompt flow at /close
 
 After the validator subagent step and before the close-completion step:
 
-1. Detection: `git diff <baseline>..HEAD --name-only` is matched against registered patterns.
+1. Detection: the spec's own changed files (per-spec attribution above) are matched against
+   registered patterns; region-scoped entries additionally check whether the diff's changed
+   lines land inside the named heading's section.
 2. If no match AND no bootstrap-fallback trigger: silent skip.
 3. If `Safety-Override:` frontmatter present: validate (≥50 chars, non-trivial), log to
    activity-log.jsonl, skip the prompt, proceed.
@@ -374,11 +430,17 @@ When a safety-named declaration lacks enforcement evidence:
 
 ## File map
 
-- `.forge/safety-config-paths.yaml` — registry (data, not code)
-- `.forge/lib/safety-config.sh` + `.ps1` — path-match + override-validation + section-validation helpers
-- `.claude/commands/close.md` Step 2g — Component A
+- `.forge/safety-config-paths.yaml` — registry (data, not code); supports whole-file and
+  `<file>::<heading>` region-scoped entries (Spec 542 R2)
+- `.forge/lib/safety-config.sh` + `.ps1` — path-match + override-validation + section-validation
+  helpers, plus per-spec attribution (`safety_config_spec_files`) and region matching
+  (`safety_config_region_touched`, `safety_config_registry_files`) (Spec 542)
+- `.claude/commands/close.md` Step 2g — Component A; resolves per-spec diff attribution before
+  matching (Spec 542 R1)
 - `.claude/commands/evolve.md` Step S — Component B
-- `scripts/safety-backfill-audit.sh` + `.ps1` — Component C
+- `scripts/safety-backfill-audit.sh` + `.ps1` — Component C; uses `safety_config_registry_files`
+  to enumerate whole files regardless of region scoping
 - `.forge/state/safety-backfill-deadline.txt` — 30-day SLA marker (set by audit, checked at /close)
 - `.forge/state/safety-sweep.jsonl` — quarterly metric history (append-only)
 - `.forge/state/safety-config-paths-prior.yaml` — prior-quarter snapshot (registry-curation drift check)
+- `.forge/bin/tests/test-spec-542-safety-gate-precision.sh` + `.ps1` — Spec 542 regression fixtures

@@ -32,8 +32,8 @@ If $ARGUMENTS is `?` or `help`:
 
 ## Step 1: Detect Devices and Providers
 
-1. Run: `bash .forge/bin/forge-security.sh --detect --json`
-   - If the command fails (exit non-zero or missing), check if `.forge/bin/forge-security.sh` exists. If not, tell the user to run `forge-setup-nanoclaw.sh` first.
+1. Run: `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-security.sh --detect --json`
+   - If the command fails (exit non-zero or missing), check if `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-security.sh` exists. If not, tell the user to run `forge-setup-nanoclaw.sh` first.
    - Make sure Yubico tools are in PATH by prepending known install directories:
      ```bash
      export PATH="/c/Program Files/Yubico/YubiKey Manager CLI:$PATH"
@@ -93,7 +93,7 @@ If $ARGUMENTS is `?` or `help`:
 
 For each key that needs programming:
 
-1. Run: `bash .forge/bin/forge-security.sh --slot-audit --device SERIAL --json`
+1. Run: `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-security.sh --slot-audit --device SERIAL --json`
 
 2. Present the slot audit results:
    ```
@@ -128,7 +128,7 @@ For each key that needs programming:
 
 6. On confirmation, run:
    ```bash
-   bash .forge/bin/forge-security.sh --program --device SERIAL --slot 2 --save-secret ~/.forge/secrets/SERIAL-slot2.key --json
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-security.sh --program --device SERIAL --slot 2 --save-secret ~/.forge/secrets/SERIAL-slot2.key --json
    ```
 
 7. Present the result:
@@ -161,7 +161,7 @@ For each key that needs programming:
 
 3. Run enrollment:
    ```bash
-   bash .forge/bin/forge-security.sh --enroll --station STATION_SERIAL --mobile MOBILE_SERIAL --json
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-security.sh --enroll --station STATION_SERIAL --mobile MOBILE_SERIAL --json
    ```
    Note: channel_id is set in Step 4.
 
@@ -250,7 +250,7 @@ For each key that needs programming:
 
 5. If the user had configured messaging platforms, also update the enrollment file with the channel ID:
    ```bash
-   bash .forge/bin/forge-security.sh --enroll --station SERIAL --mobile SERIAL --channel CHANNEL_ID --json
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-security.sh --enroll --station SERIAL --mobile SERIAL --channel CHANNEL_ID --json
    ```
 
 ---

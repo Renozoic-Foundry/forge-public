@@ -1,8 +1,48 @@
 # Behavioral-AC Fixture Convention
 
-> Last verified: 2026-04-28 (Spec 349)
+> Last verified: 2026-07-08 (Spec 540)
 
-When an acceptance criterion describes a runtime behavior that the validator subagent cannot directly drive (running a command, observing terminal output, comparing fresh-fixture state), pair the AC with a runnable fixture. The fixture turns a previously-DEFER-able AC into a mechanically-verifiable PASS or an explicit SKIP.
+When an acceptance criterion describes a runtime behavior that the validator subagent cannot directly drive (running a command, observing terminal output, comparing fresh-fixture state, or exercising a UI), pair the AC with a runnable fixture. The fixture turns a previously-DEFER-able AC into a mechanically-verifiable PASS or an explicit SKIP.
+
+## Single pattern source (Spec 540)
+
+The behavioral-AC/browser-verb pattern list lives in exactly one place:
+`.forge/lib/ac-pattern-scanner.sh` (+ `.ps1` parity; also shipped at
+`template/.forge/lib/ac-pattern-scanner.sh` for Copier consumers). Given a spec
+file, it returns:
+
+```json
+{"flagged_acs": [{"ac_number": N, "text": "...", "pattern": "..."}]}
+```
+
+Two consumers share this one script — neither hosts its own copy of the regex list:
+
+- **`/spec` Step 6d** (authoring-time nudge, non-blocking): runs the scanner
+  against the draft spec and offers to pair each flagged AC with a fixture.
+- **`/close` Step 2b2 / the validator subagent Stage 1** (close-time gate,
+  blocking): runs the scanner and HARD-FAILs any flagged AC that lacks a
+  corresponding browser-evidence manifest (`tmp/evidence/SPEC-NNN-browser-*/manifest.json`),
+  unless the operator passes `/close --accept-deferred-acs "<reason>"` (reason
+  recorded verbatim in the spec's Evidence section) or the blunt `--force` flag.
+
+The scanner's pattern set covers two origins:
+- Spec 349 behavioral phrasing: `(running|run|invoke|execute) /[a-z-]+`,
+  `(fresh|new) (fixture|copy|repo|project)`, `after .+, the operator (sees|observes)`.
+- Spec 540 browser-verb phrasing: clicking, hovering, rendering, showing,
+  visible, displaying, scrolling.
+
+Invoke it plugin-root-relative (Spec 538 convention) so plugin-primary
+consumers — who do not vendor `.forge/lib/` separately — resolve the same
+script the plugin ships:
+
+```bash
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh <spec-file>
+```
+
+**Boundary vs Spec 403**: Spec 403's live-smoke gate keys on Test-Plan keywords
+("smoke test", "live dry-run"). This scanner keys on Acceptance-Criteria
+phrasing. The two scans read different sections for different signals and
+never double-fire on the same trigger.
 
 ## When to use
 
@@ -12,8 +52,9 @@ Author a fixture when an AC matches any of these patterns:
 - "invoke `/<command>` and observe ..."
 - "in a fresh fixture / new copy / new repo / new project, ..."
 - "after `<some-action>`, the operator sees ..."
+- browser-only verbs: clicking, hovering, rendering, showing, displaying, scrolling
 
-A vague-language scan at `/spec` (Step 6c, Spec 171) catches words like *should* and *may*. The behavioral-AC scan is orthogonal: it catches ACs that are specific in language but require driving the system to verify. Both scans run at draft authoring time; both are nudges, not gates.
+A vague-language scan at `/spec` (Step 6c, Spec 171) catches words like *should* and *may*. The behavioral-AC scan is orthogonal: it catches ACs that are specific in language but require driving the system to verify. The authoring-time scan (`/spec` Step 6d) is a nudge; the close-time scan (`/close` Step 2b2, Spec 540) is a gate that can block the close workflow.
 
 If the AC is purely structural — file existence, md5 parity, grep match, exit code — no fixture is needed. The validator subagent can verify those directly.
 

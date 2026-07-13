@@ -2,6 +2,9 @@
 
 **Spec: 269**
 
+> This is the public form of this convention, authored as public-safe content at
+> source (Spec 514 disposition).
+
 This document defines the naming convention, format routing rules, and build process
 for FORGE articles that produce multiple output formats.
 

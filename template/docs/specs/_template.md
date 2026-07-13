@@ -61,6 +61,12 @@ Out of scope:
 
 ## Acceptance Criteria
 
+<!-- Redirect-reachability AC pattern (Spec 546): if this spec adds a redirect or
+     overrides a default route, include an AC of the form "user can still navigate to
+     <original destination> via <mechanism>" — displaced pages must stay reachable. -->
+<!-- Wireframe note (Spec 546, optional): for page-layout / content-section specs, add a
+     section-level wireframe (numbered sections, title + one line each) to the draft
+     before approval — prevents mid-implementation scope pivots. -->
 1. <verifiable outcome>
 
 ## Constraints

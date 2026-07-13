@@ -16,3 +16,19 @@
 # a Windows checkout CRLFs the manifest and the SessionStart integrity hook's minisign -V fails.
 .claude-plugin/payload-manifest.txt text eol=lf
 *.minisig binary
+
+# ============================================================================
+# Spec 529 — merge-safe shared artifacts (union attrs for parallel-lane writes).
+# union ONLY for append-only, line-oriented, order-tolerant streams; every entry
+# carries its safety argument. Spec files / signals / scratchpad / session logs /
+# backlog / CHANGELOG carry NO union attr (operator-owned or frontmatter-bearing).
+# Revision-Log conflicts: manual convention in docs/process-kit/parallelism-guide.md.
+# ============================================================================
+# activity-log.jsonl: agent-writable cross-lane feed; self-contained JSON lines.
+docs/sessions/activity-log.jsonl merge=union
+# security-gate.jsonl: append-only gate-verdict ledger; order-tolerant records.
+.forge/state/security-gate.jsonl merge=union
+# agent-file-registry.md: single-line role-log appends with embedded timestamps.
+docs/sessions/agent-file-registry.md merge=union
+# doctor-history.jsonl: append-only JSONL from every doctor run across worktrees.
+docs/sessions/doctor-history.jsonl merge=union

@@ -64,10 +64,16 @@ function Get-AdoptionFrontmatterFields {
   if (Test-AdoptionDefiningSpec $SpecFile) { return @() }
   $found = New-Object System.Collections.Generic.HashSet[string]
   foreach ($line in (Get-AdoptionDeclBody -SpecFile $SpecFile)) {
-    foreach ($m in [regex]::Matches($line, '\b[A-Z][A-Za-z]+(-[A-Za-z]+)+:')) {
-      $field = $m.Value.TrimEnd(':')
+    # Precision rule (Spec 536 — SIG-509-TRUST-01): backticked OR line-anchored only;
+    # bare mid-prose Word-Word: phrases are prose, not declarations.
+    foreach ($m in [regex]::Matches($line, '`([A-Z][A-Za-z]+(-[A-Za-z]+)+):')) {
+      $field = $m.Groups[1].Value
       if (Test-AdoptionKnownField $field) { continue }
       [void]$found.Add($field)
+    }
+    if ($line -match '^\s*-?\s*([A-Z][A-Za-z]+(-[A-Za-z]+)+):') {
+      $field = $Matches[1]
+      if (-not (Test-AdoptionKnownField $field)) { [void]$found.Add($field) }
     }
   }
   return ,(@($found) | Sort-Object)

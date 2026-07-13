@@ -14,6 +14,17 @@
 #                                     — Spec 397; read ignore yaml, emit one token per line
 #                                       on stdout. Verifies version: 1; warns on empty reason;
 #                                       returns empty array + stderr error on missing/wrong-version yaml.
+#   Get-SafetyConfigSpecFiles -SpecNum <n> -Baseline <rev> [-Head <rev>] [-SpecFile <path>]
+#                                     — Spec 542 R1 parity; emit the spec's own changed files via
+#                                       commits tagged "Spec <NUM>", falling back to the spec's
+#                                       Implementation Summary file list. Returns $null if neither
+#                                       source is available (caller falls back to cumulative diff).
+#   Test-SafetyConfigRegionTouched -Baseline <rev> -Head <rev> -File <path> -Heading <text>
+#                                     — Spec 542 R2 parity; $true if the diff's changed lines
+#                                       intersect the named heading's section in File at Head.
+#   Get-SafetyConfigRegistryFiles -YamlFile <path>
+#                                     — Spec 542 R2 parity; registry patterns with any
+#                                       `::<heading>` region suffix stripped, deduplicated.
 
 # Trivial-string patterns that auto-reject as override reasons (R4b).
 $script:SafetyTrivialPatterns = @('wip','ok','later','fix','tbd','n/a','na','none','pass','done')
@@ -61,20 +72,35 @@ function ConvertTo-SafetyConfigRegex {
 }
 
 # Match diff paths against registry patterns. Emits matching paths.
+# -Baseline/-Head (optional, Spec 542 R2) are required only to evaluate region-scoped
+# entries (pattern form `<file>::<heading>`); whole-file entries match regardless.
 function Get-SafetyConfigMatches {
     param(
         [Parameter(Mandatory)][string]$YamlFile,
-        [Parameter(Mandatory)][string[]]$DiffPaths
+        [Parameter(Mandatory)][string[]]$DiffPaths,
+        [string]$Baseline,
+        [string]$Head = 'HEAD'
     )
     $patterns = Get-SafetyConfigPatterns -YamlFile $YamlFile
     if ($patterns.Count -eq 0) { return @() }
-    $regexes = foreach ($p in $patterns) { ConvertTo-SafetyConfigRegex -Pattern $p }
     $seen = New-Object System.Collections.Generic.HashSet[string]
     $results = New-Object System.Collections.Generic.List[string]
     foreach ($path in $DiffPaths) {
         if ([string]::IsNullOrWhiteSpace($path)) { continue }
         if ($seen.Contains($path)) { continue }
-        foreach ($rx in $regexes) {
+        foreach ($pattern in $patterns) {
+            if ($pattern -match '::') {
+                $parts = $pattern -split '::', 2
+                $regionFile = $parts[0]
+                $regionHeading = $parts[1]
+                if ($path -eq $regionFile -and $Baseline -and (Test-SafetyConfigRegionTouched -Baseline $Baseline -Head $Head -File $regionFile -Heading $regionHeading)) {
+                    $results.Add($path) | Out-Null
+                    $seen.Add($path) | Out-Null
+                    break
+                }
+                continue
+            }
+            $rx = ConvertTo-SafetyConfigRegex -Pattern $pattern
             if ($path -match $rx) {
                 $results.Add($path) | Out-Null
                 $seen.Add($path) | Out-Null
@@ -83,6 +109,106 @@ function Get-SafetyConfigMatches {
         }
     }
     return ,$results.ToArray()
+}
+
+# Line range (start, end; 1-indexed, inclusive) of a markdown heading's section in
+# File as it exists at Rev. Returns $null if the file or heading is not found.
+function Get-SafetyConfigRegionLineRange {
+    param(
+        [Parameter(Mandatory)][string]$Rev,
+        [Parameter(Mandatory)][string]$File,
+        [Parameter(Mandatory)][string]$Heading
+    )
+    $content = git show "${Rev}:${File}" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $content) { return $null }
+    $lines = $content -split "`n"
+    $startLine = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Contains($Heading)) { $startLine = $i + 1; break }
+    }
+    if ($startLine -eq -1) { return $null }
+    $depthMarker = ($Heading -replace '^(#+).*', '$1')
+    if (-not $depthMarker -or $depthMarker -eq $Heading) { $depthMarker = '#' }
+    $depth = $depthMarker.Length
+    $endLine = $lines.Count
+    $inFence = $false
+    for ($i = $startLine; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^```') { $inFence = -not $inFence; continue }
+        if ($inFence) { continue }
+        if ($lines[$i] -match "^#{1,$depth}\s") { $endLine = $i; break }
+    }
+    return @($startLine, $endLine)
+}
+
+# $true if the diff between Baseline and Head touches any changed line inside
+# Heading's section of File (per Get-SafetyConfigRegionLineRange at Head).
+function Test-SafetyConfigRegionTouched {
+    param(
+        [Parameter(Mandatory)][string]$Baseline,
+        [Parameter(Mandatory)][string]$Head,
+        [Parameter(Mandatory)][string]$File,
+        [Parameter(Mandatory)][string]$Heading
+    )
+    $range = Get-SafetyConfigRegionLineRange -Rev $Head -File $File -Heading $Heading
+    if (-not $range) { return $false }
+    $regionStart = $range[0]
+    $regionEnd = $range[1]
+    $hunks = git diff --unified=0 $Baseline $Head -- $File 2>$null | Select-String -Pattern '^@@ -\d+(,\d+)? \+(\d+)(,(\d+))? @@'
+    foreach ($h in $hunks) {
+        $m = $h.Matches[0]
+        $newStart = [int]$m.Groups[2].Value
+        $newCount = if ($m.Groups[4].Success) { [int]$m.Groups[4].Value } else { 1 }
+        $newEnd = if ($newCount -eq 0) { $newStart } else { $newStart + $newCount - 1 }
+        if ($newStart -le $regionEnd -and $newEnd -ge $regionStart) { return $true }
+    }
+    return $false
+}
+
+# Registry patterns with any `::<heading>` region suffix stripped (Spec 542 R2),
+# deduplicated. Whole-file entries pass through unchanged.
+function Get-SafetyConfigRegistryFiles {
+    param([Parameter(Mandatory)][string]$YamlFile)
+    $patterns = Get-SafetyConfigPatterns -YamlFile $YamlFile
+    $seen = New-Object System.Collections.Generic.HashSet[string]
+    $results = New-Object System.Collections.Generic.List[string]
+    foreach ($pattern in $patterns) {
+        $fileOnly = ($pattern -split '::', 2)[0]
+        if ($seen.Add($fileOnly)) { $results.Add($fileOnly) | Out-Null }
+    }
+    return ,$results.ToArray()
+}
+
+# Spec 542 R1 parity — emit the spec's own changed files via commits tagged
+# "Spec <NUM>" (word-boundary), falling back to the spec file's Implementation
+# Summary "Changed files" list. Returns $null if neither source is available.
+function Get-SafetyConfigSpecFiles {
+    param(
+        [Parameter(Mandatory)][string]$SpecNum,
+        [Parameter(Mandatory)][string]$Baseline,
+        [string]$Head = 'HEAD',
+        [string]$SpecFile
+    )
+    $grepPattern = "Spec ${SpecNum}([^0-9]|`$)"
+    $commits = git log --no-merges --pretty=format:%H -E --grep=$grepPattern "${Baseline}..${Head}" 2>$null
+    if ($commits) {
+        $files = foreach ($c in ($commits -split "`n")) {
+            if ($c) { git diff-tree --no-commit-id --name-only -r $c 2>$null }
+        }
+        return ,($files | Sort-Object -Unique)
+    }
+    if ($SpecFile -and (Test-Path -LiteralPath $SpecFile -PathType Leaf)) {
+        $lines = Get-Content -LiteralPath $SpecFile
+        $inSummary = $false
+        $summary = New-Object System.Collections.Generic.List[string]
+        foreach ($line in $lines) {
+            if ($line -match '^## Implementation Summary\s*$') { $inSummary = $true; continue }
+            if ($line -match '^## ' -and $inSummary) { $inSummary = $false; continue }
+            if ($inSummary) { $summary.Add($line) | Out-Null }
+        }
+        $files = [regex]::Matches(($summary -join "`n"), '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notmatch '\s' }
+        if ($files) { return ,$files }
+    }
+    return $null
 }
 
 # Validate Safety-Override reason text per R4b.

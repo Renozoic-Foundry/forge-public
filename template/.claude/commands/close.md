@@ -1,3 +1,8 @@
+---
+name: close
+description: "Close a spec: confirm human validation, capture signals, update priorities"
+workflow_stage: review
+---
 
 # Framework: FORGE
 # Model-Tier: sonnet
@@ -244,10 +249,10 @@ contract: the plugin payload source (`.claude/`) and the Copier source
 (`template/.claude/`) MUST be byte-identical across the common subset
 (`commands/`, `agents/`, `skills/`).
 
-1. **Detect applicability**: if `.forge/bin/plugin-parity-check.sh` does not exist
+1. **Detect applicability**: if `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/plugin-parity-check.sh` does not exist
    (pre-Spec-463 projects), skip silently — mark `[x] Plugin parity gate (Spec 463) — not present in this project`. Proceed.
 
-2. **Run the gate**: `bash .forge/bin/plugin-parity-check.sh`.
+2. **Run the gate**: `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/plugin-parity-check.sh`.
    - Exit 0 → `GATE [plugin-parity]: PASS — plugin payload source and Copier source are byte-identical across the common subset.` Proceed.
    - Exit non-zero → `GATE [plugin-parity]: FAIL — byte-level drift between .claude/ (plugin payload) and template/.claude/ (Copier source). Remediation: re-sync the two sources so they are byte-identical across commands/, agents/, skills/, then re-run /close.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
 
@@ -285,6 +290,7 @@ Before transitioning to closed, spawn an independent validator to verify accepta
 
 2b. **Check `forge.roles.separation`** in AGENTS.md (Spec 099):
    - If `context-scoped` or `full`: All validator agents in this step (both two-stage and fallback) MUST be spawned as **isolated** sub-agents. The agent receives ONLY: the spec file, current codebase, test results, and role/review instructions — NO conversation history, NO implementer reasoning, NO DA findings, NO commit messages. This ensures independent judgment free from confirmation bias. Use `model` from `forge.roles.validator.model` if set.
+   - **Side-effect doctrine in every dispatch prompt (Spec 536)**: the validator is read-only including via Bash — accidental writes are restored by content rewrite or surfaced-and-stopped, NEVER via `git checkout --`/`reset`/`restore` (authorization-gated classes; SIG-520-02). The prompt also states the evidence-blind rule: build own fixtures, never inherit the spec's Evidence section as proof.
    - If `none` (default): Spawn validator agents in the current context (existing behavior).
 
 2c. **Role state file lifecycle (Spec 100)**: Before spawning any validator sub-agent, write the role state file to activate hook-enforced write blocking:
@@ -428,9 +434,9 @@ If enabled:
 
 6. **Role-value instrumentation (Spec 305)** — for each dispatched closing-advisory role, also append one `role-dispatch` record to the shared score-audit sink:
    ```bash
-   bash .forge/lib/score-audit.sh record-dispatch NNN close <role> <recommendation> <confidence> "<key concern>"
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-dispatch NNN close <role> <recommendation> <confidence> "<key concern>"
    ```
-   Map the role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence verbatim. Best-effort: the helper always exits 0 — never block /close. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
+   Map the role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence verbatim. Best-effort: the helper always exits 0 — never block /close. (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
 
 ### [mechanical] Step 2d+a — Operator-Acceptance Capture (Spec 305)
 
@@ -440,7 +446,7 @@ acted on the advisory role recommendations fired across this spec's lifecycle (`
 accept/ignore signal (`score-audit.sh role-audit` rolls it up). Conditional + non-blocking.
 
 1. **Read prior dispatches**: list `role-dispatch` records for this spec —
-   `bash .forge/lib/score-audit.sh read-records NNN | grep '"kind":"role-dispatch"'` — and collect
+   `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh read-records NNN | grep '"kind":"role-dispatch"'` — and collect
    the distinct advisory roles that fired (the Spec 187 dispatch roles + Review-Router perspectives;
    the DA gate and the Validator are gates, not advisories — exclude them).
    - Let `N` = count of distinct advisory roles with ≥1 dispatch for this spec.
@@ -466,11 +472,11 @@ accept/ignore signal (`score-audit.sh role-audit` rolls it up). Conditional + no
 
 3. **Write acceptance records** (single-shot append; latest-entry-wins per R7 — no supersede chain):
    ```bash
-   bash .forge/lib/score-audit.sh record-acceptance NNN <role> <true|false|null> ["<partial_note>"]
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-acceptance NNN <role> <true|false|null> ["<partial_note>"]
    ```
    One fresh `role-acceptance` record per advisory role (except under `skip-all`, which writes nothing).
    Best-effort: the helper always exits 0 — `skip-all` and a non-writable sink both proceed without
-   error. This step is NEVER a blocking gate. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-acceptance ...`.)
+   error. This step is NEVER a blocking gate. (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-acceptance ...`.)
    `Detection: active`.
 
 ### [mechanical] Step 2g — Shadow-Mode Gate Comparison (Spec 277, Phase 1)
@@ -546,7 +552,7 @@ Before generating the Review Brief, actively verify bidirectional sync:
 
 The repo-root tree is the single canonical source; both the plugin payload (`.claude/commands/`) and the `template/` Copier surface are generated downstream. This gate mechanically enforces that no canonical source was edited without regenerating its downstream surfaces — the machine-checked backstop to the prose dual-check above.
 
-Run `bash .forge/bin/forge-parity.sh --check`. This delegates to the two existing sync scripts' `--check` modes (`.claude/commands/` body-equivalence per Spec 329; `template/` mirror byte-equivalence; `.jinja` Copier-var files excluded per Spec 281/390). Bounded runtime — no Copier re-render.
+Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh --check`. This delegates to the two existing sync scripts' `--check` modes (`.claude/commands/` body-equivalence per Spec 329; `template/` mirror byte-equivalence; `.jinja` Copier-var files excluded per Spec 281/390). Bounded runtime — no Copier re-render.
 
 **Evaluation**:
 - Exit 0: mark `[x] Single-source parity — canonical and generated surfaces in sync`. Emit `GATE [single-source-parity]: PASS.` Proceed silently.
@@ -560,11 +566,27 @@ Run `bash .forge/bin/forge-parity.sh --check`. This delegates to the two existin
   > **Choose** — type a number or keyword:
   > | # | Rank | Action | Rationale | What happens |
   > |---|------|--------|-----------|--------------|
-  > | **1** | 1 | `regen` | Restores parity from canonical; safest default | Run `bash .forge/bin/forge-parity.sh` (no flags), then re-run `--check` to confirm |
+  > | **1** | 1 | `regen` | Restores parity from canonical; safest default | Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh` (no flags), then re-run `--check` to confirm |
   > | **2** | — | `block` | Manual fix path; use only if regen is unsafe | Block close until parity is restored manually |
 
-  - If `regen`: run `bash .forge/bin/forge-parity.sh`, then re-run `bash .forge/bin/forge-parity.sh --check`. On exit 0, emit `GATE [single-source-parity]: PASS — regenerated.` Proceed.
+  - If `regen`: run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh`, then re-run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh --check`. On exit 0, emit `GATE [single-source-parity]: PASS — regenerated.` Proceed.
   - If `block`: report "Close blocked — resolve single-source parity drift (run forge-parity.sh) and re-run /close." Stop.
+
+### [mechanical] Step 2d^3 — Autopilot-envelope validation (Spec 531)
+
+Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/check-autopilot-envelope.sh`. Always-strict, BLOCKING — this is the
+lint layer of the ADR-531 envelope (declarative surface; the harness authorization list +
+push guard remain the enforcement primitives).
+
+**Evaluation**:
+- Exit 0: emit `GATE [autopilot-envelope]: PASS.` Proceed silently (also the absent-block
+  consumer case — the validator is silent-safe).
+- Exit 2 (unparseable block — fail closed), 3 (scheduled enabled without a matching
+  `/config-change` audit entry naming `forge.autopilot.scheduled` with `Outcome: applied`),
+  or 4 (unknown key / invalid value): emit `GATE [autopilot-envelope]: FAIL — <validator
+  stderr>. Remediation: exit 3 → run the 3-step consent runbook in
+  authority-constitution-guide.md; exit 4 → new fields require a spec, not a config edit;
+  exit 2 → repair the YAML block.` **Stop close** — do not proceed.
 
 ### [mechanical] Step 2d+++ — Consumer-Propagation Check (Spec 303)
 
@@ -607,13 +629,29 @@ After the template/FORGE dual-check passes, verify that any documentation refere
   - Any resolved via `skip`: emit `GATE [consumer-propagation]: CONDITIONAL_PASS — <N> violation(s) skipped with documented reason.` Proceed.
   - Any unresolved (operator abandoned choice): emit `GATE [consumer-propagation]: FAIL — <N> unresolved violation(s). Remediation: mirror the doc under template/docs/, add docs/<path> to PUBLIC_DOC_FILES, or explicitly skip with reason.` Stop close.
 
+### [mechanical] Step 2d+++b — Public-doc freshness stamp (Spec 509)
+
+When the closing spec changed a documented public surface (a slash command, an AGENTS.md config block, or an install/distribution path), stamp the mapped public doc's Spec 278 `Last verified:` marker STALE so the `/now` freshness surfacer flags it for re-verification and `/evolve` sees chronic deferral. **Signal only** — this step never blocks close, never prompts, and never edits doc content beyond the marker line.
+
+**Scope**: reuse the changed-files list already computed by the Step 2d++/2d+++ detection logic (the Spec 188/303 changed-files scan against `<spec-baseline>`) — do NOT run a new traversal. If `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh` is absent: mark `[x] Doc-freshness stamp — helper absent`. Proceed silently.
+
+**Execution**: pass that same list (as arguments or on stdin) to the Spec 278 marker helper, which owns the single machine-readable copy of the Spec 511 canonical surface→doc mapping (the validator-side assertions on the same doc set live in `scripts/validate-public-docs.sh` Sections 6–7) — do not re-inline the mapping here:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh stamp --spec <NNN> --baseline <spec-baseline> -- <changed-files list from Step 2d++>
+```
+
+**Evaluation** (always exit 0 — no gate outcome, no Review Brief content; surfacing is `/now`'s job):
+- Helper printed `STAMPED <doc> — <reason>` line(s): mark `[x] Doc-freshness stamp — <N> public doc(s) stamped stale`. Include the stamped doc file(s) in the close commit's explicit path list (they carry a one-line marker edit).
+- Helper printed nothing: mark `[x] Doc-freshness stamp — no documented surface changed`. Proceed silently.
+
 ### [mechanical] Step 2d++++ — Gate-mediation drift gate (Spec 444 Req 8a/8c)
 
 When a spec touches `copier.yml` to add a new `validator:`, a new `_tasks:` entry, or a new `secret: true` runtime token, the corresponding gate kind MUST be modeled in `template/.forge/lib/stoke/gates.py` so `/forge stoke` can mediate it in chat (Spec 444). Convention statements alone have a sub-6-month half-life (Specs 427/431 violated mirror-sync conventions inside that window), so this gate enforces the convention mechanically.
 
 **Scope**: runs only when the closing spec's committed diff against the spec baseline modifies at least one of:
 - `copier.yml` (or `template/copier.yml`)
-- `template/.forge/lib/stoke/gates.py` (or its `.forge/lib/stoke/gates.py` own-copy mirror)
+- `template/.forge/lib/stoke/gates.py` (or its `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke/gates.py` own-copy mirror)
 
 If neither file is in the diff: mark `[x] Gate-mediation drift gate — no copier.yml / gates.py changes in scope`. Emit `GATE [gate-mediation]: PASS — no surface in scope.` Proceed silently.
 
@@ -628,7 +666,7 @@ If neither file is in the diff: mark `[x] Gate-mediation drift gate — no copie
    - `^\+\s*secret\s*:\s*true` — new runtime secret token
 3. Apply the YAML-adversarial fixture set (AC 9a) to the regex during test runs — anchors (`&anchor`), aliases (`*alias`), and folded scalars (`>`) inside `validator:` declarations MUST be detected as additions. Adversarial fixtures live in `.forge/tests/test_stoke_gates.py`.
 4. If ANY new-gate token is found:
-   a. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py .forge/lib/stoke/gates.py`.
+   a. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke/gates.py`.
    b. If the diff is empty (gates.py was NOT modified in this spec): emit `GATE [gate-mediation]: FAIL — copier.yml adds a new validator/_tasks/secret surface but template/.forge/lib/stoke/gates.py was not extended. Remediation: extend detect_gates() to model the new gate, OR add 'Gate-Mediation-Exempt: <≥30-char rationale>' to the spec frontmatter.` Stop close.
    c. If gates.py WAS modified: proceed to the fixture-rotation check (Req 8c).
 
@@ -636,7 +674,7 @@ If neither file is in the diff: mark `[x] Gate-mediation drift gate — no copie
 
 When `gates.py` itself is modified by the closing spec, the smoke-test fixture at `template/.forge/tests/test_stoke_mediation_coverage.py` MUST also be updated so the deliberately-unmodeled token rotates. Otherwise the test decays to tautology — it would PASS against a now-modeled gate.
 
-1. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py .forge/lib/stoke/gates.py`.
+1. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke/gates.py`.
 2. If non-empty, also check `git diff <spec-baseline>..HEAD -- template/.forge/tests/test_stoke_mediation_coverage.py .forge/tests/test_stoke_mediation_coverage.py`.
 3. If `gates.py` changed AND the smoke-test fixture's `LAST-ROTATED:` marker was NOT updated (the marker line does not appear in the added-lines diff): emit `GATE [gate-mediation]: FAIL — gates.py was modified but test_stoke_mediation_coverage.py's LAST-ROTATED marker was not updated. The smoke-test fixture must rotate to a still-unmodeled token (Spec 444 Req 8c) — otherwise the unknown-validator coverage test decays to tautology. Remediation: update the CURRENT-FIXTURE-TOKEN and LAST-ROTATED comment in test_stoke_mediation_coverage.py.` Stop close.
 4. If both files are updated in the same spec: emit `GATE [gate-mediation]: PASS — gates.py extended AND fixture rotated.` Proceed.
@@ -777,7 +815,7 @@ After the validator subagent (Step 2-2c) and before the close-completion (Step 3
 Source the helper library:
 ```bash
 # shellcheck source=/dev/null
-source .forge/lib/safety-config.sh
+source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/safety-config.sh
 ```
 
 **Step 2g.1 — Detection**:
@@ -957,7 +995,7 @@ This gate is a **machine-verifiable** check (see `docs/process-kit/gate-categori
 Source the helper library and run the gate driver:
 ```bash
 # shellcheck source=/dev/null
-source .forge/lib/close-adoption-gate.sh
+source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/close-adoption-gate.sh
 spec_file="$(ls docs/specs/NNN-*.md | head -1)"
 if adoption_gate_check "$spec_file" "$(pwd)"; then
   : # PASS line already printed to stdout
@@ -969,7 +1007,7 @@ fi
 
 PowerShell parity:
 ```powershell
-. .forge/lib/close-adoption-gate.ps1
+. ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/close-adoption-gate.ps1
 $spec = (Get-ChildItem docs/specs -Filter 'NNN-*.md' | Select-Object -First 1).FullName
 if (-not (Invoke-AdoptionGateCheck -SpecFile $spec -RepoRoot (Get-Location).Path)) { exit 2 }
 ```
@@ -995,7 +1033,7 @@ Propagate today's session-log `## Error autopsies` / `## Chat insights` entries 
 1. Locate today's session log (`docs/sessions/YYYY-MM-DD-NNN.md` — the most recent log for today's date). If no session log exists, or it has no `## Error autopsies` / `## Chat insights` sections: skip silently (fresh-project case — nothing to propagate) and proceed to Step 3.
 2. Run:
    ```bash
-   .forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --apply --session-only=YYYY-MM-DD-NNN --spec=NNN
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --apply --session-only=YYYY-MM-DD-NNN --spec=NNN
    ```
    where `--session-only` names today's session log (filename stem) and `--spec=NNN` is the closing spec — it keys the `SIG-NNN-EA/CI-<ID>` stub IDs.
 3. Evaluate the exit code:
@@ -1053,7 +1091,7 @@ a. Set `Status: closed` and add `Closed: YYYY-MM-DD` in the spec file.
 b. Add a dated revision entry based on enforcement mode:
    - Chat/PAL: `YYYY-MM-DD: Closed via /close (Chat mode). Human confirmed all deliverables.`
    - Delegated: `YYYY-MM-DD: Closed via /close (Delegated mode). All ACs machine-verified at L<N>. Evidence hash: sha256:<first 16 chars>...`
-b1. **Write-side mode check (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --skip-canonical-write`. Read stdout. If `skip` (split-file mode), the canonical README/backlog/CHANGELOG writes in c, d, e below are SUPPRESSED — the spec frontmatter edit in (a) is the source of truth and the renderer-owned `.generated/` artifacts pick up the new status on next render. The event-stream write in `e1` proceeds unchanged. If stdout is `proceed`, perform c/d/e (Phase 1 dual-write). If the helper exits nonzero, abort the canonical-write block and surface stderr — do NOT default to either behavior.
+b1. **Write-side mode check (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --skip-canonical-write`. Read stdout. If `skip` (split-file mode), the canonical README/backlog/CHANGELOG writes in c, d, e below are SUPPRESSED — the spec frontmatter edit in (a) is the source of truth and the renderer-owned `.generated/` artifacts pick up the new status on next render. The event-stream write in `e1` proceeds unchanged. If stdout is `proceed`, perform c/d/e (Phase 1 dual-write). If the helper exits nonzero, abort the canonical-write block and surface stderr — do NOT default to either behavior.
 c. **README sync (Spec 086)** [proceed mode only]: Read the spec file's `Status:` field (authoritative source). Find the spec's row in `docs/specs/README.md` and update the status to match exactly. If no row exists, add one.
 d. **Backlog sync (Spec 086)** [proceed mode only]: Find the spec's row in `docs/backlog.md`.
    - Update the status column to match the spec file (e.g., `closed`).
@@ -1070,10 +1108,10 @@ e1. **Append spec-closed event (Spec 254 — Approach D)**: Append to the per-sp
 e2. **Score-Audit observed record (Spec 368)**: Append an `observed` record to the score-audit log via the shared helper. Do NOT inline JSON here. The helper computes `wallclock_days`, `session_count`, `revise_rounds`, `validator_outcome`, `da_outcome`, `tc_overrun_derived`, and `creation_ts_source` from artifacts (git timestamps, session JSON sidecars, spec body) — Claude does NOT compute or transcribe duration values.
 
    ```bash
-   bash .forge/lib/score-audit.sh record-observed "$spec_id"
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-observed "$spec_id"
    ```
 
-   (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-observed "$spec_id"`.)
+   (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-observed "$spec_id"`.)
 
    The helper is advisory — failures emit `WARN: score-audit append failed (advisory; close continues)` to stderr but never block the close. The `tc_overrun_derived` boolean is computed automatically from the proxy mapping documented in [docs/process-kit/score-calibration-loop.md](../../docs/process-kit/score-calibration-loop.md); no operator prompt is added at /close for this field.
 f. **Three-source verification (Spec 086)**: After updating, read back all three sources and confirm they agree:
@@ -1455,7 +1493,7 @@ a2. **Trivial-doc exemption audit (Spec 395 AC 6)**: If the just-closed spec's f
    - If actual within bounds: emit `GATE [trivial-doc-audit]: PASS — trivial-doc claim within bounds (M files, N LOC).`
    - If frontmatter does NOT have `Consensus-Exempt: trivial-doc`: skip silently. Most specs skip.
    - This audit is **informational/CONDITIONAL_PASS only — never blocks /close**. The pattern is "trust at gate; verify at close" per Spec 395 Req 2 + AC 6. Repeated overstatements feed the Spec 395 Req 9 sunset review (`/evolve` decision data).
-b. **Backlog confirmation (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` and confirm the closed spec's row in the parsed JSON shows status `closed` (the helper reads frontmatter directly, so the edit from step (a) is reflected immediately regardless of rendering mode). Check if any backlog items are now unblocked.
+b. **Backlog confirmation (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` and confirm the closed spec's row in the parsed JSON shows status `closed` (the helper reads frontmatter directly, so the edit from step (a) is reflected immediately regardless of rendering mode). Check if any backlog items are now unblocked.
 c. Present the current top-3 ranked items from the backlog.
 
 Emit: `GATE [matrix-completion]: PASS/FAIL — <AC spot-check result, backlog confirmation>`. FAIL if AC spot-check finds drift.
@@ -1520,7 +1558,7 @@ echo "close-NNN" > .forge/state/active-close
 **Explicit-path staging + pathspec commit (Spec 494)**: Do NOT use `git add -A`/`git add -u` or a bare `git commit`. In a chained/parallel session the shared git index may already hold a concurrent lane's staged files, and a bare commit would sweep them into this spec's close commit (Defect C — observed 2026-06-11 when Spec 435's commit captured Spec 421's staged files). Instead:
 1. Build the explicit path list `CLOSE_PATHS` = this spec's `## Implementation Summary` `Changed files` ∪ the artifacts `/close` itself wrote this run (the spec file, `docs/.generated/*`, the session log, `docs/sessions/signals.md`, `docs/sessions/activity-log.jsonl`, `.forge/state/events/NNN/*`, and any evidence dir). Run `git status` to confirm the set and catch anything unexpected.
 2. Stage them explicitly: `git add -- <CLOSE_PATHS>` — reuses the Spec 432 `_explicit_stage_paths` discipline (verbatim paths through `--`, never `-A`/`-u`).
-3. Commit **by explicit pathspec** so only this spec's files are captured even when other paths are staged: `git commit -m "Close Spec NNN — <title>" -- <CLOSE_PATHS>`. A concurrent lane's pre-staged files are left untouched (still staged for their lane), never committed here. Verified by `.forge/bin/tests/test-spec-494-staging-collision.sh`.
+3. Commit **by explicit pathspec** so only this spec's files are captured even when other paths are staged: `git commit -m "Close Spec NNN — <title>" -- <CLOSE_PATHS>`. A concurrent lane's pre-staged files are left untouched (still staged for their lane), never committed here. Verified by `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/tests/test-spec-494-staging-collision.sh`.
 
 **Commit guard cleanup (Spec 257)**: After committing (or if no commit was needed), clear the active-close marker:
 ```bash

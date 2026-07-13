@@ -50,7 +50,7 @@ The `/goal` evaluator runs at **each turn boundary**. The exit condition is sati
 three** of these structured signals hold:
 
 1. **validator exit code** — the validator subprocess (per `forge.implement.validator`, e.g.
-   `bash .forge/bin/validate.sh`) returns **exit code 0** when invoked at the goal-evaluation point.
+   `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/validate.sh`) returns **exit code 0** when invoked at the goal-evaluation point.
 2. **spec frontmatter `Status: closed`** — the spec file's frontmatter `Status:` field, **re-read from
    disk** at goal-evaluation time, equals `closed`. (Not a cached value; not a prose mention.)
 3. **gate-emission log** — the **filesystem gate-emissions log** at
@@ -129,7 +129,7 @@ After resolving the spec number (Step 0 or Step 1), check for an existing checkp
 
 **Step 0 — Resolve `next` argument**:
 If $ARGUMENTS is `next` (case-insensitive):
-  a. **Backlog rows (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as JSON; the array contains all backlog rows.
+  a. **Backlog rows (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as JSON; the array contains all backlog rows.
   b. Find the highest-ranked row with status `draft`. If multiple rows share the same rank/score, pick the one listed first.
   c. If no `draft` specs exist: report "No draft specs in the backlog. Create one with `/spec <description>`." Stop.
   d. Display the selected spec using a Choice Block (Spec 025, see `docs/process-kit/implementation-patterns.md`):
@@ -285,7 +285,7 @@ Continue regardless — this is a warning, not a gate.
         - Missing sections → `GATE [completeness]: FAIL — missing: <sections>. Remediation: fill required sections before approval.` Stop.
      b. Update `Status: in-progress` in the spec file.
      c. Add a dated revision entry: `YYYY-MM-DD: Approved inline via /implement. Status → in-progress.`
-     d. **Write-side mode check (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --skip-canonical-write`. If stdout is `skip` (split-file mode), skip steps 2d-2e — the spec frontmatter edit in 2b is the source of truth and the renderers will reflect the new status on next render. If stdout is `proceed`, perform 2d and 2e (Phase 1 dual-write):
+     d. **Write-side mode check (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --skip-canonical-write`. If stdout is `skip` (split-file mode), skip steps 2d-2e — the spec frontmatter edit in 2b is the source of truth and the renderers will reflect the new status on next render. If stdout is `proceed`, perform 2d and 2e (Phase 1 dual-write):
        2d-i. Update the spec's row in `docs/specs/README.md` to `in-progress`.
        2e-i. Add a CHANGELOG entry: `- YYYY-MM-DD: Spec NNN approved inline via /implement.`
        If the helper exits nonzero, abort the canonical-write step and surface stderr — do NOT default to either skip or proceed.
@@ -303,6 +303,27 @@ Continue regardless — this is a warning, not a gate.
      SENTINEL
      ```
      This signals to the edit-gate hook that an active `/implement` session is in progress.
+
+### [mechanical] Step 1c — Container/host parity check (Spec 541)
+
+Post-spec-load, pre-evidence-gate: run the container/host parity helper and surface its
+output to the operator before Step 2a's evidence gates begin. This catches host-vs-container
+divergence (missing npm packages, container-name drift between spec text and the actually-
+running container) early, before evidence gates fail in confusing ways downstream.
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/container-parity-check.sh docs/specs/NNN-*.md
+```
+(PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/container-parity-check.ps1 -SpecFile docs/specs/NNN-*.md`.)
+
+The helper is **advisory only** — it diagnoses and names the remediation command; it never
+auto-remediates and never blocks the pipeline. Surface its stdout verbatim to the operator:
+- Exit 0 (parity, or no-Docker/no-daemon no-op): proceed silently to Step 2a — no operator
+  action needed.
+- Exit 1 (mismatch or container-name drift): display the helper's diagnostic and remediation
+  command (e.g. `docker exec <container> sh -c 'cd /app && npm install'`, or "container
+  `<name>` not found in `docker ps`"), then proceed to Step 2a regardless — the gate never
+  halts implementation.
 
 ### [mechanical] Step 2a — Spec integrity signature (Spec 089)
 
@@ -494,9 +515,9 @@ If enabled:
 
 6. **Role-value instrumentation (Spec 305)** — for each dispatched role, also append one `role-dispatch` record to the shared score-audit sink:
    ```bash
-   bash .forge/lib/score-audit.sh record-dispatch NNN implement <role> <recommendation> <confidence> "<key concern>"
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-dispatch NNN implement <role> <recommendation> <confidence> "<key concern>"
    ```
-   Map the role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence verbatim. Best-effort: the helper always exits 0 — never block /implement. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
+   Map the role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence verbatim. Best-effort: the helper always exits 0 — never block /implement. (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
 
 ### [mechanical] Step 2c — Acceptance Criteria Vague-Language Scan (Spec 171)
 
@@ -792,7 +813,7 @@ After implementation, if the spec's Acceptance Criteria reference UI behavior (k
 
 3. **Run browser test** (if a browser automation package is installed):
    ```bash
-   bash .forge/bin/forge-browser-test.sh NNN --url <detected-or-default-url>
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-browser-test.sh NNN --url <detected-or-default-url>
    ```
    If no browser package is installed, report: "Browser test script generated but not run — install `playwright` or `puppeteer` to execute. Script: `<path>`"
 
@@ -920,6 +941,7 @@ This substep closes the SIG-437-D self-heal pattern (3 occurrences in 14 days: /
    - [ ] New-command mirror sync — see Step 7b+ (active detection — Spec 479)
    - [ ] Authorization-rule lint gate — see Step 7c (active detection — Spec 327)
    - [ ] AGENTS.md prose↔YAML drift detector — see Step 7d (active detection — Spec 330)
+   - [ ] AC mechanism-existence pass — see Step 7e (active detection — Spec 533)
 
 ### [mechanical] Step 7a — README Update Detection (Spec 180)
 
@@ -1008,14 +1030,14 @@ already exist:
   zero overhead, no sync invocation.**
 
 - If a **new one-sided command file is detected**:
-  1. **Sync-script presence check**: if `.forge/bin/forge-sync-commands.sh` does NOT
+  1. **Sync-script presence check**: if `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-sync-commands.sh` does NOT
      exist (consumer projects may not ship it), skip with a one-line note:
      "New-command mirror sync: forge-sync-commands.sh absent — skipped (mirror must be
      generated by the consumer's own tooling)." Never block `/implement`. Mark `[x]`
      with the note.
   2. **Run the sync** (canonical → agent dirs):
      ```bash
-     bash .forge/bin/forge-sync-commands.sh
+     bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-sync-commands.sh
      ```
      **Safety (Requirement 1 — assumption verified)**: `forge-sync-commands.sh` regenerates
      ALL mirrors, but it is safe to run mid-`/implement`. For a brand-new command the mirror
@@ -1030,7 +1052,7 @@ already exist:
   3. **Include the generated mirror in the implementation's changes** — it is part of this
      spec's deliverable and must be committed in the same lane.
   4. Emit: `GATE [new-command-mirror-sync]: PASS — generated mirror(s) for <name>; forge-sync-commands.sh --check clean.`
-     Run `bash .forge/bin/forge-sync-commands.sh --check` to confirm and include the
+     Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-sync-commands.sh --check` to confirm and include the
      `OK:` line as evidence.
 
 ### [mechanical] Step 7c — Authorization-Rule Lint Gate (Spec 327)
@@ -1089,13 +1111,48 @@ See: [docs/process-kit/agents-md-authorization-model.md](../../docs/process-kit/
 
 The current default mode is `advisory`. Operator flips to `strict` (via `--mode=strict`) after the prose↔block alignment is confirmed clean — this is the prerequisite for flipping Spec 327's mode advisory→strict (per Spec 330 Trigger).
 
+### [mechanical] Step 7e — AC Mechanism-Existence Pass (Spec 533)
+
+Outcome-level checking can pass while an AC's NAMED mechanism is absent or inert
+(SIG-519-R2: `--staging` existed but carried none of the cross-link logic its AC claimed;
+caught only by the /close validator, forcing rework). This pass verifies mechanisms, not
+just outcomes, and runs on every /implement after the Step 7 checklist items above.
+
+1. **Staleness re-check first (CI-467 echo)**: re-run the Step 0e spec-vs-HEAD checks
+   (Enforcement-Layers, Implementation Summary surfaces, step references) against the
+   spec's CURRENT text — post-consensus or mid-implement revisions may have landed since
+   Step 0e. A FAIL here is the same HALT class as Step 0e (blocks `implemented`; the
+   single-use `Spec-vs-HEAD-Exempt:` escape applies).
+
+2. **Per-AC mechanism scan**: for EACH acceptance criterion, extract every named artifact —
+   file paths, script/function names, gate names, CLI flags, config keys — and record a
+   two-part verdict:
+   - **(a) exists**: the artifact is present at HEAD (file exists; function/gate/flag
+     defined in the named surface).
+   - **(b) exercised**: the evidence claimed for that AC actually invokes it — a test that
+     runs the named script, a captured command execution, or a gate-emission log line.
+     Outcome truth without mechanism exercise is a verdict-(b) FAIL.
+
+3. **Verdict table**: emit one line per AC:
+   `AC<n>: <mechanisms> — exists: <yes/no per artifact>; exercised: <yes/no + evidence pointer>`
+   ACs naming no mechanism are listed as `AC<n>: no named mechanism (pure-outcome)` —
+   visible and auditable, never failed for it.
+
+4. **FAIL semantics**: a named-but-nonexistent mechanism OR an exists-but-not-exercised
+   mechanism is a BLOCKING finding — same class as a failing AC. Emit:
+   `GATE [ac-mechanism]: FAIL — AC<n> names <artifact>: <not found at HEAD | not exercised by claimed evidence>. Remediation: build/exercise the mechanism, or /revise the AC to name what actually verifies it.`
+   Do not proceed to `implemented` past a FAIL. All-clear emits:
+   `GATE [ac-mechanism]: PASS — <N> AC(s) verified (<M> pure-outcome).`
+
+See docs/process-kit/implementation-patterns.md § AC mechanism-existence (SIG-519-R2 anatomy).
+
 <!-- module:compliance -->
    - [ ] **Lane B compliance gate check** (conditional — skip if `docs/compliance/profile.yaml` absent): Load profile `gate_rules`. Verify required evidence artifacts are present. Emit `GATE [lane-b/<gate>]: PASS/FAIL/CONDITIONAL_PASS` for each gate. FAIL is blocking.
 <!-- /module:compliance -->
 <!-- module:nanoclaw -->
    - [ ] Evidence artifacts captured (optional — run if NanoClaw async review is enabled):
      ```bash
-     source .forge/lib/evidence.sh
+     source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/evidence.sh
      forge_evidence_init "NNN"
      forge_evidence_capture_output "test-run" <test_command>
      forge_evidence_diff_summary
@@ -1138,12 +1195,12 @@ The current default mode is `advisory`. Operator flips to `strict` (via `--mode=
    e. **Implement-time telemetry + evidence flush (Spec 497)**: persist this spec's telemetry to durable state **now**, so `/close` (run immediately or deferred) reviews on-disk evidence and loses nothing. This sub-step is **unconditional** — it fires even when the spec stops at `implemented` without a `/close` (AC1). Logic lives in the Spec 495 substrate (`telemetry.sh`) + the Spec 497 readers (`token_usage.py`); these are thin call sites.
       - i. **Security verdicts → durable ledger**: for each security-relevant gate emitted during this `/implement` run (Step 7c authorization-rule-lint, Step 7d AGENTS.md drift, and any Lane B gate), record the verdict to the tracked ledger:
         ```bash
-        bash .forge/lib/telemetry.sh record-security-gate <gate-name> <PASS|FAIL> <exit_code>
+        bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/telemetry.sh record-security-gate <gate-name> <PASS|FAIL> <exit_code>
         ```
-        (PowerShell: `pwsh .forge/lib/telemetry.ps1 record-security-gate <gate-name> <PASS|FAIL> <exit_code>`.) The verdict is derived from the gate's OWN exit code, never an operator-writable field. This writes `.forge/state/security-gate.jsonl` (tracked via `!`-negation), so the verdict trail is durable **without** a `/close`. Advisory — always exits 0, never blocks.
+        (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/telemetry.ps1 record-security-gate <gate-name> <PASS|FAIL> <exit_code>`.) The verdict is derived from the gate's OWN exit code, never an operator-writable field. This writes `.forge/state/security-gate.jsonl` (tracked via `!`-negation), so the verdict trail is durable **without** a `/close`. Advisory — always exits 0, never blocks.
       - ii. **Token usage (Spec 496 GO / ADR-496)**: if the runtime exposes the on-disk transcript path (a `Stop`/`SessionEnd` hook's `transcript_path`, or `$CLAUDE_TRANSCRIPT_PATH`), capture per-session token counts:
         ```bash
-        forge-py .forge/lib/token_usage.py record --spec NNN --transcript "$transcript_path"
+        forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/token_usage.py record --spec NNN --transcript "$transcript_path"
         ```
         This writes the **token-only** record `{input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, total_tokens}` to the per-spec event stream. Per ADR-316 + ADR-496 it stores **token counts only — never a cost (USD) figure**. `/session` folds the latest record into the durable `token_usage` field of the session sidecar. If no transcript path is available in the host runtime, skip silently (advisory) — the `Stop`-hook capture path covers it.
       - iii. **Idempotency**: after the flush, touch a one-shot marker `.forge/state/events/NNN/telemetry-flushed`. If the marker already exists, do NOT re-append (a later `/close`-time capture also checks it) — this prevents double-counting in the acceptance-rate denominator (DA finding: idempotent implement-time flush).

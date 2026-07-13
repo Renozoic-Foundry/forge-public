@@ -1,3 +1,8 @@
+---
+name: forge-stoke
+description: "Pull upstream FORGE updates into this project using Copier"
+workflow_stage: lifecycle
+---
 # Framework: FORGE
 ## Subcommand: stoke
 
@@ -29,7 +34,7 @@ report-only by default — no file is touched, no cleanup runs at this step.
 
 ```bash
 # Manifest + hash-pinned catalog scan against ~/.claude/ + project tree.
-.forge/bin/forge-py .forge/lib/stoke.py detect-legacy \
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py detect-legacy \
   --project-root . \
   --template-root .forge
 ```
@@ -60,11 +65,11 @@ detection. To act on detected findings:
 
 ```bash
 # Preview only (no deletion, no backup write):
-.forge/bin/forge-py .forge/lib/stoke.py cleanup-legacy --dry-run
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py cleanup-legacy --dry-run
 
 # Perform deletion with backup snapshot (per-invocation consent; no
 # persistent consent, no env var):
-.forge/bin/forge-py .forge/lib/stoke.py cleanup-legacy --consent
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py cleanup-legacy --consent
 ```
 
 Cleanup hard-refuses on: symlinks (Req 7, AC 10), paths canonicalizing outside
@@ -87,7 +92,7 @@ window, run the stale-flag scan so any `include_*` answers in
 surfaced alongside legacy/orphan findings:
 
 ```bash
-.forge/bin/forge-py .forge/lib/stoke.py audit-stale-flags
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py audit-stale-flags
 ```
 
 Each stale flag emits one line to stdout: `Stale flag: <flag>: <value>
@@ -103,7 +108,7 @@ Run the consumer-`.gitignore` audit BEFORE the `--trust` consent prompt so the o
 
 ```bash
 # Report-only (no file changes):
-.forge/bin/forge-py .forge/lib/stoke.py audit-gitignore
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py audit-gitignore
 ```
 
 The audit:
@@ -131,7 +136,7 @@ Append missing rules to .gitignore? (y/N)
 Before any consent prompt, the chat layer runs a single pre-flight that enumerates every gate the underlying `copier update` will hit (Copier's `--trust` requirement, Spec 090 security-override validators, Spec 437 runtime-token validators, plus an `unknown-validator` fallback). The operator sees **at most two yes/no questions** — never a Python traceback, never a `--data K=V` flag, never a spec number unless an unknown gate forces the fallback path.
 
 ```bash
-.forge/bin/forge-py .forge/lib/stoke.py preflight-gates
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py preflight-gates
 ```
 
 The helper emits a JSON array of `Gate` objects, each with `kind`, `label`, `rationale`, `operator_question`, and `copier_data_keys_to_set_on_yes`. The chat layer:
@@ -181,7 +186,7 @@ Copier `--trust` is **per-invocation operator-explicit** — never baked into de
 
 ```bash
 # Enumerate tasks dynamically (Spec 428):
-.forge/bin/forge-py .forge/lib/stoke.py list-tasks
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py list-tasks
 ```
 
 Then build the prompt by substituting the helper's stdout into `<tasks>` below. If `list-tasks` exits non-zero (malformed `copier.yml` or unreachable source), abort the stoke and surface the error — do not proceed to the consent prompt with stale or partial data.
@@ -208,15 +213,15 @@ After Step 0pre.05 completes (or after the legacy Step 0pre.1 trust prompt for t
 ```bash
 # Spec 444 chat-mediated path — operator answered yes to BOTH trust AND
 # security-override:
-.forge/bin/forge-py .forge/lib/stoke.py direct-apply --trust \
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply --trust \
     --data accept_security_overrides=true \
     --data accept_security_overrides_confirmed=true
 
 # Operator answered yes to trust only (no security customizations):
-.forge/bin/forge-py .forge/lib/stoke.py direct-apply --trust
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply --trust
 
 # Operator answered 'n' / empty / anything else:
-.forge/bin/forge-py .forge/lib/stoke.py direct-apply
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply
 ```
 
 The `--data` flag is repeatable and originates EXCLUSIVELY from operator yes-answers in the current chat turn (Spec 444 Constraint). Never from env vars, config files, or session context.
@@ -225,9 +230,9 @@ The `--data` flag is repeatable and originates EXCLUSIVELY from operator yes-ans
 
 ```powershell
 # With consent:
-.forge/bin/forge-py .forge/lib/stoke.py direct-apply --trust
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply --trust
 # Without consent:
-.forge/bin/forge-py .forge/lib/stoke.py direct-apply
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply
 ```
 
 The helper orchestrates (in order):
@@ -255,7 +260,7 @@ without this refresh, Step 0pre.0a's manifest-orphan detection would report
 the just-applied state as orphans.
 
 ```bash
-.forge/bin/forge-py .forge/lib/stoke.py manifest-init \
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py manifest-init \
   --project-root . \
   --template-root .forge \
   --spec-id 431-stoke-refresh
@@ -337,7 +342,7 @@ Acceptable terminal actions after Step 0pre completes:
 - Report `direct-apply` exit code + backup snapshot path to the operator
 - If exit code != 0: surface the recovery output that the helper already emitted
 - If exit code == 0: confirm success ("stoke complete; backup at `<path>`")
-- Run the post-apply audit if desired: `.forge/bin/forge-py .forge/lib/stoke.py audit <backup-dir>` (this is the only legacy step worth preserving — it inspects governance-file deltas against the backup snapshot rather than against a removed shadow tree)
+- Run the post-apply audit if desired: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py audit <backup-dir>` (this is the only legacy step worth preserving — it inspects governance-file deltas against the backup snapshot rather than against a removed shadow tree)
 - End the command
 
 ## [mechanical] Scoped-staging contract (Spec 432)
@@ -346,7 +351,7 @@ When `/forge stoke` needs to commit on the consumer's behalf — for example to 
 
 ```bash
 # Stage tracked + restored files through the project-type exclusion filter:
-.forge/bin/forge-py .forge/lib/stoke.py safe-stage \
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py safe-stage \
     --restored .forge/state/restored.json other/restored/file \
     --commit-message "Spec 432: persist Step 0b restorations"
 ```
@@ -362,7 +367,7 @@ Behavior:
 Standalone post-hoc audit of an existing commit:
 
 ```bash
-.forge/bin/forge-py .forge/lib/stoke.py audit-commit --commit-ref HEAD
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py audit-commit --commit-ref HEAD
 # exit 0  → clean
 # exit 8  → offenders printed; commit must be amended/reset before pushing
 ```

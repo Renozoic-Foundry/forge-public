@@ -190,7 +190,8 @@ construction** — no FORGE workflow depends on the plugin in slice 1.
 
 **Signing — LANDED (Spec 488):** key-based detached signing (minisign), a fail-closed
 verifying integrity hook, key-rotation, and provenance attestation now ship — see
-"SessionStart integrity verification" below. **Still deferred:** marketplace
+"SessionStart integrity verification" below and each tier's key-management runbook
+(maintained in that tier's private repository). **Still deferred:** marketplace
 publication (Spec 489 phase-D's out-of-scope item).
 
 ---
@@ -215,11 +216,11 @@ match it. The manifest algorithm is a single shared library
 sign and verify sides can never drift.
 
 **Root of trust is external (the crux, R5).** The verification pubkey, version floor, and
-expected tier are read from an external anchor — a managed org policy anchor
-(ADR-453 trust root) or a pinned anchor (`FORGE_PLUGIN_ANCHOR`) — and **never from the
+expected tier are read from an external anchor — `managed-settings.json` (managed orgs,
+ADR-453 trust root) or a pinned anchor (`FORGE_PLUGIN_ANCHOR`) — and **never from the
 payload**. A swapped payload carrying a swapped embedded key still fails; an anchor that
-resolves inside the payload is refused. Per-tier keys (one per distribution tier —
-dev, public, and any downstream deployment) are signed at each tier's release; signatures do not
+resolves inside the payload is refused. Per-tier keys (development / public /
+customer-internal) are signed at each tier's release; signatures do not
 propagate down the pipeline.
 
 **Posture.**

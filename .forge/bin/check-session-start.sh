@@ -83,11 +83,22 @@ if [ -e "${LOGS[0]:-}" ]; then
   done
 fi
 
+# --- doctor currency (Spec 520 — one-line staleness surface at session start) ---
+# Best-effort and fast: --summary reads @{upstream} without fetching. Absent script
+# or empty output degrades to no line (this hook NEVER blocks).
+DOCTOR_LINE=""
+if [ -f ".forge/bin/forge-doctor.sh" ]; then
+  DOCTOR_LINE="$(bash .forge/bin/forge-doctor.sh --summary 2>/dev/null | head -1)"
+fi
+
 echo "FORGE session snapshot:"
 echo "  active spec: $SPEC"
 echo "  active tab: $TAB"
 echo "  unreviewed digests: $DIGESTS"
 echo "  last evolve: $EVOLVE"
+if [ -n "$DOCTOR_LINE" ]; then
+  echo "  $DOCTOR_LINE"
+fi
 
 if [ ! -f ".forge/state/implementing.json" ]; then
   echo "  tip: no active spec — consider /spec or /explore before editing code/docs"

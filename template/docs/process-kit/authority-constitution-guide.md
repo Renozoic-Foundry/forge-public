@@ -155,3 +155,36 @@ Spec 470's runner).
 - ADR-453 — autonomy-config trust boundary (declarative vs enforcement split)
 - Spec 457 — NC-2 slice 1 (the PreToolUse hook substrate this rides on)
 - `docs/process-kit/hook-coverage.md` — gate enforcement inventory (slice-2 row updated by this spec)
+
+## Autopilot envelope (Spec 531 / ADR-531 as amended 2026-07-07)
+
+Last verified: 2026-07-07
+
+The `forge.autopilot` block in AGENTS.md is the minimal autonomy envelope for the
+future /autopilot command (Spec 528): `scheduled: {enabled: false}` and
+`terminal_state: implemented`. It is DECLARATIVE — no code path reads it until
+Spec 528 ships — and it never relaxes Priority 1 (close/push authorization lives in
+Boundaries + the push guard; the envelope deliberately does not restate those rules
+as data). The capability-table interior originally sketched in ADR-531 was deferred
+by operator decision (2026-07-07) to a post-528, evidence-gated follow-up spec.
+
+**Enabling scheduled runs — the 3-step consent runbook:**
+
+1. Run `/config-change --propose autopilot-envelope "enable forge.autopilot.scheduled"` (the
+   section string `autopilot-envelope` is in the command's allowed_sections)
+   — the approved change lands as an entry in `docs/sessions/config-change-audit.md`
+   that names `forge.autopilot.scheduled` and carries `Outcome: applied`.
+2. Edit AGENTS.md: `scheduled: { enabled: true }`.
+3. The `/close` gate battery runs `.forge/bin/check-autopilot-envelope.sh`, which
+   passes only when the matching audit entry exists.
+
+**Honesty (tier-qualified)**: the audit-entry check is a **speed bump against
+accidental self-modification, not a security boundary** — the audit file is
+agent-writable, so a misbehaving agent could forge the entry. The enforcement
+primitives for close/push remain the harness authorization-required list and the
+push guard (nothing on disk is forgeable). Treat the envelope as a declared intent
+surface, not enforcement.
+
+**Change path**: toggling the existing `scheduled.enabled` value = `/config-change`.
+Adding any new field, row, or grammar value = a new spec (the validator's allowed-key
+set is code; the validator fails with exit 4 on unknown keys and says so).

@@ -146,3 +146,11 @@ forge.routines:                  # Spec 459 — scheduled strategy-only (green) 
 
 These are enumerated as **forbidden actions** in every contract (grep-verifiable) and
 are the structural guarantee that the routines stay lifecycle-neutral.
+
+## Boundary: routines vs. scheduled autopilot (ADR-531 / Spec 531)
+
+Scheduled EXECUTION runs (lifecycle-advancing work — /autopilot batches) are admitted
+per ADR-531 through the `forge.autopilot` envelope, never via `forge.routines`.
+Routines remain strategy-only (green): artifact-producing, never advancing the spec
+lifecycle, never expanding autonomy. If a scheduled task would move a spec's status,
+it belongs to the autopilot envelope's consent path, not a routine contract.

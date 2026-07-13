@@ -43,3 +43,30 @@
 # pinned: they are not in the cross-level byte-compare set, so their working-tree
 # EOL never affects --check. Verified by scripts/check-portability.sh (autocrlf
 # class) and .forge/bin/tests/test-spec-482-portability.sh (Test 3 / Test 4).
+
+# ============================================================================
+# Spec 529 — merge-safe shared artifacts (union attrs for parallel-lane writes)
+# union is the EXCEPTION, not the default (consensus 2026-07-07): applied ONLY to
+# append-only, line-oriented, order-tolerant streams where line duplication or
+# reordering is provably harmless. Every entry carries its safety argument.
+# Spec files, signals.md, scratchpad.md, session logs, backlog, CHANGELOG carry NO
+# union attr: they are operator/orchestrator-owned (AGENTS.md multi_agent
+# write_* rules, Spec 134/237) or frontmatter-bearing (union would keep BOTH sides
+# of a same-line edit — silent corruption). Revision-Log conflicts resolve by the
+# documented manual convention in docs/process-kit/parallelism-guide.md.
+# ============================================================================
+# activity-log.jsonl: the ONE agent-writable cross-lane feed (write_activity_log:
+# true). Self-contained JSON lines, embedded timestamps, consumers sort/filter —
+# duplication-free interleave proven by test-spec-529-merge-safety.sh.
+docs/sessions/activity-log.jsonl merge=union
+# security-gate.jsonl (Spec 497 durable gate-verdict ledger, tracked via negation):
+# append-only PASS/FAIL records with embedded ts + gate name; readers aggregate by
+# spec — order across lanes immaterial, no overwrite semantics.
+.forge/state/security-gate.jsonl merge=union
+# agent-file-registry.md: single-line pipe-delimited role-log appends with embedded
+# timestamps; rows are self-contained and chronology-tolerant.
+docs/sessions/agent-file-registry.md merge=union
+# doctor-history.jsonl (Spec 530 forerunner entry, absorbed into this audit):
+# append-only JSONL written by every doctor run incl. SessionStart hooks across
+# concurrent worktrees.
+docs/sessions/doctor-history.jsonl merge=union

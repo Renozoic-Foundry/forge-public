@@ -71,6 +71,10 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 3. **Dispatch — one Task call per list entry, in a single parallel-tool-call block**: Iterate `planned_agents`. For each role, emit exactly one Task tool call in the same response block, passing:
    - The role's instruction preamble (from `.claude/agents/<role>.md`)
    - The review material (spec content, ADR content, or freeform topic)
+   - **Stage framing (Spec 543)** — when the review material is a spec, re-read the spec's `Status:` frontmatter at dispatch time and key the framing off it:
+     - `draft` (or any pre-implementation status): include this line verbatim in EVERY reviewer's dispatch prompt: "REVIEW STAGE: pre-implement spec-soundness review; implementation is intentionally absent — evaluate the spec (objective, scope, acceptance criteria, test plan, risks), not delivery evidence. Do not cite missing implementation, absent test output, or an empty Evidence section as grounds for rejection."
+     - `implemented` (or later): no framing line — current prompt unchanged.
+     - Freeform topic / ADR (no spec): no framing line.
    - Instructions to produce a structured assessment:
      ```
      Review the following material from your role's perspective.
@@ -95,9 +99,9 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 
 6. **Role-value instrumentation (Spec 305)** — after parsing each role's response, append one `role-dispatch` record per assessed role to the shared score-audit sink:
    ```bash
-   bash .forge/lib/score-audit.sh record-dispatch <NNN-or-topic-slug> consensus <role> <vote> "" "<key_risk>"
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-dispatch <NNN-or-topic-slug> consensus <role> <vote> "" "<key_risk>"
    ```
-   Map `vote` → recommendation verbatim (`approve|concern|reject`). For a freeform-topic consensus (no spec id) pass the topic slug as the first arg. Skip dispatch-failed entries (no vote). Best-effort: the helper exits 0 even if the sink is unwritable — never block consensus. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
+   Map `vote` → recommendation verbatim (`approve|concern|reject`). For a freeform-topic consensus (no spec id) pass the topic slug as the first arg. Skip dispatch-failed entries (no vote). Best-effort: the helper exits 0 even if the sink is unwritable — never block consensus. (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
 
 Run all role assessments in **parallel** where possible (single response block, multiple Task calls).
 

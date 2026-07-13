@@ -1,0 +1,26 @@
+{
+  "name": "forge",
+  "owner": {
+    "name": "Renozoic Foundry",
+    "url": "https://github.com/Renozoic-Foundry/forge-public"
+  },
+  "plugins": [
+    {
+      "name": "forge",
+      "source": "./",
+      "description": "FORGE — spec-driven, evidence-gated development workflow. Ships the FORGE command, agent, skill, and hook payload as a Claude Code plugin.",
+      "author": {
+        "name": "Renozoic Foundry"
+      },
+      "homepage": "https://github.com/Renozoic-Foundry/forge-public",
+      "license": "MIT",
+      "keywords": [
+        "forge",
+        "spec-driven",
+        "evidence-gated",
+        "workflow",
+        "process"
+      ]
+    }
+  ]
+}

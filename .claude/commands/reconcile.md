@@ -55,11 +55,11 @@ If $ARGUMENTS is `?` or `help`:
 Run the engine in read-only `--plan` mode and present the routing plan to the operator:
 
 ```bash
-bash .forge/bin/forge-py .forge/lib/reconcile_classify.py --plan \
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/reconcile_classify.py --plan \
   [--since <ref>] --stub-min-files <N> --stub-min-lines <M>
 ```
 
-(PowerShell: `python .forge/lib/reconcile_classify.py --plan ...`.)
+(PowerShell: `python ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/reconcile_classify.py --plan ...`.)
 
 Present the parsed JSON as a short table: the scan range, commits scanned, the
 spec-linked / process / un-specced bucket counts, and per-cluster routing (commits,
@@ -87,7 +87,7 @@ At **L3+** with no contentious findings, proceed as `apply` (the artifacts are a
 ## [mechanical] Step 4 — Apply
 
 ```bash
-bash .forge/bin/forge-py .forge/lib/reconcile_classify.py --apply \
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/reconcile_classify.py --apply \
   [--since <ref>] --stub-min-files <N> --stub-min-lines <M> \
   --memory-dir <operator-memory-dir>
 ```

@@ -148,7 +148,7 @@ Enter numbers to enable (e.g., `1 3`), `keep` to leave unchanged.
 
 **STOP — wait for response.**
 
-Process selections, updating `.forge/onboarding.yaml` under `agents`. Then run `.forge/bin/forge-sync-commands.sh` to generate wrappers for the enabled agents. Return to main menu.
+Process selections, updating `.forge/onboarding.yaml` under `agents`. Then run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-sync-commands.sh` to generate wrappers for the enabled agents. Return to main menu.
 
 ---
 
@@ -299,7 +299,7 @@ FORGE ships some functionality inactive by default (e.g. Spec 460 lifecycle hook
 
 `forge-capability.sh` is the **sole read/write path** for capability state: read with `list`, write with `activate` / `deactivate` / `dismiss`. Do NOT edit `.claude/settings.json` inline in this flow.
 
-1. Run `bash .forge/bin/forge-capability.sh list` and render each entry with its pitch (read the `pitch:` field from `.forge/capabilities.yaml` for display only):
+1. Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh list` and render each entry with its pitch (read the `pitch:` field from `.forge/capabilities.yaml` for display only):
 
    ```
    ## Capabilities
@@ -315,8 +315,8 @@ FORGE ships some functionality inactive by default (e.g. Spec 460 lifecycle hook
 2. **STOP — wait for response.**
 
 3. Dispatch:
-   - `<number>` → toggle the whole capability: if currently `inactive`, run `bash .forge/bin/forge-capability.sh activate <id>`; if `active`, run `bash .forge/bin/forge-capability.sh deactivate <id>`. Toggling the whole capability is the default one-decision path. Per-member toggles (individual events within a capability) are offered only **after** the operator selects an entry and asks for them — never as the first prompt.
-   - `<number> dismiss` → run `bash .forge/bin/forge-capability.sh dismiss <id>` (the capability stops counting toward the `/now` surface; it never re-nags).
+   - `<number>` → toggle the whole capability: if currently `inactive`, run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh activate <id>`; if `active`, run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh deactivate <id>`. Toggling the whole capability is the default one-decision path. Per-member toggles (individual events within a capability) are offered only **after** the operator selects an entry and asks for them — never as the first prompt.
+   - `<number> dismiss` → run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh dismiss <id>` (the capability stops counting toward the `/now` surface; it never re-nags).
    - `done` → return to main menu.
 
 4. After each toggle, re-render the list and wait again. Every state change routes through the helper; this flow writes no settings file directly.

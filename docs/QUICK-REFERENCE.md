@@ -56,6 +56,7 @@
 | `/revise` | Revise a spec after devil's advocate or review findings | sonnet |
 | `/trace` | Trace a spec's evidence chain end-to-end | sonnet |
 | `/parallel` | Run multiple independent specs simultaneously | sonnet |
+| `/debug` | Systematic debugging — verified root cause before any fix | sonnet |
 | `/scheduler` | Dependency-aware multi-agent parallel execution | sonnet |
 | `/test` | Run project test suite with evidence capture | sonnet |
 

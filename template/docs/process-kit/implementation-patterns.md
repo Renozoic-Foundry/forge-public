@@ -423,3 +423,51 @@ Same underlying reality — but the second version states it honestly, carries i
 ### When to apply
 
 Apply to every drafting prompt handed to a subagent (single or fan-out batch) and to any in-session draft written under time pressure. The `/spec` command body points here at its draft-writing step. A verification-token *linter* is deliberately not part of this convention (Spec 465 constraint) — promote one via a follow-up spec only if usage evidence shows the prose convention failing.
+
+## AC mechanism-existence (Spec 533 — the SIG-519-R2 anatomy)
+
+Last verified: 2026-07-07
+
+**The failure class**: an AC names a mechanism ("`validate-public-docs.sh --staging` →
+0 broken cross-links") and the implementer verifies the OUTCOME (no broken links — true,
+because the underlying defect was fixed elsewhere) without verifying the NAMED MECHANISM
+(--staging carried no cross-link logic at all). Outcome-level verification passes; the AC's
+stated verification path is fiction; the evidence-blind /close validator catches it late and
+forces a rework cycle (SIG-519-R2). Sibling signals: SIG-507-02 (AC drift between authoring
+and /implement), CI-467 (consensus-revised spec stale within 24h), EA-434 (mechanism defects
+admitted at /spec).
+
+**The rule** (/implement Step 7e): when an AC names a command + expected behavior, the
+implement-time check must RUN that command and observe that behavior. Two verdicts per named
+artifact — *exists at HEAD* and *exercised by the claimed evidence* — and a failure of
+EITHER blocks `implemented` with equal force: an inert-but-present mechanism (the true
+SIG-519-R2 shape) is exactly as broken as a missing one. Pure-outcome ACs (naming no
+mechanism) are listed visibly as such, never failed for it. The pass is instruction-driven
+by design (Minimal-by-default): a script ships only if instruction-driven proves unreliable.
+
+## Commit-guard two-call pattern (Spec 536 — the SIG-520-CI-01 timing anatomy)
+
+The Spec 257 commit guard is a **PreToolUse hook**: it inspects the marker file and the
+staged set BEFORE the Bash tool call executes. Consequences that are invisible until hit:
+
+- `write marker && git commit` in ONE Bash call always fails — the guard evaluated before
+  the marker existed. Same for `git add <session-log> && git commit` under the Spec 421
+  session-log auto-allow: the staged set was empty at evaluation time.
+- A blocked call means the ENTIRE compound command never ran — including earlier segments
+  (a heredoc append "vanishing" is this, not a file-write failure).
+
+**The pattern**: two separate Bash calls, always —
+
+```bash
+# call 1: establish the state the guard reads
+printf '%s\n' '{"spec_id":"NNN","command":"implement",...}' > .forge/state/implementing.json
+git add <explicit paths>
+```
+```bash
+# call 2: nothing but the commit
+git commit -m "..."
+```
+
+Guard behavior itself is unchanged and correct (fail-closed both times it fired in the
+2026-07-07 sprint-runner session — this section exists so the timing is discoverable
+instead of rediscovered).

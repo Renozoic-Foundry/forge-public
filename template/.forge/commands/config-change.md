@@ -35,7 +35,7 @@ If $ARGUMENTS is `?` or `help`:
 
 Read `docs/sessions/config-change-config.yaml` (skip if absent — use defaults).
 Defaults:
-- `allowed_sections: [autonomy-levels, model-tiering, test-commands, permission-mode]` — sections of AGENTS.md/CLAUDE.md that agents may propose changes to
+- `allowed_sections: [autonomy-levels, model-tiering, test-commands, permission-mode, autopilot-envelope]` — sections of AGENTS.md/CLAUDE.md that agents may propose changes to (`autopilot-envelope` = the `forge.autopilot` block, Spec 531 — proposals to flip `scheduled.enabled` route here; the applied entry must name `forge.autopilot.scheduled` so the /close envelope validator can match it)
 - `blocked_sections: [two-hard-rules, spec-gate, change-lanes]` — sections that are always out of scope
 - `cool_down_days: 7` — minimum days between applied config changes
 - `notify_via: inline` — `inline` (present in conversation) or `nanoclaw`

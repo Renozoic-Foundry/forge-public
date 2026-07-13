@@ -89,7 +89,7 @@ If file does not exist: skip silently.
 
 ## [mechanical] Step 6 — Backlog state (Spec 399)
 
-Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as a JSON array; each row has keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`.
+Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as a JSON array; each row has keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`.
 Extract:
 - All specs with their status and score (cross-reference per-spec frontmatter for `Last updated:` if needed for aging)
 - Any stalled specs: status = `draft` or `in-progress` with no movement in > 14 days (read individual spec frontmatter for the `Last updated:` timestamp; helper does not surface that field)
@@ -99,7 +99,7 @@ Extract:
 
 ## [mechanical] Step 7 — Spec index for cross-reference (Spec 399)
 
-Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as a JSON array; each row has keys `spec_id, slug, status, title`. Collect all spec IDs and titles for cross-referencing.
+Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as a JSON array; each row has keys `spec_id, slug, status, title`. Collect all spec IDs and titles for cross-referencing.
 Build a set: `TRACKED` = all spec titles/descriptions visible in the spec index + scratchpad.md open notes.
 This is used in Step 8 to avoid recommending what's already tracked.
 

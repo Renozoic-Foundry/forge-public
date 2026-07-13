@@ -17,6 +17,25 @@
 #                                     — read ignore-yaml (Spec 397); emit one token name per line
 #                                       on stdout. Verifies version: 1; warns on empty reason;
 #                                       exit 1 + stderr on missing/wrong-version yaml.
+#   safety_config_spec_files <spec-num> <baseline> [<head>] [<spec-file>]
+#                                     — Spec 542 R1: emit the spec-under-review's own changed
+#                                       files (one per line), attributed via commits whose
+#                                       message tags "Spec <NUM>", falling back to the spec's
+#                                       Implementation Summary "Changed files" list. Exit 0 if
+#                                       per-spec data was found, exit 1 if neither source
+#                                       yielded data (caller falls back to cumulative diff + WARN).
+#   safety_config_region_touched <baseline> <head> <file> <heading>
+#                                     — Spec 542 R2: exit 0 if the diff between baseline and head
+#                                       touches any line inside the markdown section starting at
+#                                       <heading> (through the next heading of equal-or-lesser
+#                                       depth, or EOF) in <file> at <head>. Exit 1 otherwise.
+#   safety_config_registry_files <yaml>
+#                                     — Spec 542 R2: emit registry patterns with any `::<heading>`
+#                                       region suffix stripped, deduplicated (one file-glob per
+#                                       line). For consumers that enumerate whole files (e.g. the
+#                                       backfill audit's wide-net scan), which are region-agnostic
+#                                       by design — the audit sweeps a file for un-annotated safety
+#                                       declarations regardless of which section they land in.
 
 # Trivial-string patterns that auto-reject as override reasons (R4b).
 # Case-insensitive match against trimmed reason text.
@@ -60,8 +79,15 @@ safety_config_load() {
 
 # Match a list of diff paths (stdin) against registry patterns.
 # Emits matching diff paths to stdout (one per line, deduplicated, in input order).
+#
+# $2/$3 (optional, Spec 542 R2) — baseline/head revisions. Required only to evaluate
+# region-scoped entries (pattern form `<file>::<heading>`); whole-file entries match
+# regardless. Without $2, region entries are silently skipped (never match) — callers
+# that only need whole-file matching (e.g. existing Spec 387 tests) are unaffected.
 safety_config_match_diff() {
   local yaml_file="$1"
+  local baseline="${2:-}"
+  local head="${3:-HEAD}"
   local -a patterns=()
   local pattern
   while IFS= read -r pattern; do
@@ -79,6 +105,19 @@ safety_config_match_diff() {
       continue
     fi
     for pattern in "${patterns[@]}"; do
+      if [[ "$pattern" == *"::"* ]]; then
+        # Region-scoped entry: <file>::<heading>. Only fires if the diff's changed
+        # lines intersect the named heading's section in the file at $head.
+        local region_file="${pattern%%::*}"
+        local region_heading="${pattern#*::}"
+        if [[ "$diff_path" == "$region_file" && -n "$baseline" ]] \
+          && safety_config_region_touched "$baseline" "$head" "$region_file" "$region_heading"; then
+          printf '%s\n' "$diff_path"
+          seen[$diff_path]=1
+          break
+        fi
+        continue
+      fi
       # Convert glob pattern to bash extended-glob form.
       # `**/*.yaml` -> nested-dir match via `==` glob.
       # bash `[[ str == pattern ]]` honors * and ? but NOT **.
@@ -92,6 +131,112 @@ safety_config_match_diff() {
       fi
     done
   done
+}
+
+# Line range [start end] (1-indexed, inclusive) of a markdown heading's section in
+# <file> as it exists at <rev>. The section runs from the heading line through the
+# line before the next heading of equal-or-lesser depth, or EOF. Prints "start end"
+# to stdout; returns 1 if the file or heading is not found at that revision.
+safety_config_region_line_range() {
+  local rev="$1" file="$2" heading="$3"
+  local content
+  content="$(git show "${rev}:${file}" 2>/dev/null)" || return 1
+  local start_line
+  start_line="$(printf '%s\n' "$content" | grep -nF -- "$heading" | head -1 | cut -d: -f1)"
+  if [[ -z "$start_line" ]]; then
+    return 1
+  fi
+  local depth_marker="${heading%%[! #]*}"
+  depth_marker="${depth_marker// /}"
+  [[ -z "$depth_marker" ]] && depth_marker="#"
+  local depth="${#depth_marker}"
+  local total_lines
+  total_lines="$(printf '%s\n' "$content" | wc -l)"
+  # Find the next real markdown heading of depth <= $depth after $start_line, skipping
+  # lines inside fenced code blocks (```) — a YAML `# comment` inside a fence would
+  # otherwise false-match as a markdown heading.
+  local end_line
+  end_line="$(printf '%s\n' "$content" | awk -v start="$start_line" -v depth="$depth" -v total="$total_lines" '
+    NR <= start { next }
+    /^```/ { infence = !infence; next }
+    infence { next }
+    $0 ~ ("^#{1," depth "}[[:space:]]") { print NR - 1; found=1; exit }
+    END { if (!found) print total }
+  ')"
+  printf '%d %d\n' "$start_line" "$end_line"
+}
+
+# Exit 0 if the diff between <baseline> and <head> touches any changed line inside
+# <heading>'s section of <file> (per safety_config_region_line_range at <head>).
+# Exit 1 if the heading is not found, or the diff doesn't intersect its line range.
+safety_config_region_touched() {
+  local baseline="$1" head="$2" file="$3" heading="$4"
+  local range
+  range="$(safety_config_region_line_range "$head" "$file" "$heading")" || return 1
+  local region_start region_end
+  read -r region_start region_end <<< "$range"
+  local hunk_line
+  while IFS= read -r hunk_line; do
+    if [[ "$hunk_line" =~ ^@@\ -[0-9]+(,[0-9]+)?\ \+([0-9]+)(,([0-9]+))?\ @@ ]]; then
+      local new_start="${BASH_REMATCH[2]}"
+      local new_count="${BASH_REMATCH[4]:-1}"
+      local new_end=$((new_start + new_count - 1))
+      if (( new_count == 0 )); then
+        new_end="$new_start"
+      fi
+      if (( new_start <= region_end && new_end >= region_start )); then
+        return 0
+      fi
+    fi
+  done < <(git diff --unified=0 "$baseline" "$head" -- "$file" 2>/dev/null | grep -E '^@@ ')
+  return 1
+}
+
+# Emit registry patterns with any `::<heading>` region suffix stripped (Spec 542 R2),
+# deduplicated. Whole-file entries pass through unchanged.
+safety_config_registry_files() {
+  local yaml_file="$1"
+  local pattern
+  # shellcheck disable=SC2034
+  declare -A seen=()
+  while IFS= read -r pattern; do
+    local file_only="${pattern%%::*}"
+    if [[ -z "${seen[$file_only]:-}" ]]; then
+      printf '%s\n' "$file_only"
+      seen[$file_only]=1
+    fi
+  done < <(safety_config_load "$yaml_file")
+}
+
+# Spec 542 R1 — emit the spec-under-review's own changed files (one per line),
+# attributed via commits whose message tags "Spec <NUM>" (word-boundary match, so
+# "Spec 54" doesn't match "Spec 540"), between <baseline> and <head>. Falls back to
+# the spec file's "## Implementation Summary" backtick-quoted "Changed files" list
+# when no tagged commits are found. Exit 0 if either source yielded files (even an
+# empty list from zero-touch commits), exit 1 if neither source is available —
+# callers should fall back to the cumulative baseline..head diff with a WARN.
+safety_config_spec_files() {
+  local spec_num="$1" baseline="$2" head="${3:-HEAD}" spec_file="${4:-}"
+  local commits
+  commits="$(git log --no-merges --pretty=format:%H -E --grep="Spec ${spec_num}([^0-9]|\$)" "${baseline}..${head}" 2>/dev/null || true)"
+  if [[ -n "$commits" ]]; then
+    local c
+    while IFS= read -r c; do
+      [[ -z "$c" ]] && continue
+      git diff-tree --no-commit-id --name-only -r "$c" 2>/dev/null
+    done <<< "$commits" | sort -u
+    return 0
+  fi
+  if [[ -n "$spec_file" && -f "$spec_file" ]]; then
+    local summary files
+    summary="$(awk '/^## Implementation Summary$/{p=1; next} /^## /{p=0} p' "$spec_file")"
+    files="$(printf '%s\n' "$summary" | grep -oE '`[^`]+`' | tr -d '`' | grep -vE '\s' || true)"
+    if [[ -n "$files" ]]; then
+      printf '%s\n' "$files"
+      return 0
+    fi
+  fi
+  return 1
 }
 
 # Validate Safety-Override reason text per R4b.

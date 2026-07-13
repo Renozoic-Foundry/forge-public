@@ -30,7 +30,7 @@ If $ARGUMENTS is `?` or `help`:
     - Never auto-creates specs from raw clipping text (intent-to-action gate)
     - Never runs /close, git push, destructive git, or PR creation without explicit authorization
     - Summarizes + cites source URLs; never copies article bodies
-  See: docs/process-kit/signal-to-strategy-loop.md, .forge/lib/research_sources.py
+  See: docs/process-kit/signal-to-strategy-loop.md, ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/research_sources.py
   ```
   Stop — do not execute any further steps.
 
@@ -48,7 +48,7 @@ Default source set (override via $ARGUMENTS or AGENTS.md config):
 
 Run the inventory helper for a structured pass (degrades gracefully if the corpus is absent):
 ```
-.forge/bin/forge-py .forge/lib/research_sources.py <corpus-path> --format=json
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/research_sources.py <corpus-path> --format=json
 ```
 For each source record: file name, title, source URL, author (when available),
 created/published date, relevance class (**primary** / **supporting** / **adjacent**).

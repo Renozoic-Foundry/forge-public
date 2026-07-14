@@ -148,7 +148,8 @@ REASON="COMMIT GUARD (Spec 257): No active spec or /close in progress, and the s
 REASON+="To proceed, do one of: "
 REASON+="(1) re-run this commit after /implement <spec-number> or /close <spec-number> sets the active marker; "
 REASON+="(2) run it yourself in the terminal: git commit -m \"<your message>\"; "
-REASON+="(3) stage only session-log artifacts under docs/sessions/ (the dated YYYY-MM-DD-NNN log + its .json sidecar, error-log.md, insights-log.md, etc.)."
+REASON+="(3) stage only session-log artifacts under docs/sessions/ (the dated YYYY-MM-DD-NNN log + its .json sidecar, error-log.md, insights-log.md, etc.). "
+REASON+="TIMING (Spec 536): this guard is a PreToolUse hook — it inspects marker and staged state BEFORE your command runs. A marker write or git add chained in the SAME Bash call is invisible to it: use TWO separate calls (write the marker / stage first; then run git commit alone)."
 
 jq -nc --arg r "$REASON" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
 exit 0

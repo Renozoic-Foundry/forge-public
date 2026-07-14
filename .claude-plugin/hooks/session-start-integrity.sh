@@ -102,9 +102,28 @@ if [ ! -f "$MANIFEST" ] || [ ! -f "$SIG" ]; then
   exit $EXIT_FAIL
 fi
 
+# ---- LF-canonicalize the manifest for verification (Spec 518 — eol-agnostic) ----------
+# Distribution channels that bypass .gitattributes (zip/tarball release assets, Copier
+# renders without .git, pre-Spec-517 clones under core.autocrlf) can materialize the
+# manifest with CRLF endings while the signature was made over LF bytes. Strip CR into a
+# TEMP copy — the same canonicalization the manifest algorithm applies to file content
+# (payload-manifest.sh R3) — and verify against that canonical copy, so verification is
+# line-ending-agnostic. The on-disk manifest is NEVER mutated; the DETACHED SIGNATURE
+# (.minisig) is BINARY and NEVER normalized. This normalizes line endings ONLY: the
+# signature check and the recompute-diff below are unchanged in presence and strictness —
+# a tampered manifest cannot hide behind CR stripping, because verification requires the
+# canonical bytes to be byte-identical to the signed bytes.
+NORM_MANIFEST="$(mktemp)" || { log "temp file creation failed — FAIL CLOSED."; exit $EXIT_FAIL; }
+RECOMPUTED="$(mktemp)" || { rm -f "$NORM_MANIFEST"; log "temp file creation failed — FAIL CLOSED."; exit $EXIT_FAIL; }
+trap 'rm -f "$NORM_MANIFEST" "$RECOMPUTED"' EXIT
+if ! tr -d '\r' < "$MANIFEST" > "$NORM_MANIFEST"; then
+  log "manifest LF-normalization failed — FAIL CLOSED."
+  exit $EXIT_FAIL
+fi
+
 # ---- Verify the signature against the ANCHORED pubkey (R5/AC1/AC2/AC5/AC6) ------------
 VERIFY_OUT=""
-if ! VERIFY_OUT="$(minisign -V -P "$ANCHOR_PUBKEY" -m "$MANIFEST" -x "$SIG" 2>&1)"; then
+if ! VERIFY_OUT="$(minisign -V -P "$ANCHOR_PUBKEY" -m "$NORM_MANIFEST" -x "$SIG" 2>&1)"; then
   log "signature verification FAILED against anchored pubkey ($ANCHOR_SRC) — FAIL CLOSED."
   printf '%s\n' "$VERIFY_OUT" | sed 's/^/[forge:plugin-integrity]   /' >&2
   exit $EXIT_FAIL
@@ -114,11 +133,13 @@ fi
 if [ ! -f "$MANIFEST_LIB" ]; then log "manifest lib missing — FAIL CLOSED."; exit $EXIT_FAIL; fi
 # shellcheck source=/dev/null
 . "$MANIFEST_LIB" || { log "cannot load manifest lib — FAIL CLOSED."; exit $EXIT_FAIL; }
-RECOMPUTED="$(mktemp)"; trap 'rm -f "$RECOMPUTED"' EXIT
 if ! forge_build_manifest "$ASSET_ROOT" > "$RECOMPUTED" 2>/dev/null; then
   log "manifest recompute failed — FAIL CLOSED."; exit $EXIT_FAIL
 fi
-if ! diff "$RECOMPUTED" "$MANIFEST" >/dev/null 2>&1; then
+# Diff against the SAME canonical (CR-stripped) copy the signature was verified over —
+# forge_build_manifest emits LF by construction, so a CRLF on-disk manifest must not
+# false-tamper here (Spec 518). Any CONTENT mismatch still FAILS CLOSED.
+if ! diff "$RECOMPUTED" "$NORM_MANIFEST" >/dev/null 2>&1; then
   log "payload does not match the signed manifest (tamper detected) — FAIL CLOSED."
   exit $EXIT_FAIL
 fi

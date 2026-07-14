@@ -22,7 +22,7 @@ If $ARGUMENTS is `?` or `help`:
     - docs/roadmap.md — unmet phase prerequisites
     - docs/sessions/signals.md — recurring patterns (2+ entries)
     - docs/sessions/scratchpad.md — open items not yet converted to specs
-    - .forge/lib/derived_state.py --get-backlog (live frontmatter source) — gaps in coverage
+    - ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog (live frontmatter source) — gaps in coverage
   See: docs/roadmap.md, docs/process-kit/scoring-rubric.md
   ```
   Stop — do not execute any further steps.
@@ -35,7 +35,7 @@ Read the following files (skip silently if any do not exist):
 - `docs/roadmap.md`
 - `docs/sessions/signals.md`
 - `docs/sessions/scratchpad.md`
-- **Backlog rows (Spec 439)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json`. Parse stdout as JSON; the array contains all backlog rows with keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`. Do NOT open `docs/backlog.md` directly — the helper reads per-spec frontmatter live, so any edits in the same session are reflected immediately. (`docs/backlog.md` remains the operator-visible artifact, refreshed by `/matrix`.)
+- **Backlog rows (Spec 439)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json`. Parse stdout as JSON; the array contains all backlog rows with keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`. Do NOT open `docs/backlog.md` directly — the helper reads per-spec frontmatter live, so any edits in the same session are reflected immediately. (`docs/backlog.md` remains the operator-visible artifact, refreshed by `/matrix`.)
 - `docs/specs/README.md` (to check which specs already exist)
 
 ## [mechanical] Step 2 — Analyze gaps
@@ -98,7 +98,7 @@ Present recommendations as a numbered list:
    Source: scratchpad | Est. score: ~NN | Lane: <lane>
 ```
 
-**Empty-signal check (Spec 399):** Before presenting recommendations, check: run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` and verify zero rows have status `draft`, AND `docs/sessions/signals.md` has zero entries AND `docs/sessions/scratchpad.md` has zero open items? If all three are empty (new project with no history to mine), prepend this note to the output:
+**Empty-signal check (Spec 399):** Before presenting recommendations, check: run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` and verify zero rows have status `draft`, AND `docs/sessions/signals.md` has zero entries AND `docs/sessions/scratchpad.md` has zero open items? If all three are empty (new project with no history to mine), prepend this note to the output:
 
 > **No signals to mine yet.** This project is too new for pattern analysis. If requirements are still forming, consider running `/interview` first to surface assumptions and define scope before generating spec candidates.
 

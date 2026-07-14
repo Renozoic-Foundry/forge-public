@@ -339,6 +339,11 @@ case "${COMMAND}" in
         list_commands
         exit 0
         ;;
+    doctor)
+        # Spec 520: deterministic exec (precedent: list) — the read-only diagnostic
+        # runs directly and is never dispatched to an AI agent.
+        exec bash "${PROJECT_DIR}/.forge/bin/forge-doctor.sh" ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
+        ;;
     help)
         if [[ -z "${SPEC_NUMBER}" ]] && [[ ${#REMAINING_ARGS[@]} -gt 0 ]]; then
             # forge help implement — SPEC_NUMBER won't be set, but first remaining arg is the command name

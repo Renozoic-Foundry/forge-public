@@ -138,9 +138,9 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
 3. Open the just-completed spec and check one acceptance criterion against the code:
    - State the criterion, the file/function it maps to, and whether the code satisfies it
    - Flag any drift as a process defect requiring a new spec
-4. **Backlog state (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` — confirm the completed spec's row reflects `implemented` (the helper reads frontmatter directly, so freshness is immediate; mode-detection is internal).
+4. **Backlog state (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` — confirm the completed spec's row reflects `implemented` (the helper reads frontmatter directly, so freshness is immediate; mode-detection is internal).
 5. Check if any other backlog items are now unblocked by this completion and note them.
-6. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py .forge/lib/acceptance_rate.py` and surface its one-line rolling-30-day figure. When it reports `n/a` (no rated decisions in window), surface that verbatim. This is the same read the operator's `consensus_tracking` config (AGENTS.md) defines; it is also surfaced by `/now`.
+6. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py` and surface its one-line rolling-30-day figure. When it reports `n/a` (no rated decisions in window), surface that verbatim. This is the same read the operator's `consensus_tracking` config (AGENTS.md) defines; it is also surfaced by `/now`.
 
 **If periodic review (full F1–F4):**
 3. Spot-check 2–3 `implemented` or `closed` specs for acceptance criteria drift.
@@ -154,15 +154,15 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    c. If systematic bias detected in either direction: recommend updating E anchor guidance and present specific anchor adjustments.
    d. Token-cost (TC) calibration is qualitative — operator-recall against the cost-feel of recent specs (Spec 316 removed the metrics framework that was documented but never wired).
 
-6b+. **Data-driven score calibration via score-audit log (Spec 368)**: Augment the operator-recall pass in 6b with predicted-vs-observed data from `.forge/state/score-audit.jsonl`. The shared helper at `.forge/lib/score-audit.sh` (PowerShell parity at `.forge/lib/score-audit.ps1`) renders the bias report; do NOT inline JSON parsing here.
+6b+. **Data-driven score calibration via score-audit log (Spec 368)**: Augment the operator-recall pass in 6b with predicted-vs-observed data from `.forge/state/score-audit.jsonl`. The shared helper at `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh` (PowerShell parity at `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1`) renders the bias report; do NOT inline JSON parsing here.
 
    Run the bias report:
 
    ```bash
-   bash .forge/lib/score-audit.sh bias-report "$verbosity_mode"
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh bias-report "$verbosity_mode"
    ```
 
-   (PowerShell: `pwsh .forge/lib/score-audit.ps1 bias-report "$verbosity_mode"`. `$verbosity_mode` is `lean` or `verbose` per `forge.output.verbosity` in AGENTS.md.)
+   (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 bias-report "$verbosity_mode"`. `$verbosity_mode` is `lean` or `verbose` per `forge.output.verbosity` in AGENTS.md.)
 
    The helper:
    - Reads predicted/observed pairs grouped by `lane + kind_tag` (Req 14b cross-tab from day one).
@@ -175,7 +175,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
 
    Note: this report is data, not authority. Anchor revisions still require operator judgment — see `docs/process-kit/score-calibration-loop.md` § Time-blindness mitigation for the principle that durations are derived from shell arithmetic over git timestamps, not model recall.
 
-6b++. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py .forge/lib/acceptance_rate.py` and surface the rolling-30-day figure (`accepted / (accepted + modified + rejected)` over `docs/sessions/*.json`, per `docs/process-kit/telemetry-capture-guide.md`). When it reports `n/a` (no rated decisions in window), surface that verbatim — never a divide error. A persistently low or sharply dropping rate is a calibration/process signal worth a CEfO/CQO note; the figure is data, not authority.
+6b++. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py` and surface the rolling-30-day figure (`accepted / (accepted + modified + rejected)` over `docs/sessions/*.json`, per `docs/process-kit/telemetry-capture-guide.md`). When it reports `n/a` (no rated decisions in window), surface that verbatim — never a divide error. A persistently low or sharply dropping rate is a calibration/process signal worth a CEfO/CQO note; the figure is data, not authority.
 
 6c. **CEfO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
    - Read `.claude/agents/cefo.md` for the role preamble.
@@ -358,7 +358,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
 
     h. **Multi-role vetting**: For high-impact proposals (severity `high` or BV >= 4), recommend running `/consensus <proposal>` to gather structured feedback from all registry roles before approving.
 After either path:
-- **Deferred scope aging (Spec 199):** Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-backlog --format=json` and scan for any items tagged as deferred scope (status `deferred` or content with deferred-scope markers). For each deferred item, check its origination date. Flag items older than 14 days without disposition:
+- **Deferred scope aging (Spec 199):** Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` and scan for any items tagged as deferred scope (status `deferred` or content with deferred-scope markers). For each deferred item, check its origination date. Flag items older than 14 days without disposition:
   ```
   DEFERRED SCOPE AGING — The following items are >14 days old without disposition:
   - <date> from Spec NNN: <item summary> (<age> days)
@@ -380,7 +380,7 @@ A quarterly deprecation sweep that verifies safety-property enforcement persiste
 
 ```bash
 # shellcheck source=/dev/null
-source .forge/lib/safety-config.sh
+source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/safety-config.sh
 
 sweep_log=".forge/state/safety-sweep.jsonl"
 mkdir -p .forge/state

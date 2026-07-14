@@ -19,6 +19,6 @@
 # auto_progression ceiling; it never flips a flag here. Priority-1 boundaries apply at L4.
 #
 # Keep this format simple + greppable: one space-separated bracketed list per key.
-commands: [close, implement, spec, forge, forge-init, forge-stoke, parallel, reconcile, config-change, configure, configure-nanoclaw, nanoclaw, onboarding, scheduler, tab, session]
+commands: [close, implement, spec, forge, forge-init, forge-stoke, parallel, reconcile, config-change, configure, configure-nanoclaw, nanoclaw, onboarding, scheduler, tab, session, debug]
 skills_model_invokable: [now, note, brainstorm, dependency-audit, explore, insights, trace, test, signal-to-strategy]
 skills_explicit: [consensus, decision, evolve, interview, matrix, revise, synthesize]

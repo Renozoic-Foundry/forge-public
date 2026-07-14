@@ -226,6 +226,30 @@ When Spec 344 ships, Lane A specs no longer carry the Approved-SHA gate. The thr
 
 These three together provide functionally equivalent coverage on Lane A without the per-spec hash management overhead that Spec 089 imposes. Lane B retains the hash gate verbatim (audit-chain compliance unchanged).
 
+## Spec 548 — validator execution-evidence enforcement (post-check + redaction)
+
+Two mechanical layers harden validator independence at /close Step 2d (fallback path):
+
+1. **Spec-copy redaction** (`spec_redact.py`): the validator receives a copy with
+   implementer-authored proof sections (`## Evidence`, `## Disposition Record`,
+   `## Devil's Advocate Findings`) stripped — the evidence-blind rule no longer depends on
+   prompt compliance (SIG-532-04/535-02 showed ~2/3 same-day lapse rates on prompt-only
+   enforcement).
+2. **Execution-evidence post-check** (`validator_evidence_postcheck.py`): any AC the shared
+   scanner (`ac-pattern-scanner.sh <spec> runnable` — the Spec 550 matcher infrastructure,
+   the ONLY command-detection source) flags as naming a runnable command must carry execution
+   evidence (exit code / output excerpt, tolerated variants documented in
+   `EVIDENCE_PATTERNS`) in its criterion result. A PASS without it — or a PASS citing the
+   implementer Evidence section — downgrades to `GATE [validator]: FAIL`, naming the AC and
+   the missing element (one-shot retry contract).
+
+**Enforcement ceiling (honest)**: the post-check verifies evidence **presence, not
+truthfulness** — a validator could fabricate a plausible exit code without executing
+anything. It is a lint-level speed bump against drift, NOT a hard trust boundary.
+Evidence-to-tool-call trace binding is the named follow-up (watchlist: "Full validator
+isolation"). At L3/L4 the whole layer is **designed-not-enforced** until the
+managed-settings trust root lands (ADR-453 §6.1) — same ceiling as Spec 498's push gate.
+
 ## What is NOT handled by these guards
 
 - **Genuine post-close corrections** (typos, broken links, signal-ID drift caught later) are a separate problem. /close-time edits and post-close edits are different windows. If you hit a post-close correction case, file a follow-up spec for the optional **Pattern A errata-file mechanism** (deferred follow-up, not a launch requirement of Spec 344).

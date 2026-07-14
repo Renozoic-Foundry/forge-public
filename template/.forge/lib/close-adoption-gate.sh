@@ -85,9 +85,17 @@ adoption_detect_frontmatter_fields() {
   body="$(_adoption_section "$spec_file" Scope)
 $(_adoption_section "$spec_file" Requirements)
 $(_adoption_section "$spec_file" 'Acceptance Criteria')"
-  # Match `Word-Word:` field-name declarations (single-line, value optional).
-  printf '%s\n' "$body" \
-    | grep -oE '\b[A-Z][A-Za-z]+(-[A-Za-z]+)+:' \
+  # Precision rule (Spec 536 — SIG-509-TRUST-01): a candidate declaration must be
+  # (a) backticked (`New-Field:` — how specs cite field names), or
+  # (b) line-anchored (start of line / list item — the frontmatter-position shape).
+  # A bare mid-prose `Word-Word:` phrase ("... Precision-over-recall: an internal ...")
+  # is prose, not a declaration — the old \b-anchored match false-FAILed Spec 509 on it.
+  {
+    printf '%s\n' "$body" | grep -oE '`[A-Z][A-Za-z]+(-[A-Za-z]+)+:' | tr -d '`' || true
+    printf '%s\n' "$body" \
+      | grep -oE '^[[:space:]]*-?[[:space:]]*[A-Z][A-Za-z]+(-[A-Za-z]+)+:' \
+      | grep -oE '[A-Z][A-Za-z]+(-[A-Za-z]+)+:' || true
+  } \
     | sed -E 's/:$//' \
     | sort -u \
     | while IFS= read -r field; do

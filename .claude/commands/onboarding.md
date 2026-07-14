@@ -340,13 +340,13 @@ If the operator chose SKIP-FOR-NOW, also append the scratchpad note (see above).
    - `.claude/settings.json` — start from `{}` if absent, otherwise the existing content. Set `"defaultMode": "default"` (L1 autonomy default).
    - `AGENTS.md` — find the `forge:` config block. Set `forge.methodology: none` (preserve other fields). **Strategic scope (Spec 382)**: if `project.strategic_scope` is populated in `.forge/onboarding.yaml`, write it to AGENTS.md's `forge.strategic_scope:` block via the yaml-aware helper:
       ```bash
-      .forge/bin/forge-py .forge/lib/strategic-scope.py write \
+      ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/strategic-scope.py write \
         .forge/state/onboarding-staging/AGENTS.md \
         "$(yq '.project.strategic_scope' .forge/onboarding.yaml)"
       ```
-      (Or pipe via stdin: `echo "$value" | .forge/bin/forge-py .forge/lib/strategic-scope.py write <path> -`. Regex-replace on raw markdown is NOT acceptable per Spec 382 AC9 — fragile against block-scalar variants.)
+      (Or pipe via stdin: `echo "$value" | ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/strategic-scope.py write <path> -`. Regex-replace on raw markdown is NOT acceptable per Spec 382 AC9 — fragile against block-scalar variants.)
    - `.copier-answers.yml` — if present, set `project_name`, `project_slug` (lowercase+hyphen), `project_description`, `test_command`, `lint_command`. Preserve `_commit` and `_src_path`. (Note: `_src_path` determines where `/forge stoke` pulls updates from — `gh:Renozoic-Foundry/forge-public` works from any machine; a local path only works on that machine.)
-   - **Agent wrappers** (output of `.forge/bin/forge-sync-commands.sh`) — generate the wrappers into the staging directory's `.claude/commands/` and similar subdirs, NOT into the live tree. Reproducing the script's output deterministically into staging keeps Step B's contract: nothing goes live until "yes".
+   - **Agent wrappers** (output of `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-sync-commands.sh`) — generate the wrappers into the staging directory's `.claude/commands/` and similar subdirs, NOT into the live tree. Reproducing the script's output deterministically into staging keeps Step B's contract: nothing goes live until "yes".
 
 3. **Credential placeholder scan**: scan `.env.example`, `.env.template`, `docker-compose*.yml`, and config files for placeholder patterns (`TODO`, `CHANGEME`, `YOUR_`, `<...>`, `your-`, `-here`, `xxx`). Record any findings under `setup_tasks` in `.forge/onboarding.yaml`:
    ```yaml
@@ -456,7 +456,7 @@ Apply these staged onboarding changes? (yes / no)
 
 **post-confirmation — runs after staging commit (Spec 315).** This step runs only on the "yes" path, AFTER the atomic-apply / commit and manifest-integrity step has completed. The capability writes (`activate` / `dismiss`) are post-confirmation actions; they are NEVER performed mid-staging.
 
-1. Run `bash .forge/bin/forge-capability.sh pending`. If the count is `0`, skip this step silently.
+1. Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh pending`. If the count is `0`, skip this step silently.
 2. If the count is ≥ 1, present ONE batched question listing every `recommended: true` capability (read `title` + `pitch` from `.forge/capabilities.yaml` for display):
 
    ```
@@ -471,9 +471,9 @@ Apply these staged onboarding changes? (yes / no)
 
 3. **STOP — wait for response.**
 4. Dispatch:
-   - `all` → for each recommended capability, run `bash .forge/bin/forge-capability.sh activate <id>`.
-   - `pick` → present **a single multi-select prompt** listing all recommended capabilities with numbers, answered in one line (e.g. `1 3`). This is **one prompt, one answer — never a per-capability loop**. For each selected number, run `bash .forge/bin/forge-capability.sh activate <id>`; unselected recommended capabilities are dismissed via `bash .forge/bin/forge-capability.sh dismiss <id>` so they do not re-nag.
-   - `skip` → run `bash .forge/bin/forge-capability.sh dismiss <id>` for every recommended capability (no re-nag at every `/now`).
+   - `all` → for each recommended capability, run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh activate <id>`.
+   - `pick` → present **a single multi-select prompt** listing all recommended capabilities with numbers, answered in one line (e.g. `1 3`). This is **one prompt, one answer — never a per-capability loop**. For each selected number, run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh activate <id>`; unselected recommended capabilities are dismissed via `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh dismiss <id>` so they do not re-nag.
+   - `skip` → run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-capability.sh dismiss <id>` for every recommended capability (no re-nag at every `/now`).
 
 All capability state changes route through `forge-capability.sh`; this step writes no settings file directly.
 

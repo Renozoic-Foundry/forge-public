@@ -1,7 +1,7 @@
 # MCP Pinning and Integrity Policy
-<!-- Last updated: 2026-06-12 -->
+<!-- Last updated: 2026-07-13 -->
 
-Last verified: 2026-04-17
+Last verified: 2026-07-13
 
 ## Why this policy exists
 

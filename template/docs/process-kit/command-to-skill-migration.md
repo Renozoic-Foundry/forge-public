@@ -168,6 +168,19 @@ grep -c "disable-model-invocation: false" template/.claude/skills/*/SKILL.md  # 
 grep -c "disable-model-invocation: true"  template/.claude/skills/*/SKILL.md  # expect 10 (Cat B + C)
 ```
 
+## Helper invocations in skill/command bodies (Spec 538)
+
+Since skills are generated verbatim from the canonical command body (`.forge/commands/<name>.md`
+via `forge-sync-skills.sh`), any `.forge/bin/*` or `.forge/lib/*` helper invocation authored into
+a command body ships into the skill body too — including to plugin-only consumers with no
+vendored `.forge/` tree. Author every such invocation with the
+`${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/...` idiom (resolves from the plugin root when installed as
+a plugin, falls back to project-relative for classic vendored consumers). See
+`docs/process-kit/single-source-generator-guide.md#plugin-root-relative-helper-resolution-in-commandsskills-spec-538`
+for the full convention, the PowerShell equivalent, and documented exclusions (project-scoped
+data paths, FORGE's own self-referential authoring paths, and destination-report/naming-template
+prose that never resolves to a helper being invoked).
+
 ## Plugin namespacing (forward note)
 
 Plugin packaging (`.claude-plugin/plugin.json`) is **not** introduced by Spec 461. Spec 463 adds

@@ -26,3 +26,15 @@ See docs/process-kit/cxo-rubric.md for the shared review rubric.
 - BLOCK for any credential exposure, auth bypass, or unmitigated injection risk
 - REVISE for missing input validation, overly broad permissions, or unaudited dependencies
 - Flag supply chain concerns even if they seem unlikely — the cost of missing them is high
+
+## Model & refusal fallback (security-flavored work)
+Benign security review can false-positive on frontier-model cyber safety classifiers
+(`stop_reason: "refusal"`) — Fable 5 most strictly; Sonnet 5 ships with milder cyber
+safeguards on by default. If this role's dispatch refuses or stalls on legitimate review
+content (CVE/dependency analysis, incident work, attack-surface reasoning), re-run on
+Opus 4.8 — it carries no such constraint and is cheaper for advisory work. Any API-level
+integration should pass server-side `fallbacks: [{model: "claude-opus-4-8"}]` (beta) for
+security-flavored calls. Do not instruct this role to "show your thinking" or transcribe
+chain-of-thought into output — that can trip the reasoning-extraction refusal category;
+the rubric's structured rationale fields are the correct channel. (F5-5, research intake
+2026-07-06; see docs/process-kit/agent-roles-guide.md §9.)

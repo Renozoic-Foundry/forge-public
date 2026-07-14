@@ -6,12 +6,23 @@
 #
 # Pattern syntax: shell-glob (matched against `git diff --name-only` output).
 # Self-reference is intentional — see Spec 387 R1b.
+#
+# Region syntax (Spec 542 R2): `<file>::<heading>` scopes a whole-file entry down to
+# one markdown section — the entry fires only when the diff's changed lines fall
+# inside that heading's section (through the next heading of equal-or-lesser depth,
+# or EOF) in the file as it exists at HEAD. Whole-file entries (no `::`) keep their
+# existing behavior. AGENTS.md carries most of its prose outside config content (the
+# Mission, role-mapping, and process narrative sections); scoping it to the Boundaries
+# heading — where the authorization gates, autonomy levels, and machine-readable
+# rules actually live — closes the doc-only false-positive class (a prose addition
+# elsewhere in the file no longer fires) without weakening true-positive coverage of
+# the safety-relevant region.
 patterns:
-  - AGENTS.md
+  - "AGENTS.md::## Boundaries (authorization, safety)"
   - CLAUDE.md
   - .forge/onboarding.yaml
   - .mcp.json
   - .forge/safety-config-paths.yaml
-  - template/AGENTS.md.jinja
+  - "template/AGENTS.md.jinja::## Boundaries (authorization, safety)"
   - template/CLAUDE.md.jinja
   - "template/**/*.yaml"

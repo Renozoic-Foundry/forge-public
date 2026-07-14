@@ -109,20 +109,52 @@ if $CHECK_MODE; then
   echo "=== Surface 3: .forge/{bin,lib} mirrors (Spec 489 / SIG-487-02) ==="
   PARITY_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
   FORGE_DIR_DRIFT=0
-  for _cf in "${PARITY_ROOT}"/.forge/bin/*.sh "${PARITY_ROOT}"/.forge/bin/*.ps1 "${PARITY_ROOT}"/.forge/lib/*.sh "${PARITY_ROOT}"/.forge/lib/*.ps1; do
-    [ -f "$_cf" ] || continue
-    _rel="${_cf#"${PARITY_ROOT}"/}"
-    _mirror="${PARITY_ROOT}/template/${_rel}"
-    if [ ! -f "$_mirror" ]; then
-      echo "  DRIFT: missing mirror template/${_rel}"
-      FORGE_DIR_DRIFT=1
-      continue
-    fi
-    if ! diff <(tr -d '\r' < "$_cf") <(tr -d '\r' < "$_mirror") >/dev/null 2>&1; then
-      echo "  DRIFT: ${_rel} differs from its template mirror"
-      FORGE_DIR_DRIFT=1
-    fi
-  done
+  # Spec 554: batch the CR-normalized compares into ONE forge-py process — the
+  # per-file `diff <(tr ...)` form spawned ~5 processes x ~85 files (~60s of
+  # win32 sys time). Identical semantics: same globs, same missing-mirror and
+  # differs messages, CR-stripped byte equality. Falls back to the original
+  # per-file loop when forge-py is unavailable.
+  if [ -x "${PARITY_ROOT}/.forge/bin/forge-py" ] || command -v python3 >/dev/null 2>&1; then
+    _drift_out="$("${PARITY_ROOT}/.forge/bin/forge-py" - "$PARITY_ROOT" <<'PYEOF'
+import glob, os, sys
+root = sys.argv[1]
+drift = 0
+files = []
+for pat in (".forge/bin/*.sh", ".forge/bin/*.ps1", ".forge/lib/*.sh", ".forge/lib/*.ps1"):
+    files.extend(glob.glob(os.path.join(root, pat)))
+for cf in sorted(files):
+    if not os.path.isfile(cf):
+        continue
+    rel = os.path.relpath(cf, root).replace(os.sep, "/")
+    mirror = os.path.join(root, "template", rel)
+    if not os.path.isfile(mirror):
+        print(f"  DRIFT: missing mirror template/{rel}")
+        drift = 1
+        continue
+    with open(cf, "rb") as fa, open(mirror, "rb") as fb:
+        if fa.read().replace(b"\r", b"") != fb.read().replace(b"\r", b""):
+            print(f"  DRIFT: {rel} differs from its template mirror")
+            drift = 1
+sys.exit(drift)
+PYEOF
+)" && FORGE_DIR_DRIFT=0 || FORGE_DIR_DRIFT=1
+    if [ -n "${_drift_out}" ]; then printf '%s\n' "${_drift_out}"; fi
+  else
+    for _cf in "${PARITY_ROOT}"/.forge/bin/*.sh "${PARITY_ROOT}"/.forge/bin/*.ps1 "${PARITY_ROOT}"/.forge/lib/*.sh "${PARITY_ROOT}"/.forge/lib/*.ps1; do
+      [ -f "$_cf" ] || continue
+      _rel="${_cf#"${PARITY_ROOT}"/}"
+      _mirror="${PARITY_ROOT}/template/${_rel}"
+      if [ ! -f "$_mirror" ]; then
+        echo "  DRIFT: missing mirror template/${_rel}"
+        FORGE_DIR_DRIFT=1
+        continue
+      fi
+      if ! diff <(tr -d '\r' < "$_cf") <(tr -d '\r' < "$_mirror") >/dev/null 2>&1; then
+        echo "  DRIFT: ${_rel} differs from its template mirror"
+        FORGE_DIR_DRIFT=1
+      fi
+    done
+  fi
   if [ "$FORGE_DIR_DRIFT" -eq 0 ]; then
     echo "  parity: OK"
   else
@@ -156,6 +188,21 @@ if $CHECK_MODE; then
     DRIFT_SURFACES+=(".claude/skills invocation-policy (forge-sync-skills.sh --verify-policy)")
   fi
   echo ""
+
+  # Surface 6 (Spec 524): consensus-classifier single-source parity. The workflow
+  # script embeds a duplicated copy of the divergence classifier (Workflow scripts
+  # cannot import at runtime); this gate byte-verifies it against the canonical
+  # .forge/lib/consensus-classifier.js. Skip silently if the artifacts are absent
+  # (consumer projects predating Spec 524).
+  if [ -f "${SCRIPT_DIR}/check-consensus-classifier-parity.sh" ] && [ -f "${SCRIPT_DIR}/../workflows/consensus.workflow.js" ]; then
+    echo "=== Surface 6: consensus-classifier single source (Spec 524) ==="
+    if bash "${SCRIPT_DIR}/check-consensus-classifier-parity.sh"; then
+      : # OK line printed by the check
+    else
+      DRIFT_SURFACES+=("consensus-classifier embed (Spec 524 — .forge/workflows/consensus.workflow.js)")
+    fi
+    echo ""
+  fi
 
   echo "## Summary"
   if [[ ${#DRIFT_SURFACES[@]} -eq 0 ]]; then

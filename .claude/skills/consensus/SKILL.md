@@ -54,7 +54,33 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 
 ## [mechanical] Step 3 — Declare planned_agents and dispatch
 
-**Single source of truth (Spec 423)**: this step declares `planned_agents` as an explicit list BEFORE any dispatch, and the dispatch narration is **generated from `planned_agents`** — not authored freehand. The same list drives both narration and the Task tool-call loop, so the count and names cannot diverge. This collapses the narration-vs-dispatch defect class that caused /consensus 399 round 3 to silently omit COO.
+### Step 3.0 — Workflow-path capability probe (Spec 524)
+
+Before the prompt-driven dispatch below, branch on Workflow-tool availability:
+
+- **Workflow tool present in this session's toolset** (Claude Code) → use the **Workflow path**:
+  invoke the `consensus-fanout` workflow (`.forge/workflows/consensus.workflow.js`) via the Workflow
+  tool, passing `args = {specId, reviewMaterial, roster: [{role, agentType, effort?, model?}],
+  stageFraming, roundCap}`. `roundCap` is 1 or 2 (the workflow covers rounds 1–2 only; explore F2).
+  The workflow returns `{rounds: [{verdicts[], tally, divergence, round_two}], final_divergence,
+  recommended_action, role_yield}` — schema-validated verdicts, in-script tally + Spec 391 round-2
+  re-vote, NO prose parsing (Req 3). Then **in the main loop** (the workflow performs no repo side
+  effects — explore F5): render the Step 5 summary from the return value; apply the Spec 468
+  terminal classification (HUMAN-JUDGMENT taxonomy, model-side — never in-script); run Step 4b
+  cap/extension prompts and Step 4c Consensus-Close-SHA for round 3+; write the session sidecar
+  role-yield from `role_yield`; run the Spec 305 `record-dispatch` calls. MT reframes and
+  HUMAN-JUDGMENT still escalate to the operator — never auto-revised (Constraints).
+  Per-role effort/model overrides are pinned by role identity inside the workflow
+  (`OVERRIDE_BY_ROLE`) and MUST NOT be derived from `$ARGUMENTS`/review content (Req 5; CISO).
+- **Workflow tool absent** (Codex/Cursor/Gemini/Aider, or a Claude Code session without it) → use
+  the **prompt-driven fallback** below (Steps 3.1–4), the documented cross-runtime contract. This
+  is not dead code (Constraints); the two paths produce identical divergence classification and
+  recommended action on the same verdict set — the classifier is a single source
+  (`.forge/lib/consensus-classifier.js`), byte-verified against the workflow embed by
+  `forge-parity.sh --check` Surface 6 (Spec 524 Req 8). Terminal workflow failure mid-run → fall
+  back to prompt-driven and inform the operator.
+
+**Single source of truth (Spec 423)**: this step declares `planned_agents` as an explicit list BEFORE any dispatch, and the dispatch narration is **generated from `planned_agents`** — not authored freehand. The same list drives both narration and the Task tool-call loop, so the count and names cannot diverge. This collapses the narration-vs-dispatch defect class that caused /consensus 399 round 3 to silently omit COO. (In the Workflow path the roster array IS the dispatch list — the Spec 423 defect class is eliminated by construction; explore F3.)
 
 1. **Declare `planned_agents`**: Build an explicit list of role identifiers for this round, one entry per role to be spawned. Example:
    ```
@@ -71,6 +97,10 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 3. **Dispatch — one Task call per list entry, in a single parallel-tool-call block**: Iterate `planned_agents`. For each role, emit exactly one Task tool call in the same response block, passing:
    - The role's instruction preamble (from `.claude/agents/<role>.md`)
    - The review material (spec content, ADR content, or freeform topic)
+   - **Stage framing (Spec 543)** — when the review material is a spec, re-read the spec's `Status:` frontmatter at dispatch time and key the framing off it:
+     - `draft` (or any pre-implementation status): include this line verbatim in EVERY reviewer's dispatch prompt: "REVIEW STAGE: pre-implement spec-soundness review; implementation is intentionally absent — evaluate the spec (objective, scope, acceptance criteria, test plan, risks), not delivery evidence. Do not cite missing implementation, absent test output, or an empty Evidence section as grounds for rejection."
+     - `implemented` (or later): no framing line — current prompt unchanged.
+     - Freeform topic / ADR (no spec): no framing line.
    - Instructions to produce a structured assessment:
      ```
      Review the following material from your role's perspective.
@@ -95,9 +125,9 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 
 6. **Role-value instrumentation (Spec 305)** — after parsing each role's response, append one `role-dispatch` record per assessed role to the shared score-audit sink:
    ```bash
-   bash .forge/lib/score-audit.sh record-dispatch <NNN-or-topic-slug> consensus <role> <vote> "" "<key_risk>"
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-dispatch <NNN-or-topic-slug> consensus <role> <vote> "" "<key_risk>"
    ```
-   Map `vote` → recommendation verbatim (`approve|concern|reject`). For a freeform-topic consensus (no spec id) pass the topic slug as the first arg. Skip dispatch-failed entries (no vote). Best-effort: the helper exits 0 even if the sink is unwritable — never block consensus. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
+   Map `vote` → recommendation verbatim (`approve|concern|reject`). For a freeform-topic consensus (no spec id) pass the topic slug as the first arg. Skip dispatch-failed entries (no vote). Best-effort: the helper exits 0 even if the sink is unwritable — never block consensus. (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
 
 Run all role assessments in **parallel** where possible (single response block, multiple Task calls).
 

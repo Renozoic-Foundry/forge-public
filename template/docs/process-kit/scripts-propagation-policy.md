@@ -83,7 +83,7 @@ Two `.py` files in canonical `scripts/` currently relate to the propagation surf
 - `migrate-to-derived-view.py` — mirrored to `template/scripts/` (Spec 399 derived-view migration); behaves as `propagate` in practice.
 - `spec-344-insert-guards.py`, `spec-344-insert-sentinels.py` — one-shot migrations for Spec 344; `framework-internal`.
 
-The remaining `.py` files (`build-article-*.py`, `build-example.py`, `gen_pptx_*.py`) are FORGE-internal content-generation tools and stay canonical-only.
+The remaining `.py` files (`build-article-*.py`, `gen_pptx_*.py`, and the internal fork-build script) are FORGE-internal content-generation tools and stay canonical-only.
 
 These are documented here for completeness, but `.py` is not yet covered by the dual-check gate and is therefore not in the audited table above. When the propagation surface formally extends to `.py`, the table should grow to include them and the row-count assertion should be amended to count `scripts/*.{sh,ps1,py}` (matching propagation surface).
 

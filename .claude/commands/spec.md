@@ -111,7 +111,7 @@ If $ARGUMENTS does not contain `--guided`: continue with Step 1 below.
 
 1b. **Authorization scope check (Spec 165)**: If the description or spec title names a new command file (e.g., a new `/push-release`, `/deploy-all`, or similar slash command): prompt — "Does this command name imply modification of external/shared systems? If so, declare explicit scope limits in the opening line of the command file."
 
-2. **Next spec number (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=json`. Parse the stdout as JSON; the next available spec number is one greater than the maximum `spec_id` in the array (treat IDs as zero-padded integers).
+2. **Next spec number (Spec 399, fetch-before-mint per Spec 532)**: Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/spec-next-id.sh`. It prints the next available spec number as max+1 over the union of the local corpus and the remote default branch's `docs/specs/` view (best-effort, time-bounded fetch — offline degrades to the local view with one warning; never blocks). **Fallback when the helper is absent** (consumer projects mid-update): run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-spec-index --format=json` and take one greater than the maximum `spec_id` in the array (local-max behavior; treat IDs as zero-padded integers).
 3. Select template based on lane:
    - If Change-Lane is `process-only` or `small-change`: read `docs/specs/_template-light.md`.
    - Otherwise: read `docs/specs/_template.md`.
@@ -177,9 +177,9 @@ f. If any perspective recommends BLOCK, flag the spec but do NOT auto-block — 
 
 g. **Role-value instrumentation (Spec 305)** — after presenting the Review Brief, append one `role-dispatch` record per selected role to the shared score-audit sink:
    ```bash
-   bash .forge/lib/score-audit.sh record-dispatch <NNN> spec <role> <recommendation> <confidence> "<key concern>"
+   bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-dispatch <NNN> spec <role> <recommendation> <confidence> "<key concern>"
    ```
-   Map each role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence (`HIGH|MEDIUM|LOW`) verbatim. Best-effort: the helper always exits 0 — never block /spec. (PowerShell: `pwsh .forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
+   Map each role's Recommendation (`PROCEED|REVISE|BLOCK`) and Confidence (`HIGH|MEDIUM|LOW`) verbatim. Best-effort: the helper always exits 0 — never block /spec. (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-dispatch ...`.) `Detection: active`.
 
 ---
 
@@ -209,16 +209,30 @@ If no vague language detected: proceed silently.
 
 ---
 
-### [mechanical] Step 6d — Behavioral-AC Fixture Scan (Spec 349)
+### [mechanical] Step 6d — Behavioral-AC Fixture Scan (Spec 349, unified with Spec 540)
 
 Sibling pattern to Step 6c. Where Step 6c catches *vague* AC language, Step 6d catches ACs that are specific in language but require driving the system to verify — runtime behaviors the validator subagent cannot directly observe. Such ACs frequently close as DEFER or PARTIAL (Spec 225: 3/8 PARTIAL; Spec 315: 10/16 DEFER) when the validator has no runnable artifact to gate against. Pairing the AC with a fixture turns the AC mechanically-verifiable. See `docs/process-kit/behavioral-ac-fixture-guide.md` for the canonical convention, fixture naming (`.forge/bin/tests/test-spec-NNN-<behavior>.{sh,ps1}`), and PASS/SKIP/FAIL semantic.
 
-After the spec draft is written (and after Step 6c completes), scan each acceptance criterion for behavioral-AC patterns:
-- `(running|run|invoke|execute) /[a-z-]+`
-- `(fresh|new) (fixture|copy|repo|project)`
-- `after <action>, the operator (sees|observes)`
+**Boundary vs Spec 403**: Spec 403's live-smoke gate (a `/close`-time check) keys
+on Test-Plan keywords. This scan runs at authoring time and keys on
+Acceptance-Criteria phrasing — different sections, different signal, no overlap.
 
-If any acceptance criterion matches:
+After the spec draft is written (and after Step 6c completes), run the shared
+AC-pattern scanner (Spec 540) against the draft spec file — the SAME pattern
+source the `/close`-time validator gate consumes, so authoring-time nudge and
+close-time gate never drift into two divergent regex copies:
+```bash
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh <draft-spec-file>
+```
+This returns `{"flagged_acs":[{"ac_number":N,"text":"...","pattern":"..."}]}`.
+The pattern set covers both the original Spec 349 behavioral phrasing
+(`(running|run|invoke|execute) /[a-z-]+`, `(fresh|new) (fixture|copy|repo|project)`,
+`after .+, the operator (sees|observes)`) and the Spec 540 browser-verb set
+(clicking, hovering, rendering, showing, displaying, scrolling) — a flagged AC
+here is also what the `/close`-time gate will hard-fail on absent evidence, so
+authoring-time fixture-pairing is the cheapest way to avoid that gate later.
+
+If `flagged_acs` is non-empty:
 a. Present a choice block:
    ```
    Behavioral acceptance criteria found — the following ACs describe runtime behavior the validator cannot drive directly:
@@ -242,15 +256,15 @@ The fixture itself is authored at `/implement` (not `/spec`); this directive onl
 
 ### [mechanical] Step 6e — Score-Audit Predicted Record (Spec 368)
 
-After the spec file is written and scored, append a `predicted` record to the score-audit log so `/evolve` F4 can compare predictions against observed proxies at close time. The helper at `.forge/lib/score-audit.sh` (PowerShell parity at `.forge/lib/score-audit.ps1`) handles JSON formatting, atomic-append bound, and shell-derived timestamps; do NOT inline JSON here.
+After the spec file is written and scored, append a `predicted` record to the score-audit log so `/evolve` F4 can compare predictions against observed proxies at close time. The helper at `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh` (PowerShell parity at `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1`) handles JSON formatting, atomic-append bound, and shell-derived timestamps; do NOT inline JSON here.
 
 `kind_tag` is one of: `instrumentation`, `doc`, `command-edit`, `linter`, `template-sync`, `process-defect`, `feature`, `hotfix`, `other`. Default: infer from spec title and lane (e.g., a `process-only` spec touching `template/.claude/commands/` → `command-edit`; a `standard-feature` spec adding a script → `feature`). Operator may override at `/spec`.
 
 ```bash
-bash .forge/lib/score-audit.sh record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" 0
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" 0
 ```
 
-(PowerShell: `pwsh .forge/lib/score-audit.ps1 record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" 0`.)
+(PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 record-predicted "$spec_id" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" 0`.)
 
 The helper is advisory — failures emit a WARN to stderr but never block `/spec`. Records land in `${SCORE_AUDIT_FILE:-.forge/state/score-audit.jsonl}`.
 
@@ -387,7 +401,7 @@ See: docs/specs/466-pre-consensus-draft-time-role-pass.md for the full AC set an
 
 ## [mechanical] Steps 7–10
 
-7. **Write-side mode check (Spec 399)**: Before any canonical-table-row write, run `.forge/bin/forge-py .forge/lib/derived_state.py --skip-canonical-write`. Read stdout: if `skip`, the project is in split-file mode — skip steps 7-9 below entirely. The new spec's frontmatter is already on disk; renderers (which the operator runs via `/matrix` or stoke) will reflect the new spec on next render. Event-stream writes (`.forge/state/events/<spec-id>/`) proceed unchanged. If stdout is `proceed`, run steps 7-9 (Phase 1 dual-write). If the helper exits nonzero, abort the canonical-write step and surface stderr — do NOT default to either behavior.
+7. **Write-side mode check (Spec 399)**: Before any canonical-table-row write, run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --skip-canonical-write`. Read stdout: if `skip`, the project is in split-file mode — skip steps 7-9 below entirely. The new spec's frontmatter is already on disk; renderers (which the operator runs via `/matrix` or stoke) will reflect the new spec on next render. Event-stream writes (`.forge/state/events/<spec-id>/`) proceed unchanged. If stdout is `proceed`, run steps 7-9 (Phase 1 dual-write). If the helper exits nonzero, abort the canonical-write step and surface stderr — do NOT default to either behavior.
    - In `proceed` mode only:
      7a. Update docs/specs/README.md — add a row for the new spec (sorted by number).
      8. Update docs/specs/CHANGELOG.md — add an entry for the new spec.
@@ -435,7 +449,7 @@ Fill any unmapped sections (Change-Lane, Trigger, Priority-Score, Evidence) usin
 
 Read `docs/process-kit/scoring-rubric.md` and score the spec.
 **Input validation (Spec 148)**: Validate that each BV, E, R, SR value is an integer between 1 and 5 inclusive. If any value is outside this range, STOP and report the error: "[dimension] must be 1-5 (got [value])". Do not compute the score with invalid inputs.
-**Next spec number (Spec 399)**: Run `.forge/bin/forge-py .forge/lib/derived_state.py --get-spec-index --format=count` (or `--format=json` if you also need IDs). The count + scan of existing IDs tells you the next available number.
+**Next spec number (Spec 399, fetch-before-mint per Spec 532)**: Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/spec-next-id.sh` — it prints the next available number over the local ∪ remote-default-branch view (offline degrades to local with one warning). **Fallback when the helper is absent**: run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-spec-index --format=count` (or `--format=json` if you also need IDs); the count + scan of existing IDs tells you the next available number (local-max behavior).
 Write the spec file at `docs/specs/NNN-<slug>.md` with:
 - Status: `draft`
 - All sections populated from Spec Kit mapping + FORGE defaults

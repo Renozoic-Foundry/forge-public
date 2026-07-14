@@ -12,6 +12,12 @@
 #   - forge-sign-payload.sh        (sign side — release step)
 #   - session-start-integrity.sh   (verify side — SessionStart hook)
 # so the two can never drift (CTO consensus: clean shared boundary).
+#
+# MIGRATION (Spec 508): forge_build_manifest now applies PAYLOAD_EXCLUDE at the algorithm
+# level, changing the signed-manifest contract — a payload manifest signed BEFORE Spec 508
+# will FAIL verification against this builder (the file set differs) and must be RE-SIGNED.
+# That failure is by design, not corruption. See docs/process-kit/sync-runbook.md
+# § Signed-manifest migration (Spec 508).
 set -uo pipefail
 
 # Payload roots relative to the asset root (the plugin payload set per Spec 487).
@@ -34,10 +40,11 @@ FORGE_PAYLOAD_DIRS=(
 # (.forge/bin/tests, .forge/bin/autonomy-test) and untracked bytecode (__pycache__/*.pyc)
 # that must not ship to forge-public. Each entry is a basename/glob matched at any depth.
 #
-# NOTE (Spec 506 ↔ 508 boundary): forge_build_manifest below deliberately does NOT consume
-# PAYLOAD_EXCLUDE yet — wiring the exclusions into the signed-manifest builder (so the manifest
-# excludes these at the algorithm level even when run against the source/template tree) is
-# Spec 508's scope. 506 applies PAYLOAD_EXCLUDE on the sync side only.
+# NOTE (Spec 506 ↔ 508 boundary): the VALUE of PAYLOAD_EXCLUDE is owned by Spec 506 (sync
+# side). Spec 508 additionally consumes it inside forge_build_manifest below, so the signed
+# manifest excludes these at the algorithm level even when run against the source/template
+# tree. The PowerShell twin (payload-manifest.ps1, $script:ForgePayloadExclude) mirrors this
+# list and MUST stay in lockstep.
 PAYLOAD_EXCLUDE=(
   "tests"
   "autonomy-test"
@@ -62,6 +69,35 @@ forge_manifest_file_hash() {
   tr -d '\r' < "$file" | $tool | awk '{print $1}'
 }
 
+# PINNED exclusion predicate (Spec 508) — the ONE definition of how PAYLOAD_EXCLUDE is
+# matched inside the builder. Pure-bash `case` matching on the RELATIVE path: `find` only
+# ENUMERATES files; exclusion semantics live here, so behavior is identical on GNU find,
+# BSD/macOS find, and Windows Git Bash (no -path/-prune dialect variance).
+#   - "*.ext" entries match the BASENAME only (e.g. *.pyc at any depth).
+#   - bare entries match a WHOLE path segment: "tests" excludes "a/tests/f" but NOT
+#     "contests/f" or "mytests.sh" (segment-anchored, never substring).
+# Returns 0 (excluded) / 1 (kept). Call sites MUST use this — never re-derive the match.
+forge_manifest_excluded() {
+  local rel="$1" pat
+  for pat in "${PAYLOAD_EXCLUDE[@]}"; do
+    case "$pat" in
+      \*.*)
+        # $pat is intentionally an unquoted glob pattern here:
+        # shellcheck disable=SC2254
+        case "${rel##*/}" in
+          $pat) return 0 ;;
+        esac
+        ;;
+      *)
+        case "/$rel/" in
+          */"$pat"/*) return 0 ;;
+        esac
+        ;;
+    esac
+  done
+  return 1
+}
+
 # Build the manifest for the payload rooted at $1 (default: FORGE_ASSET_ROOT or cwd).
 # Prints the manifest to stdout. Returns non-zero on error (fail-closed for callers).
 forge_build_manifest() {
@@ -78,14 +114,39 @@ forge_build_manifest() {
   done
   if [ "${#files[@]}" -eq 0 ]; then echo "payload-manifest: no payload files under $root" >&2; return 1; fi
 
-  {
-    for f in "${files[@]}"; do
+  # Apply PAYLOAD_EXCLUDE at the algorithm level (Spec 508) BEFORE hashing, so excluded
+  # paths never enter the signed manifest — even against the source/template tree.
+  local kept=()
+  for f in "${files[@]}"; do
+    rel="${f#"$root"/}"
+    [ "$rel" = "$FORGE_MANIFEST_RELPATH" ] && continue
+    [ "$rel" = "$FORGE_MANIFEST_SIG_RELPATH" ] && continue
+    if forge_manifest_excluded "$rel"; then continue; fi
+    kept+=("$f")
+  done
+  if [ "${#kept[@]}" -eq 0 ]; then
+    echo "payload-manifest: no payload files under $root after exclusions (fail-closed)" >&2
+    return 1
+  fi
+
+  local manifest
+  manifest="$(
+    for f in "${kept[@]}"; do
       rel="${f#"$root"/}"
-      [ "$rel" = "$FORGE_MANIFEST_RELPATH" ] && continue
-      [ "$rel" = "$FORGE_MANIFEST_SIG_RELPATH" ] && continue
       printf '%s  %s\n' "$(forge_manifest_file_hash "$f" "$tool")" "$rel"
-    done
-  } | LC_ALL=C sort -k2
+    done | LC_ALL=C sort -k2
+  )"
+
+  # Runtime count invariant (Spec 508, CISO hardening): emitted line count must equal the
+  # kept-file count — an under-emit (present-on-disk-but-unmanifested file) is an
+  # integrity-bypass vector, so refuse to emit rather than ship a short manifest.
+  local lines
+  lines="$(printf '%s\n' "$manifest" | wc -l | tr -d '[:space:]')"
+  if [ "$lines" -ne "${#kept[@]}" ]; then
+    echo "payload-manifest: count invariant violated (emitted $lines != kept ${#kept[@]}) — refusing to emit (fail-closed)" >&2
+    return 1
+  fi
+  printf '%s\n' "$manifest"
 }
 
 # Executed directly (not sourced): build + print the manifest for the requested root.

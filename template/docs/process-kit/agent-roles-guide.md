@@ -137,3 +137,27 @@ convention, recommendation taxonomy, and confidence labels). Each CXO file keeps
 its role-specific Key Questions, Constraints, role-specific output lines, and
 narrative. No new skill was created — the rubric is a markdown reference, not a
 preloaded capability (MT finding, /consensus 462 R1).
+
+## 9. Refusal fallback for security-flavored work (F5-5)
+
+Benign security work — CISO dispatch, `/security-review` usage, dependency/CVE
+analysis, incident-class work (Spec 519 territory) — can false-positive on
+frontier-model cyber safety classifiers (`stop_reason: "refusal"`). Fable 5 enforces
+these most strictly; Sonnet 5 ships with milder cyber safeguards on by default;
+Opus 4.8 carries no such constraint.
+
+Operating guidance:
+- **Session-level**: if a security-flavored role refuses or stalls on legitimate
+  review content, re-run it on Opus 4.8 (also cheaper — advisory roles don't need
+  Fable 5). The CISO role file carries this note inline.
+- **API-level**: anything FORGE ever builds against the API for security-flavored
+  calls should pass server-side `fallbacks: [{model: "claude-opus-4-8"}]` by default
+  (beta feature — verify the header at implementation time).
+- **Prompt hygiene**: never instruct a role to "show your thinking" or transcribe
+  chain-of-thought into response text — that can trip the `reasoning_extraction`
+  refusal category. Structured rationale fields (the cxo-rubric output blocks) are
+  the correct channel.
+
+Provenance: F5-5 in `docs/digests/fable5-adaptation-recommendations.md` (v4).
+Originally dispositioned 2026-07-02 as "folded into Spec 519 follow-up" but never
+written (SIG-INTAKE-0706-01); landed 2026-07-06 via research-intake small-change.

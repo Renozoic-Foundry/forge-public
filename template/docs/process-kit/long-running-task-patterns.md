@@ -284,6 +284,23 @@ Streams output from a background process (build, test suite, deploy) directly in
 
 ---
 
+## win32 close-path timeout convention (Spec 554)
+
+Close-path validators are process-spawn-bound on win32 Git Bash (each subshell/`basename`/`diff`
+spawn costs ~100ms; loops over hundreds of files hit minutes of pure sys time — profiled
+2026-07-13: `validate-readme-counts.sh` 81s→2s after replacing `$(basename)` with `${f##*/}`;
+`forge-parity.sh --check` 191s→~135s after batching Surface-3 compares into one forge-py process).
+**Convention**: any helper known or measured to exceed ~2 minutes on win32 is invoked with an
+explicit generous timeout (≥5 min) or `run_in_background` — never a bare foreground chain that
+inherits the 2-minute tool default. **Result-check-before-proceed is mandatory**: a backgrounded
+invocation is polled to completion and its exit code read before the calling gate is evaluated;
+an unread result is treated as a failure, never a pass — a backgrounded validator failing silently
+while the close proceeds is the masked-failure class (d83f990) this convention exists to prevent.
+When optimizing a spawn-bound script, prefer spawn-free bash expansions and batching per-file
+subprocess work into a single `forge-py` pass; never drop or weaken checks for speed.
+
+---
+
 ## Cross-References
 
 - [Implementation Patterns — Parallelism](implementation-patterns.md#agent-parallelism--when-and-how) -- within-session parallel execution patterns and trade-offs

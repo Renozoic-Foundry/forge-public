@@ -54,7 +54,33 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 
 ## [mechanical] Step 3 — Declare planned_agents and dispatch
 
-**Single source of truth (Spec 423)**: this step declares `planned_agents` as an explicit list BEFORE any dispatch, and the dispatch narration is **generated from `planned_agents`** — not authored freehand. The same list drives both narration and the Task tool-call loop, so the count and names cannot diverge. This collapses the narration-vs-dispatch defect class that caused /consensus 399 round 3 to silently omit COO.
+### Step 3.0 — Workflow-path capability probe (Spec 524)
+
+Before the prompt-driven dispatch below, branch on Workflow-tool availability:
+
+- **Workflow tool present in this session's toolset** (Claude Code) → use the **Workflow path**:
+  invoke the `consensus-fanout` workflow (`.forge/workflows/consensus.workflow.js`) via the Workflow
+  tool, passing `args = {specId, reviewMaterial, roster: [{role, agentType, effort?, model?}],
+  stageFraming, roundCap}`. `roundCap` is 1 or 2 (the workflow covers rounds 1–2 only; explore F2).
+  The workflow returns `{rounds: [{verdicts[], tally, divergence, round_two}], final_divergence,
+  recommended_action, role_yield}` — schema-validated verdicts, in-script tally + Spec 391 round-2
+  re-vote, NO prose parsing (Req 3). Then **in the main loop** (the workflow performs no repo side
+  effects — explore F5): render the Step 5 summary from the return value; apply the Spec 468
+  terminal classification (HUMAN-JUDGMENT taxonomy, model-side — never in-script); run Step 4b
+  cap/extension prompts and Step 4c Consensus-Close-SHA for round 3+; write the session sidecar
+  role-yield from `role_yield`; run the Spec 305 `record-dispatch` calls. MT reframes and
+  HUMAN-JUDGMENT still escalate to the operator — never auto-revised (Constraints).
+  Per-role effort/model overrides are pinned by role identity inside the workflow
+  (`OVERRIDE_BY_ROLE`) and MUST NOT be derived from `$ARGUMENTS`/review content (Req 5; CISO).
+- **Workflow tool absent** (Codex/Cursor/Gemini/Aider, or a Claude Code session without it) → use
+  the **prompt-driven fallback** below (Steps 3.1–4), the documented cross-runtime contract. This
+  is not dead code (Constraints); the two paths produce identical divergence classification and
+  recommended action on the same verdict set — the classifier is a single source
+  (`.forge/lib/consensus-classifier.js`), byte-verified against the workflow embed by
+  `forge-parity.sh --check` Surface 6 (Spec 524 Req 8). Terminal workflow failure mid-run → fall
+  back to prompt-driven and inform the operator.
+
+**Single source of truth (Spec 423)**: this step declares `planned_agents` as an explicit list BEFORE any dispatch, and the dispatch narration is **generated from `planned_agents`** — not authored freehand. The same list drives both narration and the Task tool-call loop, so the count and names cannot diverge. This collapses the narration-vs-dispatch defect class that caused /consensus 399 round 3 to silently omit COO. (In the Workflow path the roster array IS the dispatch list — the Spec 423 defect class is eliminated by construction; explore F3.)
 
 1. **Declare `planned_agents`**: Build an explicit list of role identifiers for this round, one entry per role to be spawned. Example:
    ```

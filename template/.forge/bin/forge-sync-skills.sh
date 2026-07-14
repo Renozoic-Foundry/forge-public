@@ -228,7 +228,7 @@ if [[ "$MODE" == "verify-policy" ]]; then
   done < <(policy_list skills_model_invokable)
 
   if [[ "$VIOL" -eq 0 ]]; then
-    echo "OK: invocation-policy verified — all 16 command-form names skill-free; explicit skills true; model-invokable skills false."
+    echo "OK: invocation-policy verified — all command-form names skill-free; explicit skills true; model-invokable skills false."
     exit 0
   else
     echo "" >&2

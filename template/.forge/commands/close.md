@@ -423,11 +423,50 @@ Before transitioning to closed, spawn an independent validator to verify accepta
        `flagged_acs` is empty, this list is empty and Stage 1 is a no-op
        (AC4 regression: clean specs see no behavior change).
 
+   a3. **Spec-copy redaction (Spec 548)**: produce the redacted spec copy the
+       validator receives — implementer-authored proof sections (`## Evidence`,
+       `## Disposition Record`, `## Devil's Advocate Findings`) are stripped
+       mechanically so the evidence-blind rule no longer depends on prompt
+       compliance (SIG-532-04, SIG-535-02):
+       ```bash
+       mkdir -p tmp/evidence/SPEC-NNN-YYYYMMDD
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/spec_redact.py \
+         docs/specs/NNN-<slug>.md -o tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
+       ```
+       The validator prompt below references the REDACTED copy, not the
+       original. Also pre-compute the runnable-command AC list (shared matcher
+       — the Spec 550 scanner is the single command-detection source):
+       ```bash
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh docs/specs/NNN-<slug>.md runnable \
+         > tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
+       ```
+
+   a4. **Orchestrator-run execution evidence (Spec 556)**: the `forge:validator` agent is read-only
+       (no Bash — it cannot execute a suite), so when `runnable-acs.json` is **non-empty** the
+       ORCHESTRATOR (this /close context, which holds Bash) runs the command(s) the spec's Test Plan
+       names for each flagged AC, **fresh** — NOT reusing the implementer's reported output (Spec 536
+       evidence-blind doctrine: independence is bounded by orchestrator-summarization trust, but the
+       evidence must be freshly derived, never inherited from the spec's `## Evidence`). For each
+       flagged AC, capture exit code + stdout/stderr to
+       `tmp/evidence/SPEC-NNN-YYYYMMDD/orchestrator-run.txt`, tagged with the AC number(s) that command
+       proves:
+       ```
+       === AC<N>: <command> ===
+       <verbatim stdout/stderr>
+       exit code: <code>
+       ```
+       Inject each tagged block into the validator prompt (below) as authoritative execution evidence
+       for that AC. If a command FAILS to run in the orchestrator (missing script, wrong dir, shell
+       mismatch), that is a close-blocker — surface it and halt, do not fall through to "no evidence".
+       If `runnable-acs.json` is empty, skip a4 entirely (no runnable-command AC — nothing to run).
+
    b. Spawn a validator sub-agent with the following prompt structure:
       ```
       [Role preamble from validator.md]
 
-      You are validating: docs/specs/NNN-<slug>.md
+      You are validating: tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
+      (a redacted copy of docs/specs/NNN-<slug>.md — implementer proof sections
+      are withheld by design; form your own evidence)
 
       Stage 1 — Behavioral/browser-verb AC check (Spec 540, pre-computed):
       <flagged-ac-list from step a2, or "none — scanner found no flagged ACs">
@@ -439,6 +478,16 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       `"browser_evidence": "verified"` in that criterion's result object so the
       distinction from an ordinarily-verified AC is visible in the report.
 
+      Orchestrator-run execution evidence (Spec 556, when present):
+      <the AC-tagged orchestrator-run blocks from step a4, or "none — no runnable-command ACs">
+      These blocks are FRESH orchestrator runs of the commands your runnable-command ACs name.
+      Treat the exit-code and pass/fail facts as authoritative (you have no Bash to re-run them).
+      For each such AC, copy the matching tagged block's exit code + output excerpt into THAT
+      criterion's own `notes` (or `test_output`) field — not a shared report-level field — so the
+      execution-evidence post-check can bind the evidence to the specific AC. You MAY still flag
+      anomalous or suspicious content within a captured block (it is raw stdout/stderr) rather than
+      trusting it blindly — surface any anomaly in the criterion notes.
+
       Read the spec file's Acceptance Criteria section. For each criterion:
       1. Read the relevant code/files in the codebase
       2. Determine if the criterion is satisfied
@@ -448,7 +497,7 @@ Before transitioning to closed, spawn an independent validator to verify accepta
 
       IMPORTANT: Do NOT read or consider the `## Evidence` section of the spec file. The Evidence section was written by the implementing agent and could anchor your judgment. Form your own evidence by examining the codebase, running tests, and reading the actual files directly. Base your findings solely on what you observe, not on what the implementer reported.
 
-      IMPORTANT: You are READ-ONLY for source files. You may use Read, Glob, Grep, and Bash (for running tests). You do NOT have Write or Edit tools. Do not attempt to modify any file.
+      IMPORTANT: You are READ-ONLY. You may use Read, Glob, and Grep. You have NO Bash and NO Write/Edit tools — you do NOT run test suites yourself; execution evidence for runnable-command ACs is provided above as fresh orchestrator-run blocks (Spec 556). Do not attempt to modify any file.
 
       Produce your output as a JSON code block with this structure:
       {
@@ -462,6 +511,29 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       ```
 
    c. Parse the validator's JSON output.
+
+   c2. **Execution-evidence post-check (Spec 548)**: write the parsed report to
+       `tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json`, then run:
+       ```bash
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator_evidence_postcheck.py \
+         --spec docs/specs/NNN-<slug>.md \
+         --report tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json \
+         --scanner-json tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
+       ```
+       - Exit 0: proceed to step d/e on the validator's own verdict.
+       - Exit 1: the report contains a PASS on a runnable-command AC without
+         execution evidence (or an evidence-blind citation). Emit
+         `GATE [validator]: FAIL — execution-evidence post-check: <each failure's ac_number + reason>.`
+         The FAIL names the AC and the missing element so the validator retry
+         is one-shot (Spec 548 AC5). Treat as a validator FAIL (step e) even if
+         `validation_result` was PASS.
+       - Exit 2: input error — surface stderr, do not silently skip; fall back
+         to treating the validator verdict as-is with a WARN note.
+       Honesty (Spec 548 AC4): the post-check verifies evidence PRESENCE, not
+       truthfulness — a lint-level speed bump, not a hard trust boundary. At
+       L3/L4 this remains designed-not-enforced until the managed-settings
+       trust root lands (ADR-453 §6.1). Evidence-to-tool-call trace binding is
+       the named follow-up.
 
    d. **If validation_result is PASS**:
       - Emit: `GATE [validator]: PASS — all <count> acceptance criteria verified independently.`
@@ -631,6 +703,8 @@ Before generating the Review Brief, actively verify bidirectional sync:
 The repo-root tree is the single canonical source; both the plugin payload (`.claude/commands/`) and the `template/` Copier surface are generated downstream. This gate mechanically enforces that no canonical source was edited without regenerating its downstream surfaces — the machine-checked backstop to the prose dual-check above.
 
 Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh --check`. This delegates to the two existing sync scripts' `--check` modes (`.claude/commands/` body-equivalence per Spec 329; `template/` mirror byte-equivalence; `.jinja` Copier-var files excluded per Spec 281/390). Bounded runtime — no Copier re-render.
+
+**win32 timeout convention (Spec 554)**: this check measures >2 minutes on win32 Git Bash (spawn-bound; profiled 2026-07-13). Invoke it with an explicit generous timeout (≥5 min) or `run_in_background` — never a bare foreground call that inherits the 2-minute default. **Result-check-before-proceed (mandatory)**: a backgrounded run MUST be polled to completion and its exit code read before this gate is evaluated — a non-zero exit is a gate FAIL exactly as if it ran foreground. Never advance past this step with the check still running or its exit code unread.
 
 **Evaluation**:
 - Exit 0: mark `[x] Single-source parity — canonical and generated surfaces in sync`. Emit `GATE [single-source-parity]: PASS.` Proceed silently.
@@ -1289,6 +1363,11 @@ fi
 - If a script is absent: skip silently (consumer projects may not have them).
 - If `--fix` corrects counts: the updated README.md is included in the /close commit.
 - If a script fails for any reason: proceed (non-blocking, `|| true`).
+- **win32 timeout convention (Spec 554)**: run these two with a generous timeout (≥5 min) or
+  `run_in_background` rather than a bare foreground chain; if backgrounded, poll to completion and
+  read the exit codes before committing (result-check-before-proceed) — the `|| true` non-blocking
+  semantics apply to the CHECKED result, never to an unread one. (Post-554 the counts script runs
+  in ~2s, but chained close-step batches still add up.)
 
 <!-- module:compliance -->
 ## [mechanical] Step 3b — V&V report generation (Spec 039, conditional)

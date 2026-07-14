@@ -168,7 +168,13 @@ If the spec has an `Approved-SHA:` field in frontmatter:
 If no `Approved-SHA:` field exists (legacy spec): skip verification silently.
 
 <!-- module:browser-test -->
-## [mechanical] Step 2b2 — Visual evidence gate (Spec 093, conditional)
+## [mechanical] Step 2b2 — Visual evidence gate (Spec 093, conditional; hard-fail added Spec 540)
+
+**Boundary vs Spec 403 (Step 2b5)**: Spec 403's live-smoke gate keys on Test-Plan
+keywords ("smoke test", "live dry-run"). This gate keys on Acceptance-Criteria
+browser verbs (clicking, hovering, rendering, showing, displaying, scrolling) via
+the shared scanner below. The two gates scan different sections for different
+signals and do not double-fire.
 
 If browser test evidence exists for this spec (`tmp/evidence/SPEC-NNN-browser-*/manifest.json`):
 
@@ -177,8 +183,57 @@ If browser test evidence exists for this spec (`tmp/evidence/SPEC-NNN-browser-*/
 3. Gate outcome:
    - All passed → `GATE [browser-evidence]: PASS — <passed>/<total> UI checks passed. Screenshots: <count>, Video: <yes/no>.`
    - Any failed → `GATE [browser-evidence]: CONDITIONAL_PASS — <passed>/<total> UI checks passed, <failed> failed. Human review required for failed steps. Evidence: <dir>.`
-   - No manifest found → skip silently (spec may not have UI components).
 4. If evidence exists, include the evidence directory path and summary.md link in the spec's Evidence section when updating to `closed`.
+
+4b. **Visual-deliverable detection (Spec 545)**: independent of the AC-verb scan
+   below, check whether the spec's `## Implementation Summary` / `## Scope` sections
+   list an HTML or other rendered/visual artifact as a deliverable (file paths ending
+   `.html`/`.htm`, or explicit "visual artifact"/"dashboard"/"report" deliverable
+   language). This catches visual deliverables whose Acceptance Criteria don't happen
+   to use a browser verb (e.g., "produces a summary page") — the AC-verb scan in step 5
+   would otherwise miss them. Record the matched deliverable(s) as `visual_deliverables`
+   (may be empty).
+
+5. **No manifest found (Spec 540 hard-fail, extended by Spec 545)**: run the shared
+   AC-pattern scanner against the spec file:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh docs/specs/NNN-<slug>.md
+   ```
+   a. If `flagged_acs` is empty AND `visual_deliverables` (step 4b) is empty → skip
+      silently. Mark `[x] Visual evidence gate (Spec 093) — no browser-verb ACs and
+      no visual deliverables detected, no manifest required.` Proceed.
+   b. If `flagged_acs` is non-empty OR `visual_deliverables` is non-empty:
+      - **`--accept-deferred-acs "<reason>"` present** in `$ARGUMENTS`: append the
+        reason verbatim to the spec's Evidence section under a
+        `## Operator-accepted deferral` heading (create the heading if absent —
+        `- YYYY-MM-DD: <reason>`). This is distinct from `--force`: it is
+        per-gate and reason-recorded, not a blunt bypass of every gate. Emit
+        `GATE [browser-evidence]: PASS — operator accepted deferral for AC(s)/
+        deliverable(s) <numbers or names>: "<reason>".` Proceed.
+      - **`--force` present** (existing blunt bypass, Step 2d Override): emit
+        `GATE [browser-evidence]: PASS — hard-fail bypassed via --force. Flagged
+        AC(s)/deliverable(s): <numbers or names>.` Log the same signal format as
+        the Step 2d Override:
+        `SIG-NNN | process | Browser-evidence hard-fail overridden via --force on
+        spec NNN. Flagged criteria: <AC numbers and matched patterns, and/or
+        visual deliverables>.` Proceed.
+      - **Neither flag present**: prompt for the render-time visual-verification
+        gate (Spec 545, docs/process-kit/human-validation-runbook.md section H)
+        rather than a bare failure when the trigger is `visual_deliverables`:
+        `GATE [browser-evidence]: FAIL — <reason: N acceptance criteria contain
+        browser-only verbs (AC <numbers>) and/or this spec's deliverables include
+        a visual artifact (<file/name>)> but no browser-evidence manifest exists
+        at tmp/evidence/SPEC-NNN-browser-*/manifest.json. Remediation: run
+        ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-visual-verify.sh NNN
+        <artifact-path> to record a render-time visual check (see runbook
+        section H), or re-run /close NNN --accept-deferred-acs "<reason>" to
+        explicitly accept the deferral (reason-recorded), or --force to bypass
+        outright.` **This is blocking — halt the close workflow. Do not proceed
+        to Step 3.**
+
+   This is one gate, not two: `visual_deliverables` is an additional trigger
+   condition feeding the same PASS/FAIL/override logic already used for
+   `flagged_acs` — non-visual specs (both empty) see zero additional friction.
 <!-- /module:browser-test -->
 
 ## [mechanical] Step 2b3 — Shadow validation evidence check (Spec 115, updated by Spec 129)
@@ -355,11 +410,83 @@ Before transitioning to closed, spawn an independent validator to verify accepta
 
    a. Read `.claude/agents/validator.md` for the role preamble.
 
+   a2. **Stage-1 scanner pre-check (Spec 540)**: run the shared AC-pattern
+       scanner and fold its output into the validator prompt (the validator
+       agent has no Bash tool — the prompt carries the scanner's findings
+       rather than the subagent re-deriving them):
+       ```bash
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh docs/specs/NNN-<slug>.md
+       ```
+       For each entry in `flagged_acs`, check whether
+       `tmp/evidence/SPEC-NNN-browser-*/manifest.json` exists. Build a list of
+       `{ac_number, text, pattern, evidence: "verified"|"missing"}`. If
+       `flagged_acs` is empty, this list is empty and Stage 1 is a no-op
+       (AC4 regression: clean specs see no behavior change).
+
+   a3. **Spec-copy redaction (Spec 548)**: produce the redacted spec copy the
+       validator receives — implementer-authored proof sections (`## Evidence`,
+       `## Disposition Record`, `## Devil's Advocate Findings`) are stripped
+       mechanically so the evidence-blind rule no longer depends on prompt
+       compliance (SIG-532-04, SIG-535-02):
+       ```bash
+       mkdir -p tmp/evidence/SPEC-NNN-YYYYMMDD
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/spec_redact.py \
+         docs/specs/NNN-<slug>.md -o tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
+       ```
+       The validator prompt below references the REDACTED copy, not the
+       original. Also pre-compute the runnable-command AC list (shared matcher
+       — the Spec 550 scanner is the single command-detection source):
+       ```bash
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh docs/specs/NNN-<slug>.md runnable \
+         > tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
+       ```
+
+   a4. **Orchestrator-run execution evidence (Spec 556)**: the `forge:validator` agent is read-only
+       (no Bash — it cannot execute a suite), so when `runnable-acs.json` is **non-empty** the
+       ORCHESTRATOR (this /close context, which holds Bash) runs the command(s) the spec's Test Plan
+       names for each flagged AC, **fresh** — NOT reusing the implementer's reported output (Spec 536
+       evidence-blind doctrine: independence is bounded by orchestrator-summarization trust, but the
+       evidence must be freshly derived, never inherited from the spec's `## Evidence`). For each
+       flagged AC, capture exit code + stdout/stderr to
+       `tmp/evidence/SPEC-NNN-YYYYMMDD/orchestrator-run.txt`, tagged with the AC number(s) that command
+       proves:
+       ```
+       === AC<N>: <command> ===
+       <verbatim stdout/stderr>
+       exit code: <code>
+       ```
+       Inject each tagged block into the validator prompt (below) as authoritative execution evidence
+       for that AC. If a command FAILS to run in the orchestrator (missing script, wrong dir, shell
+       mismatch), that is a close-blocker — surface it and halt, do not fall through to "no evidence".
+       If `runnable-acs.json` is empty, skip a4 entirely (no runnable-command AC — nothing to run).
+
    b. Spawn a validator sub-agent with the following prompt structure:
       ```
       [Role preamble from validator.md]
 
-      You are validating: docs/specs/NNN-<slug>.md
+      You are validating: tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
+      (a redacted copy of docs/specs/NNN-<slug>.md — implementer proof sections
+      are withheld by design; form your own evidence)
+
+      Stage 1 — Behavioral/browser-verb AC check (Spec 540, pre-computed):
+      <flagged-ac-list from step a2, or "none — scanner found no flagged ACs">
+      For any AC in this list with evidence: "missing", you MUST hard-FAIL that
+      criterion and name its AC number in criteria_results, regardless of any
+      other evidence you find — a browser-verb/behavioral AC without a recorded
+      browser-evidence manifest is not independently verifiable. For any AC
+      with evidence: "verified", report it as PASS with
+      `"browser_evidence": "verified"` in that criterion's result object so the
+      distinction from an ordinarily-verified AC is visible in the report.
+
+      Orchestrator-run execution evidence (Spec 556, when present):
+      <the AC-tagged orchestrator-run blocks from step a4, or "none — no runnable-command ACs">
+      These blocks are FRESH orchestrator runs of the commands your runnable-command ACs name.
+      Treat the exit-code and pass/fail facts as authoritative (you have no Bash to re-run them).
+      For each such AC, copy the matching tagged block's exit code + output excerpt into THAT
+      criterion's own `notes` (or `test_output`) field — not a shared report-level field — so the
+      execution-evidence post-check can bind the evidence to the specific AC. You MAY still flag
+      anomalous or suspicious content within a captured block (it is raw stdout/stderr) rather than
+      trusting it blindly — surface any anomaly in the criterion notes.
 
       Read the spec file's Acceptance Criteria section. For each criterion:
       1. Read the relevant code/files in the codebase
@@ -370,13 +497,13 @@ Before transitioning to closed, spawn an independent validator to verify accepta
 
       IMPORTANT: Do NOT read or consider the `## Evidence` section of the spec file. The Evidence section was written by the implementing agent and could anchor your judgment. Form your own evidence by examining the codebase, running tests, and reading the actual files directly. Base your findings solely on what you observe, not on what the implementer reported.
 
-      IMPORTANT: You are READ-ONLY for source files. You may use Read, Glob, Grep, and Bash (for running tests). You do NOT have Write or Edit tools. Do not attempt to modify any file.
+      IMPORTANT: You are READ-ONLY. You may use Read, Glob, and Grep. You have NO Bash and NO Write/Edit tools — you do NOT run test suites yourself; execution evidence for runnable-command ACs is provided above as fresh orchestrator-run blocks (Spec 556). Do not attempt to modify any file.
 
       Produce your output as a JSON code block with this structure:
       {
         "validation_result": "PASS" | "FAIL",
         "criteria_results": [
-          {"criterion": "AC text", "file": "path", "method": "code review|test|manual", "result": "PASS|FAIL", "notes": "..."}
+          {"criterion": "AC text", "file": "path", "method": "code review|test|manual", "result": "PASS|FAIL", "notes": "...", "browser_evidence": "n/a|verified|missing"}
         ],
         "test_output": "summary of any test results",
         "summary": "One paragraph assessment"
@@ -384,6 +511,29 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       ```
 
    c. Parse the validator's JSON output.
+
+   c2. **Execution-evidence post-check (Spec 548)**: write the parsed report to
+       `tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json`, then run:
+       ```bash
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator_evidence_postcheck.py \
+         --spec docs/specs/NNN-<slug>.md \
+         --report tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json \
+         --scanner-json tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
+       ```
+       - Exit 0: proceed to step d/e on the validator's own verdict.
+       - Exit 1: the report contains a PASS on a runnable-command AC without
+         execution evidence (or an evidence-blind citation). Emit
+         `GATE [validator]: FAIL — execution-evidence post-check: <each failure's ac_number + reason>.`
+         The FAIL names the AC and the missing element so the validator retry
+         is one-shot (Spec 548 AC5). Treat as a validator FAIL (step e) even if
+         `validation_result` was PASS.
+       - Exit 2: input error — surface stderr, do not silently skip; fall back
+         to treating the validator verdict as-is with a WARN note.
+       Honesty (Spec 548 AC4): the post-check verifies evidence PRESENCE, not
+       truthfulness — a lint-level speed bump, not a hard trust boundary. At
+       L3/L4 this remains designed-not-enforced until the managed-settings
+       trust root lands (ADR-453 §6.1). Evidence-to-tool-call trace binding is
+       the named follow-up.
 
    d. **If validation_result is PASS**:
       - Emit: `GATE [validator]: PASS — all <count> acceptance criteria verified independently.`
@@ -553,6 +703,8 @@ Before generating the Review Brief, actively verify bidirectional sync:
 The repo-root tree is the single canonical source; both the plugin payload (`.claude/commands/`) and the `template/` Copier surface are generated downstream. This gate mechanically enforces that no canonical source was edited without regenerating its downstream surfaces — the machine-checked backstop to the prose dual-check above.
 
 Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh --check`. This delegates to the two existing sync scripts' `--check` modes (`.claude/commands/` body-equivalence per Spec 329; `template/` mirror byte-equivalence; `.jinja` Copier-var files excluded per Spec 281/390). Bounded runtime — no Copier re-render.
+
+**win32 timeout convention (Spec 554)**: this check measures >2 minutes on win32 Git Bash (spawn-bound; profiled 2026-07-13). Invoke it with an explicit generous timeout (≥5 min) or `run_in_background` — never a bare foreground call that inherits the 2-minute default. **Result-check-before-proceed (mandatory)**: a backgrounded run MUST be polled to completion and its exit code read before this gate is evaluated — a non-zero exit is a gate FAIL exactly as if it ran foreground. Never advance past this step with the check still running or its exit code unread.
 
 **Evaluation**:
 - Exit 0: mark `[x] Single-source parity — canonical and generated surfaces in sync`. Emit `GATE [single-source-parity]: PASS.` Proceed silently.
@@ -810,7 +962,7 @@ If no /consensus was invoked: skip silently.
 
 ## [mechanical] Step 2g — Safety-property gate (Spec 387)
 
-After the validator subagent (Step 2-2c) and before the close-completion (Step 3), check whether this spec touches a registered safety-config path. The gate has three branches: registry-content match (R2a), bootstrap fallback (R1c), and no-match (silent pass). It also enforces the backfill SLA (R6b).
+After the validator subagent (Step 2-2c) and before the close-completion (Step 3), check whether this spec touches a registered safety-config path. The gate has three branches: registry-content match (R2a), bootstrap fallback (R1c), and no-match (silent pass). It also enforces the backfill SLA (R6b). Detection is scoped to the spec-under-review's own footprint, not the cumulative window (Spec 542 R1) — see Step 2g.1.
 
 Source the helper library:
 ```bash
@@ -829,12 +981,25 @@ if ! git rev-parse -q --verify "$baseline" >/dev/null; then
 fi
 ```
 
-Run the path-match check:
+**Per-spec attribution (Spec 542 R1)**: resolve the diff input to this spec's own changed files — not the cumulative `baseline..HEAD` window, which in multi-spec sessions and deferred-close chaining attributes sibling specs' changes to this spec's gate run. `safety_config_spec_files` tries commits whose message tags `Spec NNN` first, then the spec's `## Implementation Summary` file list, falling back to the cumulative diff (WARN-annotated) only if neither source is available:
+
 ```bash
-matched=$(git diff "$baseline"..HEAD --name-only | safety_config_match_diff .forge/safety-config-paths.yaml)
+spec_file=$(ls docs/specs/NNN-*.md 2>/dev/null | head -1)
+if diff_source=$(safety_config_spec_files "NNN" "$baseline" HEAD "$spec_file"); then
+  attribution="per-spec"
+else
+  diff_source=$(git diff "$baseline"..HEAD --name-only)
+  attribution="cumulative"
+  echo "GATE [safety-property]: WARN — per-spec diff attribution unavailable for Spec NNN (no commits tagged 'Spec NNN', no Implementation-Summary file list). Falling back to the cumulative baseline..HEAD diff, which may attribute sibling-spec changes in this window to this gate run."
+fi
 ```
 
-Run the bootstrap-fallback check (R1c):
+Run the path-match check against the resolved diff source (region-scoped registry entries need `$baseline`/`HEAD` to evaluate — see Spec 542 R2):
+```bash
+matched=$(printf '%s\n' "$diff_source" | safety_config_match_diff .forge/safety-config-paths.yaml "$baseline" HEAD)
+```
+
+Run the bootstrap-fallback check (R1c) — this stays on the cumulative diff regardless of attribution mode, since it detects the registry file's own first-appearance/deletion, not a per-spec safety property:
 ```bash
 bootstrap=0
 if git diff "$baseline"..HEAD --name-status | safety_config_bootstrap_fallback; then
@@ -1198,6 +1363,11 @@ fi
 - If a script is absent: skip silently (consumer projects may not have them).
 - If `--fix` corrects counts: the updated README.md is included in the /close commit.
 - If a script fails for any reason: proceed (non-blocking, `|| true`).
+- **win32 timeout convention (Spec 554)**: run these two with a generous timeout (≥5 min) or
+  `run_in_background` rather than a bare foreground chain; if backgrounded, poll to completion and
+  read the exit codes before committing (result-check-before-proceed) — the `|| true` non-blocking
+  semantics apply to the CHECKED result, never to an unread one. (Post-554 the counts script runs
+  in ~2s, but chained close-step batches still add up.)
 
 <!-- module:compliance -->
 ## [mechanical] Step 3b — V&V report generation (Spec 039, conditional)

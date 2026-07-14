@@ -188,4 +188,4 @@ This cycle repeats for every change, whether it is a one-line fix or a multi-wee
 
 ---
 
-*Last verified against Spec 507 on 2026-06-29.*
+*Last verified against Spec 507 on 2026-06-29.* | STALE: re-verify — Spec 535 changed an install/distribution surface (/close 2026-07-13, Spec 509)

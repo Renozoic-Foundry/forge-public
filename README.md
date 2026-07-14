@@ -1,4 +1,5 @@
 # FORGE — Framework for Organized Reliable Gated Engineering
+<!-- Last verified: (unset) | STALE: re-verify — Spec 535 changed an install/distribution surface (/close 2026-07-13, Spec 509) -->
 
 AI coding assistants lose context between sessions, drift from the original goal, and declare work done before it meets acceptance criteria. FORGE fixes that with specs, evidence gates, and a structured delivery process that remains reliable as agent autonomy increases.
 
@@ -344,7 +345,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 541 specs across 151 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 550 specs across 153 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

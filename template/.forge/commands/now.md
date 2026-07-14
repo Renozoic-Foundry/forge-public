@@ -175,6 +175,25 @@ On a freshly-bootstrapped consumer (no operator-installed managed settings) the 
 `hooks-only`. Do not add follow-up prompts or detail — the one-line posture is the entire output
 of this step.
 
+## [mechanical] Step 0g — Red-main CI advisory (Spec 549)
+
+Surface a one-line advisory when the latest main-branch run of any GitHub workflow is red, so
+work cannot silently merge past a red main.
+
+Run:
+```bash
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ci_status.py
+```
+
+- If the helper prints a line (one or more workflows' latest main run concluded `failure`):
+  surface that line verbatim. It is never suppressed in lean mode (red main is operator-actionable).
+- If the helper prints nothing: skip silently — green main, no GitHub remote, or `gh`
+  unavailable/unauthenticated all look identical by design (fail-silent contract: /now is the
+  highest-frequency command and must not surface external-dependency errors; the helper always
+  exits 0).
+
+This surface is read-only and advisory — it never blocks.
+
 ## [mechanical] Step 0d — MCP integrity probe (Spec 284)
 
 Persistent fail-closed visibility for the hash-verified MCP server lockfiles. Runs on every `/now` invocation — if any probe fails, the advisory re-appears until resolved (not one-shot).

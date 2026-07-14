@@ -46,6 +46,17 @@ echo "=== FORGE Runtime Smoke Test ==="
 echo "  Template: $RENDERED_DIR"
 echo ""
 
+# Spec 489 phase-D render-shrink (Spec 549): the framework runtime (.forge/bin, .forge/lib,
+# .forge/adapters, ...) ships via the SIGNED PLUGIN, not the Copier render — a phase-D render
+# legitimately has none of the files this smoke test exercises. Same discriminator as the
+# copier _tasks spec-398 guard: forge-py absent == phase-D render. Pre-phase-D renders still
+# have forge-py present and run the full smoke test unchanged.
+if [[ ! -f "$FORGE_DIR/bin/forge-py" ]]; then
+  echo "SKIP: phase-D render (framework ships via plugin — .forge/bin/forge-py absent)."
+  echo "      Runtime smoke test applies only to pre-phase-D renders (Spec 489/549)."
+  exit 0
+fi
+
 # --- Check 1: Source all 6 library files ---
 echo "--- Check 1: Source library files ---"
 

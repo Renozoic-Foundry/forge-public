@@ -152,7 +152,10 @@ HOOKS_TPL="$ROOT/template/.claude-plugin/hooks"
 if [ -d "$HOOKS_TPL" ] && [ -d "$HOOKS_ROOT" ]; then
   echo "=== check-plugin-manifest: hooks parity root<->template (Spec 535) ==="
   # Pinned expected-divergence pair: "<basename> <root-sha256> <template-sha256>"
-  PINNED="hooks.json df27c7f14baa0418479e46a1bb76d6124b45fa877f1c13097aba21f9faa7f92f 85117283d85bbd4147d99680b25b790fa9dee011738e166fab674aeabd221754
+  # Hashes are LF-normalized (CR stripped) so Windows autocrlf checkouts and Linux CI
+  # compute the same digest (Spec 549 — the original hooks.json pin was minted from a
+  # CRLF working copy and failed every LF checkout on CI).
+  PINNED="hooks.json df27c7f14baa0418479e46a1bb76d6124b45fa877f1c13097aba21f9faa7f92f a615eeafbc72297f3a8287610ff076a19879ad8535dfd7c70bad6026520d5898
 session-start-integrity.sh 4e3cd42bbc617022f6c778c2d4366cab6d6adce39579cddddf3866f0bbfc75d5 164d6a778eaf5373641e99b54782f5f998434ce66464db0f803b2b3c379a18e4"
   for f in "$HOOKS_ROOT"/* "$HOOKS_TPL"/*; do
     [ -e "$f" ] || continue
@@ -161,8 +164,8 @@ session-start-integrity.sh 4e3cd42bbc617022f6c778c2d4366cab6d6adce39579cddddf386
     if [ ! -f "$rf" ]; then err "hooks parity: $base exists in template/ but not root (.claude-plugin/hooks/)"; continue; fi
     if [ ! -f "$tf" ]; then err "hooks parity: $base exists in root but not template/.claude-plugin/hooks/"; continue; fi
     pin="$(printf '%s\n' "$PINNED" | grep "^$base " || true)"
-    rh="$(sha256sum "$rf" | awk '{print $1}')"
-    th="$(sha256sum "$tf" | awk '{print $1}')"
+    rh="$(tr -d '\r' < "$rf" | sha256sum | awk '{print $1}')"
+    th="$(tr -d '\r' < "$tf" | sha256sum | awk '{print $1}')"
     if [ -n "$pin" ]; then
       want_rh="$(printf '%s' "$pin" | awk '{print $2}')"
       want_th="$(printf '%s' "$pin" | awk '{print $3}')"

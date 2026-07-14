@@ -89,6 +89,7 @@ framework:
     - "scripts/migrate-to-derived-view.py"  # Spec 254 — Approach D one-shot migration; FORGE-shipped
     - "scripts/migrate-spec-452-backfill-orphaned-signals.py"  # Spec 452 — EA/CI propagation engine + one-shot backfill; FORGE-shipped
     - ".forge/lib/two-list-bypass-detect.ps1"  # Spec 411 — PS parity for the coordinated two-list bypass detector (overrides *.ps1 project-default below; .sh sibling covered by the .forge/ wildcard above)
+    - ".forge/lib/ac-pattern-scanner.ps1"  # Spec 550 — PS parity for the AC-pattern scanner (overrides *.ps1 project-default below; .sh sibling covered by the .forge/ wildcard above)
 
 project:
   description: "Project-owned files — never touch during upgrade"

@@ -180,6 +180,27 @@ append ` · autopilot envelope: scheduled <off|on>` to the Authority line (read 
 block is absent (consumer projects that never adopted autopilot), print nothing extra —
 silent-when-absent is the contract.
 
+## [mechanical] Step 0g — Red-main CI advisory (Spec 549)
+
+Surface a one-line advisory when the latest main-branch run of any GitHub workflow is red, so
+closes cannot silently merge past a red main (the SIG-526-01 defect: five specs closed and
+pushed onto a main that had been red since 2026-07-10).
+
+Run:
+```bash
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ci_status.py
+```
+
+- If the helper prints a line (one or more workflows' latest main run concluded `failure`):
+  surface that line verbatim. It is never suppressed in lean mode (red main is operator-actionable).
+- If the helper prints nothing: skip silently — green main, no GitHub remote, or `gh`
+  unavailable/unauthenticated all look identical by design (fail-silent contract: /now is the
+  highest-frequency command and must not surface external-dependency errors; the helper always
+  exits 0).
+
+This surface is read-only and advisory — it never blocks. Fixtures: `tests/fixtures/549/{red,green}.json`
+via `--from-file` (red emits the line; green and any error path emit nothing).
+
 ## [mechanical] Step 0d — MCP integrity probe (Spec 284)
 
 Persistent fail-closed visibility for the hash-verified MCP server lockfiles. Runs on every `/now` invocation — if any probe fails, the advisory re-appears until resolved (not one-shot).

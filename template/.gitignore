@@ -64,3 +64,6 @@ docs/sessions/context-snapshot.md
 *.swp
 Thumbs.db
 .DS_Store
+
+# Spec 567 (D3): stoke direct-apply PID sentinel — must never trip copier's dirty check
+.forge/state/stoke-in-progress-*

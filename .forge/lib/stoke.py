@@ -14,7 +14,8 @@ Subcommands:
         2. Dirty-tree pre-apply guard (Req 4 / AC 1 dirty-tree-refuses)
         3. Old-backup cleanup (Req 7 / AC 11)
         4. Pre-apply backup snapshot with mode 0700 (Req 5,6 / AC 5,6)
-        5. `copier update --vcs-ref=$_commit --skip-answered --defaults`
+        5. `copier update --vcs-ref=HEAD --skip-answered --defaults` (Spec 567 D9:
+           default target is the template's latest content; pass --vcs-ref to pin)
         6. Conflict-marker check + crash-recovery output (Req 8 / AC 15,16)
 
   audit <backup-dir> [--live-root DIR] [--hard-pct N] [--min-lines N]
@@ -76,7 +77,15 @@ DEFAULT_MAX_BACKUP_AGE_DAYS = 30
 PROJECT_TYPE_EXCLUSIONS_FILENAME = "project-type-exclusions.yaml"
 
 # Conflict-marker patterns copier-direct may write into files on merge collision.
-CONFLICT_MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
+# Spec 567 (D7): anchored line-form regexes, not substrings — a cosmetic separator
+# line ("=================") trivially contains the 7-char "=======" substring and
+# produced false positives (flagged bin/forge with zero real markers). A file is
+# conflicted only when ALL THREE marker forms appear as real marker LINES.
+CONFLICT_MARKER_RES = (
+    re.compile(r"^<<<<<<< ", re.M),
+    re.compile(r"^=======\r?$", re.M),
+    re.compile(r"^>>>>>>> ", re.M),
+)
 
 
 # ---- copier.yml::_exclude parsing -------------------------------------------
@@ -473,7 +482,8 @@ def _scan_for_conflict_markers(live_root: Path, patterns_excluded: list[str]) ->
             with full.open("rb") as fh:
                 head = fh.read(256 * 1024)
             text = head.decode("utf-8", errors="replace")
-            if any(marker in text for marker in CONFLICT_MARKERS):
+            # Spec 567 (D7): require ALL three anchored marker forms in the same file.
+            if all(rx.search(text) for rx in CONFLICT_MARKER_RES):
                 conflicts.append(full)
         except OSError:
             continue
@@ -789,11 +799,17 @@ def cmd_direct_apply(args: argparse.Namespace) -> int:
     backup = _create_backup_snapshot(live_root, copier_yml)
     print(f"Backup snapshot: {backup}", file=sys.stderr)
 
-    # Step 5: determine VCS ref from .copier-answers.yml unless overridden
+    # Step 5: determine the target VCS ref.
+    # Spec 567 (D9): the old default read the answers-file `_commit` — updating the
+    # consumer TO THE VERSION IT IS ALREADY ON (guaranteed no-op), with `_src_path`
+    # (a filesystem path!) as the git-ref fallback. New default: HEAD — the template's
+    # latest content, uniform across tagged (e.g. forge-public) and untagged consumer
+    # templates (documented asymmetry: omitting --vcs-ref would mean latest-TAG on
+    # tagged templates but HEAD on untagged ones; HEAD keeps stoke's "update to latest
+    # content" semantics identical everywhere). Explicit --vcs-ref remains
+    # pin-on-purpose and passes through verbatim.
     answers = _read_copier_answers(live_root)
-    vcs_ref = args.vcs_ref
-    if not vcs_ref and answers:
-        vcs_ref = answers.get("_commit") or answers.get("_src_path")
+    vcs_ref = args.vcs_ref or "HEAD"
 
     # Step 5b: Spec 434 Req 4 — fresh-clone-detection warning for security overrides.
     # Partial mitigation of the bootstrap-path consent gap (CISO round-1 finding).
@@ -1825,7 +1841,7 @@ def main() -> int:
     p.add_argument("--copier-yml", default=None)
     p.add_argument("--allow-dirty", action="store_true", help="Override dirty-tree guard (operator-explicit per Req 4)")
     p.add_argument("--no-cleanup-old-backups", action="store_true")
-    p.add_argument("--vcs-ref", default=None, help="Override --vcs-ref (default: read from .copier-answers.yml::_commit)")
+    p.add_argument("--vcs-ref", default=None, help="Pin the update target ref (default: HEAD — the template's latest content; Spec 567 D9)")
     p.add_argument("--trust", action="store_true", help="Pass --trust to copier update. OPERATOR-EXPLICIT per invocation per Req 1 / AC 7 / CISO Constraint — never baked into defaults, never from env, never from config. The /forge stoke command body prompts the operator and passes this flag only after explicit consent.")
     p.add_argument("--confirm-security-overrides", action="store_true", help="Spec 434 Req 4: confirm honoring accept_security_overrides when .copier-answers.yml shows no in-session operator edit (fresh-clone state). Required to proceed when the security-override-consent gate WARNs.")
     p.add_argument("--data", action="append", default=[], help="Spec 444: pass KEY=VALUE through to `copier update --data`. Used by the /forge stoke chat-mediation flow to supply `accept_security_overrides=true` and `accept_security_overrides_confirmed=true` after explicit operator yes-answers via Step 0pre.05. Repeatable. MUST originate from operator yes-answers in the current chat turn — never from env vars, config files, or implicit context (Spec 444 Constraint).")

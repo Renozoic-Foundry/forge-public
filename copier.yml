@@ -46,7 +46,14 @@ _exclude:
 _skip_if_exists:
   - "AGENTS.md"
   - "CLAUDE.md"
-  - ".copier-answers.yml"
+  # Spec 567 (D8): `.copier-answers.yml` REMOVED from this list. Spec 441 placed it
+  # here when moving it out of `_exclude`, but `_skip_if_exists` suppresses the
+  # answers-file re-render on EVERY `copier update`, so `_commit` never recorded the
+  # new template version — every subsequent update replayed from a stale baseline
+  # (the smiley1 D6 replay-generator; minimal falsifier in Spec 567 Evidence).
+  # Standard Copier semantics (answers file as a normal render) are correct: written
+  # on copy AND update. The Spec 441 defect (file in `_exclude` → consumers get NO
+  # answers file) stays fixed — the file must simply not appear in EITHER list.
 
 # Spec 294 — Copier-native placeholder scrub (runs on every copy AND update).
 # The helper applies a guarded scrub: only blanks a field when the field's current
@@ -68,9 +75,23 @@ _tasks:
   # `validator:` on accept_security_overrides below). Runs FIRST in _tasks: so
   # poisoned-answers-file renders abort before any persistent state is written by
   # downstream tasks. See scripts/copier-hooks/forge_consent_gate.py.
+  # Spec 567 (D5/D5b): cwd-relative hook path + existence guard. Copier runs tasks
+  # with cwd=dst_path, so `./scripts/...` is correct for absolute AND relative
+  # destinations (the `{{ dst_path }}/...` form doubled the path on relative dsts).
+  # The `sh -c '...' guard "$@"` form keeps every Jinja value as ARGV (never
+  # interpolated into shell text — injection-safe), and the guard skips LOUDLY when
+  # the hook is not yet in the consumer tree (first delivery of copier-hooks to an
+  # older-vintage consumer): the render must never crash post-apply (Spec 446/D5;
+  # compensating consent control = Spec 434 fresh-clone warning in stoke.py Step 5b).
   - command:
+      - sh
+      - -c
+      - |-
+        if [ -f ./scripts/copier-hooks/forge_consent_gate.py ]; then exec "$@"; else
+        echo "WARNING: FORGE consent gate (scripts/copier-hooks/forge_consent_gate.py) is not present in this tree — SKIPPED this run (first delivery of copier-hooks?). The gate will run on the next update. If you did not expect this, verify your template version ships the hook." >&2; fi
+      - forge-consent-gate-guard
       - "{{ _copier_python }}"
-      - "{{ _copier_conf.dst_path }}/scripts/copier-hooks/forge_consent_gate.py"
+      - "./scripts/copier-hooks/forge_consent_gate.py"
       - "{{ accept_security_overrides|default(false) }}"
       - "{{ accept_security_overrides_confirmed|default(false) }}"
       - "{{ _copier_conf.dst_path }}"
@@ -88,9 +109,16 @@ _tasks:
       - "{% if include_nanoclaw %}include_nanoclaw=true{% endif %}"
       - "{% if include_advanced_autonomy %}include_advanced_autonomy=true{% endif %}"
       - "{% if include_two_stage_review %}include_two_stage_review=true{% endif %}"
+  # Spec 567 (D5/D5b): same guard pattern as the consent-gate task above.
   - command:
+      - sh
+      - -c
+      - |-
+        if [ -f ./scripts/copier-hooks/scrub_answers.py ]; then exec "$@"; else
+        echo "WARNING: FORGE answers scrub (scripts/copier-hooks/scrub_answers.py) is not present in this tree — SKIPPED this run (first delivery of copier-hooks?). It will run on the next update." >&2; fi
+      - forge-scrub-guard
       - "{{ _copier_python }}"
-      - "{{ _copier_conf.dst_path }}/scripts/copier-hooks/scrub_answers.py"
+      - "./scripts/copier-hooks/scrub_answers.py"
       - "scrub"
       - "{{ _copier_conf.src_path }}"
   - command:
@@ -158,9 +186,18 @@ _tasks:
 # answers so subsequent render uses healed values.
 _migrations:
   - version: v2.2.0
+    # Spec 567 (D5/D5b): guarded like the _tasks hook sites. The `before` stage runs
+    # PRE-render, so an older-vintage consumer genuinely lacks the hook here — the
+    # guard (not a crash) is the only correct behavior on first delivery.
     command:
+      - sh
+      - -c
+      - |-
+        if [ -f ./scripts/copier-hooks/scrub_answers.py ]; then exec "$@"; else
+        echo "WARNING: FORGE pre-294 answers migration (scripts/copier-hooks/scrub_answers.py) is not present in this tree — SKIPPED this run (pre-hooks consumer vintage). It will run on the next update." >&2; fi
+      - forge-migrate-scrub-guard
       - "{{ _copier_python }}"
-      - "{{ _copier_conf.dst_path }}/scripts/copier-hooks/scrub_answers.py"
+      - "./scripts/copier-hooks/scrub_answers.py"
       - "migrate"
       - "{{ _copier_conf.src_path }}"
     when: "{{ _stage == 'before' }}"

@@ -151,16 +151,16 @@ fi
 echo ""
 
 # --- Step 6: Verify _skip_if_exists block declares Spec 441 protected files ---
-# Static check on copier.yml — the three consumer-owned top-level files MUST
-# appear in `_skip_if_exists` and MUST NOT appear in `_exclude`. Dynamic
-# end-to-end `copier update` testing (modify CLAUDE.md, re-update, verify
-# preservation) is out of scope for this smoke test because copier update
-# requires a fully git-tracked source subproject — not reliably constructable
-# in a self-contained smoke fixture. The static check catches the regression
-# class (Spec 441) without the brittle integration path.
-echo "Step 6: Checking _skip_if_exists declaration in copier.yml (Spec 441) ..."
+# Static check on copier.yml — the doctrine files MUST appear in `_skip_if_exists`
+# and MUST NOT appear in `_exclude`. Spec 567 (D8) REMOVED `.copier-answers.yml`
+# from this list: `_skip_if_exists` suppressed the answers-file re-render on every
+# `copier update`, so `_commit` never recorded the new version (the replay-generator
+# behind the smiley1 D6 data loss). The answers file must appear in NEITHER list —
+# asserted separately below. Dynamic end-to-end `copier update` testing is out of
+# scope here (see test-spec-567-commit-bump.sh for the update-path fixture).
+echo "Step 6: Checking _skip_if_exists declaration in copier.yml (Spec 441 + 567) ..."
 copier_yml="$REPO_ROOT/copier.yml"
-spec_441_files=("AGENTS.md" "CLAUDE.md" ".copier-answers.yml")
+spec_441_files=("AGENTS.md" "CLAUDE.md")
 # Extract the _skip_if_exists block (lines from `_skip_if_exists:` until next
 # top-level key — a line starting with `_` or non-whitespace at column 0).
 skip_block="$(awk '
@@ -186,6 +186,20 @@ for f in "${spec_441_files[@]}"; do
         echo "  FAIL: $f missing from _skip_if_exists in copier.yml"
         details+="  - $f not declared in _skip_if_exists (Spec 441 regression)"$'\n'
         (( errors++ )) || true
+    fi
+done
+# Spec 567 (D8): the answers file must be a NORMAL render — in NEITHER list.
+for f in ".copier-answers.yml"; do
+    if echo "$skip_block" | grep -qE "^[[:space:]]*-[[:space:]]*\"?${f//./\\.}\"?[[:space:]]*$"; then
+        echo "  FAIL: $f in _skip_if_exists — suppresses the answers re-render on update; _commit never bumps (Spec 567 D8 regression)"
+        details+="  - $f must NOT be in _skip_if_exists (Spec 567 D8)"$'\n'
+        (( errors++ )) || true
+    elif echo "$exclude_block" | grep -qE "^[[:space:]]*-[[:space:]]*\"?${f//./\\.}\"?[[:space:]]*$"; then
+        echo "  FAIL: $f in _exclude — consumers get no answers file (Spec 441 regression)"
+        details+="  - $f must NOT be in _exclude (Spec 441)"$'\n'
+        (( errors++ )) || true
+    else
+        echo "  PASS: $f in neither _skip_if_exists nor _exclude (normal render — Spec 567 D8)"
     fi
 done
 echo ""

@@ -9,13 +9,15 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 
 ---
 
-## v3.0.0 — 2026-06-30
+## v3.0.0 — 2026-07-16
 
 **MAJOR bump — breaking changes; migration required.** The plugin-primary distribution pivot lands: FORGE now installs as a Claude Code plugin, with Copier reduced to project scaffolding. Three MAJOR drivers; aggregate MAJOR.
 
-**Audit**: `ADR-501-v2.1.0-to-v3.0.0-audit.md` (private forge repo). Base resolved v2.1.0 → v3.0.0 via the Spec 505 Path C resolver (immutable tag graph; fail-loud).
+> **Re-cut note**: an initial v3.0.0 tag (2026-06-30) was withdrawn the following day — see `## Yanked Tags` below. This 2026-07-16 cut supersedes it and additionally carries the specs closed 2026-07-01 → 2026-07-15; the release window spans the full v2.1.0 → 2026-07-16 range (234 audited specs, fifth audit refresh).
 
-**Signed payload**: the plugin payload is minisign-signed (key `6269A10FAAA740E1`). The detached `.minisig` carries the trusted comment `tier=forge-public version=3.0.0`. See the v3.0.0 GitHub Release notes for the pubkey, the out-of-band SHA-256 (`2820bebb…a187`), and `FORGE_PUBKEY_URL` / `FORGE_PUBKEY_SHA256` install-time verification.
+**Audit**: `ADR-501-v2.1.0-to-v3.0.0-audit.md` plus the 2026-07-16 fifth-refresh expansion (private forge repo). Base resolved v2.1.0 → v3.0.0 via the Spec 505 Path C resolver (immutable tag graph; fail-loud).
+
+**Signed payload**: the plugin payload is minisign-signed (key `6269A10FAAA740E1`), re-signed at this cut over the final v3.0.0 payload. The detached `.minisig` carries the trusted comment `tier=forge-public version=3.0.0`. See the v3.0.0 GitHub Release notes for the pubkey, the out-of-band SHA-256, and `FORGE_PUBKEY_URL` / `FORGE_PUBKEY_SHA256` install-time verification.
 
 ### Breaking changes (MAJOR drivers)
 
@@ -33,7 +35,12 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 - **`/consensus`** — structured multi-role review (Devil's Advocate, Maverick Thinker, Competitor, C-suite) on demand before committing to a spec (Spec 179).
 - **`/signal-to-strategy`** — convert external research signals into scored, testable advantage hypotheses that feed the backlog (Spec 458).
 - **`/reconcile`** — ingest work committed outside FORGE into the spec corpus (Spec 486).
-- **Hardened release tooling** — `cut-release.sh` resolves the base from the immutable local+remote tag graph and fails loud instead of defaulting to v0.0.0 (Spec 505); PowerShell parity (Spec 515).
+- **Hardened release tooling** — `cut-release.sh` resolves the base from the immutable local+remote tag graph and fails loud instead of defaulting to v0.0.0 (Spec 505); PowerShell parity (Spec 515); corpus cross-check blocks a cut whose audit is missing closed specs (Spec 537).
+- **`forge doctor`** — one-command environment/config consistency diagnostic (Spec 520).
+- **`/debug`** — structured, hypothesis-first debugging sessions with verify-before-fix discipline (Spec 525).
+- **Plugin-native project bootstrap** — `/forge-init` scaffolds a new project directly from the installed plugin, no Copier required for greenfield starts (Spec 557, slice 1 of the inverted-distribution architecture).
+- **`/consensus` workflow engine** — the multi-role review now runs as a deterministic orchestrated workflow with a divergence classifier (Spec 524).
+- **Fail-closed publish pipeline** — the public-sync engine is collapsed to one manifest-driven model with a payload round-trip e2e gate, strict PII/forbidden-token scanning, and an outgoing-identity gate on every push and tag (Specs 512, 513, 519).
 
 ### Surface change — Spec 491 command/skill consolidation (MINOR, preserved invocation)
 
@@ -48,7 +55,15 @@ cd forge-public && claude plugin install ./ # 2. Install the FORGE plugin (Claud
 /forge stoke                                # 3. Update scaffolding; pass --allow-major for the v2.1.0 -> v3.0.0 MAJOR drift
 ```
 
-Full per-spec window classification (485–500 + the v3.0.0 readiness cluster): see ADR-501 and the canonical audit doc.
+Full per-spec window classification (v2.1.0 → 2026-07-16, 234 specs): see ADR-501 and the canonical audit doc (fifth refresh).
+
+---
+
+## Yanked Tags
+
+| Yanked tag | Successor | Reason | Yanked on |
+|------------|-----------|--------|-----------|
+| v3.0.0 (2026-06-30 tag) | v3.0.0 (re-cut 2026-07-16) | A document not intended for publication shipped in the tagged tree; the tag and release were deleted and history rewritten the same day, and fail-closed publish gates (forbidden-token, excluded-doc referrer, outgoing-identity) were added before this re-cut. | 2026-07-01 |
 
 ---
 

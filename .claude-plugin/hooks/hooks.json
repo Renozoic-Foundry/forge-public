@@ -22,11 +22,16 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell|Monitor",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/.forge/bin/check-commit-guard.sh\"",
+            "timeout": 3000
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/.forge/bin/check-push-guard.sh\"",
             "timeout": 3000
           },
           {

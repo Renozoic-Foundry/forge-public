@@ -7,7 +7,7 @@ disable-model-invocation: true
 # Framework: FORGE
 <!-- multi-block mode: serialized — evolve emits choice blocks at distinct mechanical steps (trust calibration, proposal disposition, scratchpad disposition, exit gate). Each block waits for operator response before the next is presented. Bare numerics work because only one block is ever co-presented at a time. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
 
-**Output verbosity (Spec 225)**: At the start of execution, read `forge.output.verbosity` from `AGENTS.md` (default: `lean`). In **lean** mode, suppress non-actionable diagnostic output (passing-gate confirmations, KPI tables, calibration deltas, MCP pin status, deprecation scans, signal-by-signal pattern dumps, root-cause groupings, deferred-scope aging when none aged, score-rubric details when unchanged) — write the full content to its file artifact (session log, `pattern-analysis.md`, etc.) and emit a one-line pointer in chat (or omit entirely if purely informational). In **verbose** mode, emit full detail as before. **Never suppressed in either mode**: choice blocks, FAILed gates, push-confirmation prompts, Review Brief "Needs Your Review" items, operator-input prompts, error/abort messages. See `docs/process-kit/output-verbosity-guide.md` for the full rules and worked examples.
+**Output verbosity (Spec 225)**: read `forge.output.verbosity` from `AGENTS.md` (default `lean`). In **lean** mode, suppress non-actionable diagnostics (passing-gate confirmations, KPI tables, calibration deltas, MCP pin status, deprecation scans, signal-pattern dumps, root-cause groupings, unchanged deferred-scope aging, unchanged score-rubric details) — write full detail to the relevant file artifact and emit a one-line chat pointer (or omit if purely informational). **Verbose** mode emits full detail. **Never suppressed**: choice blocks, FAILed gates, push-confirmation prompts, Review Brief "Needs Your Review" items, operator-input prompts, error/abort messages. Full rules: `docs/process-kit/output-verbosity-guide.md`.
 
 Run the KCS Evolve Loop review. Use this after a spec reaches `implemented` or monthly.
 
@@ -39,67 +39,58 @@ If $ARGUMENTS is `?` or `help`:
 ---
 
 ## [mechanical] Step 0 — Load config and resolve mode
-Read `docs/sessions/evolve-config.yaml` (skip silently if absent — use defaults: trigger=manual, notify_via=log-only).
+Read `docs/sessions/evolve-config.yaml` (skip silently if absent — defaults: trigger=manual, notify_via=log-only).
 
 Determine run mode:
-- If `--auto` in $ARGUMENTS: automated mode (scheduled heartbeat). Admission is decided by **signal
-  thresholds in Step 0-cd** (Spec 500 — this supersedes the legacy `trigger=on_spec_count|time|manual`
-  config triggers, which are no longer consulted for admission). Proceed to Step 0-cd: it admits only
-  when ≥1 canonical signal threshold is crossed and otherwise SKIPs (exit 0) and reschedules the heartbeat.
-- If `--spec NNN`: fast-path mode for spec NNN.
-- If `--full`: full F1-F4 review.
-- If `--auto`: this invocation may be a scheduled rewake (see Step 0-cd and the rewake at command exit).
-- Otherwise: interactive mode — ask which spec was just completed (or confirm periodic review).
+- `--auto`: automated mode; admission decided by signal thresholds in Step 0-cd (Spec 500 — supersedes the legacy `trigger=on_spec_count|time|manual` triggers). Proceed to Step 0-cd.
+- `--spec NNN`: fast-path mode for spec NNN.
+- `--full`: full F1-F4 review.
+- Otherwise: interactive — ask which spec was just completed (or confirm periodic review).
 
 ### [mechanical] Step 0-cd — Signal-based admission (Spec 500 / ADR-500 — supersedes the Spec 464 calendar entry-gate)
 
-There is **no calendar cool-down on running the review**. The ADR-046 cool-down lives on *applied*
-self-modification (Step AS below — ADR-046 Invariant #3), NOT on the review. Admission is decided by
-who invoked `/evolve` and, for the automated heartbeat, whether signals have accumulated. This runs at
-command entry, before the state marker and before any F1–F4 work.
+No calendar cool-down applies to running the review — that lives on *applied* self-modification (Step AS,
+ADR-046 Invariant #3). Admission depends on who invoked `/evolve` and, for the automated heartbeat, whether
+signals have accumulated. Runs at command entry, before the state marker and before any F1–F4 work.
 
 1. **Explicit human invocation** — if `--auto` is NOT in `$ARGUMENTS` (`/evolve`, `/evolve --full`,
-   `/evolve --spec NNN`): **always admit**. A human asking for a review is sufficient justification.
-   Emit `GATE [evolve-admission]: PASS — explicit invocation.` Proceed.
+   `/evolve --spec NNN`): **always admit**. Emit `GATE [evolve-admission]: PASS — explicit invocation.` Proceed.
 2. **Automated rewake** — if `--auto` IS in `$ARGUMENTS`: admit only when **≥1 signal threshold is crossed**.
-   a. Read the canonical thresholds from `forge.evolve.signal_thresholds` in `AGENTS.md` (the SINGLE
-      source — Spec 500 R8; do NOT re-inline the numbers here). Keys: `unreviewed_signals`,
-      `open_evolve_scratchpad`, `error_autopsies`, `deferred_scope_items`, `spec_velocity`.
-   b. Compute the same five signal counts `/now` Step 12 uses, measured since the last review date
-      (`docs/sessions/evolve-state.md` `last_evolve_loop_run:` — the single last-review source, Spec 500 R6a;
+   a. Read thresholds from `forge.evolve.signal_thresholds` in `AGENTS.md` (single source, Spec 500 R8; do
+      NOT re-inline values here). Keys: `unreviewed_signals`, `open_evolve_scratchpad`, `error_autopsies`,
+      `deferred_scope_items`, `spec_velocity`.
+   b. Compute the same five signal counts `/now` Step 12 uses, since the last review date
+      (`docs/sessions/evolve-state.md` `last_evolve_loop_run:` — single source, Spec 500 R6a;
       `.forge/state/evolve-cool-down.json` is retired and MUST NOT be read).
-   c. **Hysteresis (R10)**: if `forge.evolve.admission_hysteresis` is true, require at least one NEW signal
-      since the last recorded skip (`evolve-state.md` `last_auto_skip:`), so a count parked at a threshold
-      boundary does not flap admit/skip across successive heartbeats.
+   c. **Hysteresis (R10)**: if `forge.evolve.admission_hysteresis` is true, require ≥1 new signal since the
+      last recorded skip (`evolve-state.md` `last_auto_skip:`) — prevents flapping at a threshold boundary.
    d. If ≥1 threshold is crossed: emit `GATE [evolve-admission]: PASS — auto; thresholds crossed: <list>.` Proceed.
    e. If none crossed: emit `GATE [evolve-admission]: SKIP — auto; no accumulation — skipped (nothing crossed since <date>; signals N/<t>, scratchpad N/<t>, EA N/<t>, deferred N/<t>, velocity N/<t>).` Record `last_auto_skip: <today>` in `evolve-state.md`, reschedule the heartbeat (Step Z), and **exit 0** WITHOUT running F1–F4.
-3. **Soft time fallback (R3 — recommendation only, NEVER a block)**: independent of admission, if the last
-   review is older than `forge.evolve.time_fallback_days` (default 30), include a one-line nudge in the
-   output (and `/now` surfaces the same nudge). This never blocks admission and never forces it.
+3. **Soft time fallback (R3 — recommendation only, NEVER a block)**: if the last review predates
+   `forge.evolve.time_fallback_days` (default 30), include a one-line nudge in the output (also surfaced by
+   `/now`). Never blocks or forces admission.
 
 ### [mechanical] Step AS — Apply-surface cool-down gate (Spec 500 R4 / ADR-500 / ADR-046 Invariant #3)
 
-This is where the ADR-046 cool-down actually lives. **EVERY `/evolve` auto-apply write** — any write that
-modifies an operating-rule / config / gate file — MUST pass this gate BEFORE writing. Enumerated apply paths
-(Spec 500 R4b / AC4b — this list is the enumeration invariant the fixture checks):
+This is where the ADR-046 cool-down lives. **EVERY `/evolve` auto-apply write** — any write that modifies
+an operating-rule/config/gate file — MUST pass this gate BEFORE writing. Enumerated apply paths (Spec 500
+R4b/AC4b — the fixture checks this enumeration):
 - Trust-calibration `apply all` / `apply <N>` (Step 8b) → writes `docs/process-kit/gate-categories.md`.
 - Score-anchor / E-anchor revisions, if applied inline → writes `docs/process-kit/scoring-rubric.md`.
 - Any future `/evolve` auto-apply path that writes an operating-rule/config/gate file.
 
-(Score-calibration *timestamp* writes — `Last score calibration:` in `docs/backlog.md` — and proposal
-drafting are NOT self-modifications of operating rules and are exempt.)
+(Score-calibration *timestamp* writes and proposal drafting are NOT self-modifications and are exempt.)
 
 Gate procedure (shared with `/config-change` — one throttle across both apply surfaces):
 1. Read `forge.evolve.apply_cool_down_days` from `AGENTS.md` (default `7`).
-2. Read `docs/sessions/config-change-audit.md`; find the most recent entry with `outcome: applied` (the
-   SAME source `/config-change` Step 2 reads).
-3. If that entry's date is within `apply_cool_down_days` of today: **BLOCK the apply**. Emit
+2. Read `docs/sessions/config-change-audit.md`; find the most recent `outcome: applied` entry (same source
+   `/config-change` Step 2 reads).
+3. If that entry's date is within `apply_cool_down_days` of today: **BLOCK**. Emit
    `GATE [evolve-apply-cool-down]: BLOCK — last applied self-modification <date> (<n>d ago); cool-down <N>d. Apply deferred.`
-   Record the proposed (un-applied) change in the evolve session log and **continue the review WITHOUT writing**.
-4. Otherwise (outside the window, or no prior applied entry): **ALLOW**. After writing, append to
-   `docs/sessions/config-change-audit.md`:
+   Record the proposed (un-applied) change in the evolve session log and **continue WITHOUT writing**.
+4. Otherwise: **ALLOW**. After writing, append to `docs/sessions/config-change-audit.md`:
    `- date: YYYY-MM-DD | source: /evolve | change: <what was applied> | outcome: applied`
-   so the next apply (from `/evolve` OR `/config-change`) is throttled against it. Emit
+   so the next apply is throttled against it. Emit
    `GATE [evolve-apply-cool-down]: PASS — no applied self-modification within <N>d; apply recorded.`
 
 **Sequencing invariant (Spec 500 R4c)**: this gate ships in the SAME change as the Step 0-cd entry-gate
@@ -115,7 +106,7 @@ status: in-progress
 started: YYYY-MM-DD HH:MM
 mode: <fast-path|full|interactive>
 ```
-This marker prevents solve-loop commands (/implement, /spec, /close) from executing while the evolve loop is active. The marker is cleared only after the exit gate completes (see "Evolve Loop Exit Gate" below).
+This marker blocks solve-loop commands (/implement, /spec, /close) while active; cleared only after the exit gate completes (see "Evolve Loop Exit Gate" below).
 
 ### [mechanical] Current Goal tracking (Spec 091)
 After completing each numbered section (fast-path steps 3-5, or full-review steps 3-10), emit a review progress block at the END of your output:
@@ -138,9 +129,9 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
 3. Open the just-completed spec and check one acceptance criterion against the code:
    - State the criterion, the file/function it maps to, and whether the code satisfies it
    - Flag any drift as a process defect requiring a new spec
-4. **Backlog state (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` — confirm the completed spec's row reflects `implemented` (the helper reads frontmatter directly, so freshness is immediate; mode-detection is internal).
+4. **Backlog state (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` — confirm the completed spec's row reflects `implemented`.
 5. Check if any other backlog items are now unblocked by this completion and note them.
-6. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py` and surface its one-line rolling-30-day figure. When it reports `n/a` (no rated decisions in window), surface that verbatim. This is the same read the operator's `consensus_tracking` config (AGENTS.md) defines; it is also surfaced by `/now`.
+6. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py` and surface its rolling-30-day figure. Surface `n/a` verbatim when no rated decisions exist — same read as the `consensus_tracking` config (AGENTS.md); also surfaced by `/now`.
 
 **If periodic review (full F1–F4):**
 3. Spot-check 2–3 `implemented` or `closed` specs for acceptance criteria drift.
@@ -148,11 +139,11 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    Check docs/README.md CLI commands against actual CLI help output.
 5. Report KPI trends from session logs: lead time, hotfix count, doc drift events since last review.
 6. Score calibration: compare predicted vs actual BV for completed specs — flag if systematic bias found.
-6b. **E calibration (Spec 158, simplified per Spec 316)**: For specs closed since last calibration:
-   a. If session data exists: compare expected session count (inferred from E score — E=1-2: single session, E=3: 1-2 sessions, E=4-5: 2+ sessions) vs actual sessions from session logs.
-   b. Flag systematic E over-prediction (AI handles it easier than estimated — 3+ specs where actual E was lower) or under-prediction (iteration loops not anticipated — 3+ specs where actual E was higher).
-   c. If systematic bias detected in either direction: recommend updating E anchor guidance and present specific anchor adjustments.
-   d. Token-cost (TC) calibration is qualitative — operator-recall against the cost-feel of recent specs (Spec 316 removed the metrics framework that was documented but never wired).
+6b. **E calibration (Spec 158, simplified per Spec 316)**: for specs closed since last calibration:
+   a. Compare expected session count (E=1-2 single, E=3 1-2, E=4-5 2+) vs actual sessions from session logs, if data exists.
+   b. Flag systematic over-prediction (3+ specs where actual E was lower) or under-prediction (3+ specs higher).
+   c. If bias detected: recommend E anchor guidance updates with specific adjustments.
+   d. TC calibration is qualitative — operator-recall against cost-feel of recent specs (Spec 316 removed the unwired metrics framework).
 
 6b+. **Data-driven score calibration via score-audit log (Spec 368)**: Augment the operator-recall pass in 6b with predicted-vs-observed data from `.forge/state/score-audit.jsonl`. The shared helper at `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh` (PowerShell parity at `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1`) renders the bias report; do NOT inline JSON parsing here.
 
@@ -165,71 +156,57 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    (PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1 bias-report "$verbosity_mode"`. `$verbosity_mode` is `lean` or `verbose` per `forge.output.verbosity` in AGENTS.md.)
 
    The helper:
-   - Reads predicted/observed pairs grouped by `lane + kind_tag` (Req 14b cross-tab from day one).
-   - Emits an anchor-revision advisory only when **N≥3** specs in the same dimension+lane+kind_tag cell show the same-direction deviation.
-   - Suffixes every advisory with the literal `(direction-only; magnitude not measured)` so downstream readers cannot cite the bias as quantitative (Req 14c, AC6).
+   - Groups predicted/observed pairs by `lane + kind_tag` (Req 14b cross-tab).
+   - Emits an anchor-revision advisory only when **N≥3** specs in the same dimension+lane+kind_tag cell show same-direction deviation.
+   - Suffixes every advisory with the literal `(direction-only; magnitude not measured)` (Req 14c, AC6).
    - Annotates each advisory `(based on N=<count> closed specs since first record)` (Req 14d, AC6).
-   - In **lean** mode, suppresses cells below the N≥3 threshold (Spec 225). In **verbose** mode, renders sub-threshold cells as `insufficient data (N=<count>)` (AC7).
+   - Lean mode suppresses cells below the N≥3 threshold (Spec 225); verbose mode renders them as `insufficient data (N=<count>)` (AC7).
 
-   If the audit log is empty or absent (pre-instrumentation specs only), the helper emits `0 records — calibration deferred until data accumulates`. Continue with operator-recall calibration from Step 6b.
+   If the audit log is empty/absent (pre-instrumentation specs only): the helper emits `0 records — calibration deferred until data accumulates`. Continue with operator-recall calibration from Step 6b.
 
-   Note: this report is data, not authority. Anchor revisions still require operator judgment — see `docs/process-kit/score-calibration-loop.md` § Time-blindness mitigation for the principle that durations are derived from shell arithmetic over git timestamps, not model recall.
+   Note: this report is data, not authority — anchor revisions still require operator judgment (`docs/process-kit/score-calibration-loop.md` § Time-blindness mitigation).
 
 6b++. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py` and surface the rolling-30-day figure (`accepted / (accepted + modified + rejected)` over `docs/sessions/*.json`, per `docs/process-kit/telemetry-capture-guide.md`). When it reports `n/a` (no rated decisions in window), surface that verbatim — never a divide error. A persistently low or sharply dropping rate is a calibration/process signal worth a CEfO/CQO note; the figure is data, not authority.
 
 6c. **CEfO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
    - Read `.claude/agents/cefo.md` for the role preamble.
-   - Spawn CEfO as an isolated sub-agent with the bias report from Step 6b+ (data-driven) and the E calibration data from step 6b (operator-recall).
-   - Prompt: "Review the E/TC calibration results and the score-audit bias report (predicted vs observed proxies from `.forge/state/score-audit.jsonl`, grouped by lane+kind_tag). Assess whether effort estimates are systematically miscalibrated, token costs are trending unsustainably, or process overhead is disproportionate. Report direction only; do not assert magnitude — observed proxies are direction-only signals (Spec 368 Req 14c, Req 15). Produce your standard review block."
-   - Present the CEfO advisory inline after the calibration results:
+   - Spawn CEfO with the bias report (Step 6b+, data-driven) and E calibration data (Step 6b, operator-recall).
+   - Prompt: "Review the E/TC calibration results and score-audit bias report (predicted vs observed proxies from `.forge/state/score-audit.jsonl`, grouped by lane+kind_tag). Assess whether effort estimates are miscalibrated, token costs are trending unsustainably, or process overhead is disproportionate. Report direction only, not magnitude — observed proxies are direction-only (Spec 368 Req 14c, Req 15). Produce your standard review block."
+   - Present inline:
      ```
      ### CEfO Advisory — Efficiency Review
      <CEfO review block>
      ```
    - If `forge.dispatch_rules.enabled` is `false` or absent: skip silently.
-6d. **MCP pin review (Spec 284)**: Read `docs/process-kit/mcp-pinning-policy.md`. Check the `Last verified:` date at the top. For each pin documented in the policy's "What's pinned" section:
-   - Compare current `Last verified:` age against the per-package threshold (context7=60 days, fetch=365 days).
-   - If stale: emit a one-line advisory: `MCP pin stale: <package> pinned <N> days ago, threshold <T>. Run bump-verification checklist in docs/process-kit/mcp-pinning-policy.md before rotating.`
-   - If all pins fresh: emit a one-line confirmation: `MCP pins current: <package1>@<v1> verified <N1>d ago, <package2>@<v2> verified <N2>d ago.`
-   - This is an advisory checklist item — does NOT auto-bump pins. Operator executes the bump-verification checklist manually when ready.
+6d. **MCP pin review (Spec 284)**: Read `docs/process-kit/mcp-pinning-policy.md`. Check each pin's `Last verified:` age against its threshold (context7=60 days, fetch=365 days).
+   - Stale: `MCP pin stale: <package> pinned <N> days ago, threshold <T>. Run bump-verification checklist in docs/process-kit/mcp-pinning-policy.md before rotating.`
+   - Fresh: `MCP pins current: <package1>@<v1> verified <N1>d ago, <package2>@<v2> verified <N2>d ago.`
+   - Advisory only — does not auto-bump; operator runs the checklist manually.
 
-6e. **Release-eligible + deprecation surfacing (Spec 291)**: Surface two release-policy signals as part of the periodic review (full F1-F4 mode).
+6e. **Release-eligible + deprecation surfacing (Spec 291)**, full F1-F4 mode:
 
-   1. **Release-eligible count**: Read `docs/sessions/signals.md`. Count entries
-      matching `^### SIG-[0-9]+-RE`. If count ≥ 1, present:
+   1. **Release-eligible count**: count `docs/sessions/signals.md` entries matching `^### SIG-[0-9]+-RE`. If ≥1:
       ```
       N release-eligible spec(s) pending tag cut.
       Audit: docs/process-kit/v1.0.0-to-next-audit.md
       Tooling: scripts/cut-release.sh (dry-run by default)
       ```
-      Recommend the operator review the audit and decide whether to cut now or
-      continue accumulating. If the live audit doc is missing, flag it as a
-      process defect (release-policy.md § Post-cut disposition expects the doc
-      to exist between tag cuts).
+      Recommend the operator review the audit and decide whether to cut now or keep accumulating. Missing audit doc = process defect (release-policy.md § Post-cut disposition expects it between cuts).
 
-   2. **Deprecation surface scan**: Scan `copier.yml` for top-level variables
-      with `deprecated: true` and `.claude/commands/*.md` for files with
-      `deprecated: true` in YAML frontmatter (or the first 10 lines). For each
-      match, present a one-line item:
+   2. **Deprecation surface scan**: scan `copier.yml` and `.claude/commands/*.md` frontmatter for `deprecated: true`. For each match:
       ```
       ⚠ Deprecated <surface>: <name> (deprecated_in: <ver>, removed_in: <ver>)
       ```
-      If any deprecation has a `removed_in:` ≤ the next likely tag (per the
-      live audit's proposed bump), recommend that the audit explicitly note
-      the removal as a MAJOR-cut item.
+      If `removed_in:` ≤ the next likely tag, recommend the audit flag the removal as a MAJOR-cut item.
 
-   These signals are advisory — they do NOT block the evolve loop exit gate.
+   Both signals are advisory — do NOT block the evolve loop exit gate.
 
 
 7. Update `Last score calibration:` in docs/backlog.md.
 8. **Signal pattern analysis (Spec 044):** Read `docs/sessions/signals.md`. Apply structured pattern detection:
-   a. **Parse**: Extract from each signal entry: type tag (e.g. `[process]`, `[tooling]`, `[template]`), affected component(s), root-cause keywords (words in title/description that could recur).
-   b. **Group**: Cluster entries with matching type tags or overlapping root-cause keywords (≥2 keyword overlap = related).
-   c. **Score**: For each cluster, compute pattern severity = impact_level × frequency:
-      - impact_level: high=3, medium=2, low=1 (use the signal's `Impact:` field if present, else medium)
-      - frequency = number of entries in the cluster
-      - severity_score = impact_level × frequency
-      - Label: score ≥6 → `high`; score 3-5 → `medium`; score 1-2 → `low`
+   a. **Parse**: extract type tag, affected component(s), and root-cause keywords from each signal entry.
+   b. **Group**: cluster entries sharing a type tag or ≥2 overlapping root-cause keywords.
+   c. **Score**: severity = impact_level (high=3, medium=2, low=1; use the signal's `Impact:` field, else medium) × frequency (cluster size). Label: score ≥6 → `high`; 3-5 → `medium`; 1-2 → `low`.
    d. **Report (pattern table)**:
       ```
       Signal Pattern Analysis — <date>
@@ -237,12 +214,12 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       |---------|------|-------------|----------|------------|--------|
       | <pattern name> | [type] | N | high/med/low | SIG-NNN, ... | systemic gap → spec recommended |
       ```
-      - Patterns with 1 occurrence: list as "isolated — monitor"
-      - Patterns with 2+ occurrences at medium+ severity: flag as "systemic gap → spec recommended"
+      - Patterns with 1 occurrence: "isolated — monitor"
+      - Patterns with 2+ occurrences at medium+ severity: "systemic gap → spec recommended"
    e. Save the pattern table to `docs/sessions/pattern-analysis.md` (append with date header; create if absent).
-   f. **Knowledge consolidation**: If pattern analysis reveals 10+ signals or 3+ recurring themes, recommend running `/synthesize --decisions` to consolidate accumulated knowledge into a refined reference document. Mode hint (Spec 328): `--decisions` is the default for /evolve-context recommendations because it aggregates the full decision history that pattern analysis builds on. Operator can override at invocation (`--postmortem` for general consolidation, `--topic <theme>` for a specific cluster, or `--all` for all four modes).
-   g. **Architecture document update** (Spec 228): Check `docs/architecture.md`. If it exists and any of the following changed since its `Last updated` date: new modules added, commands added/removed, agent roles changed, or runtime adapters modified — flag for update: "Architecture document may be stale. Review `docs/architecture.md` and update feature inventory, module list, or integration points as needed."
-   h. **Root-cause category grouping (Spec 267)**: In addition to the type-tag + keyword clustering in (b), re-group all signals by their `Root-cause category` field (one of `spec-expectation-gap`, `model-knowledge-gap`, `implementation-error`, `process-defect`, `other`). Signals without this field (pre-Spec-267 entries) are treated as `other`. Append a category-grouping section to the pattern analysis output:
+   f. **Knowledge consolidation**: 10+ signals or 3+ recurring themes → recommend `/synthesize --decisions` (default mode; operator can override with `--postmortem`, `--topic <theme>`, or `--all`).
+   g. **Architecture document update** (Spec 228): if `docs/architecture.md` exists and modules/commands/roles/adapters changed since its `Last updated` date, flag: "Architecture document may be stale. Review `docs/architecture.md` and update feature inventory, module list, or integration points as needed."
+   h. **Root-cause category grouping (Spec 267)**: re-group signals by `Root-cause category` (`spec-expectation-gap`, `model-knowledge-gap`, `implementation-error`, `process-defect`, `other`; pre-Spec-267 entries default to `other`). Append:
       ```
       Root-cause Category Grouping — <date>
       | Category | Occurrences | Signal IDs | Notes |
@@ -253,40 +230,32 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       | process-defect         | N | SIG-NNN, ... | ... |
       | other                  | N | SIG-NNN, ... | (pre-267 entries + uncategorized) |
       ```
-      - If the `other` bucket is >40% of signals since the last evolve review, emit an advisory: "Category quality regression — >40% of signals are `other`. Consider reviewing `docs/process-kit/signal-quality-guide.md` for calibration." (This is advisory, not blocking.)
-   i. **Gate-coverage gaps (Spec 267)**: Scan all signals for the `Evidence-gate coverage` field. Cluster `missed-by-existing-gate` signals by the named gate (the field is "missed-by-existing-gate — <gate name>"). A cluster qualifies as a **gate-coverage gap** when either:
-      - ≥3 `missed-by-existing-gate` signals name the same gate (AC 5 threshold), OR
-      - ≥50% of a pattern cluster (from step b) is `missed-by-existing-gate` (Requirement 5 threshold).
-
-      For each qualifying cluster, append to the pattern analysis output:
+      - `other` >40% of signals since last review: advisory "Category quality regression — >40% of signals are `other`. Consider reviewing `docs/process-kit/signal-quality-guide.md` for calibration." (advisory, not blocking)
+   i. **Gate-coverage gaps (Spec 267)**: cluster `missed-by-existing-gate` signals (field: "missed-by-existing-gate — <gate name>") by named gate. Qualifies as a gap when ≥3 signals name the same gate (AC5) OR ≥50% of a pattern cluster (step b) is `missed-by-existing-gate` (Req 5). For each qualifying cluster, append:
       ```
       Gate-Coverage Gaps — <date>
       | Gate Named | Missed Count | % of Pattern Cluster | Signal IDs | Recommendation |
       |-----------|--------------|----------------------|------------|----------------|
       | <gate>    | N            | X%                   | SIG-NNN, ... | Review whether <gate> needs extension or a new gate is warranted |
       ```
-      If no qualifying clusters exist: emit a single line "Gate-coverage gaps: none detected (N `missed-by-existing-gate` signals, no cluster ≥3 or ≥50%)."
-
-      This output is **advisory** — it does not block the evolve loop. It surfaces systemic evidence-gate gaps so the operator can propose spec-level gate improvements.
-8j. **Positive-signal review (Spec 497):** The pattern analysis above clusters problems; this sub-step reviews the success side so wins are reinforced, not just failures fixed. Read `docs/sessions/signals.md` for entries with type tag `[positive]` recorded since the last evolve review.
-   a. Group `[positive]` entries by their `Why it worked` factor (the enabling pattern, decision, gate, or tool) — same ≥2-keyword-overlap clustering as step (b).
-   b. Append a positive-signal section to the pattern analysis output:
+      If none qualify: "Gate-coverage gaps: none detected (N `missed-by-existing-gate` signals, no cluster ≥3 or ≥50%)." Advisory — does not block the evolve loop.
+8j. **Positive-signal review (Spec 497):** reviews the success side so wins are reinforced, not just failures fixed. Read `docs/sessions/signals.md` for `[positive]` entries since the last review.
+   a. Group by `Why it worked` factor (same ≥2-keyword clustering as (b)).
+   b. Append:
       ```
       Positive-Signal Review — <date>
       | Win pattern | Occurrences | Signal IDs | Keep/amplify recommendation |
       |-------------|-------------|------------|-----------------------------|
       | <enabling factor> | N | SIG-NNN, ... | <how to repeat or institutionalize> |
       ```
-   c. For any win recurring ≥2 times (a durable, repeatable success), recommend graduating it: capture in project memory or a strategy/process-kit doc so the pattern is reused deliberately. See `docs/process-kit/positive-signal-taxonomy.md`.
-   d. If no `[positive]` entries exist since the last review: emit a single line "Positive signals: none captured since last review — consider whether wins are going unrecorded (the taxonomy was historically ~54:1 failure-biased)." Advisory only; never blocks.
-8b. **Trust calibration review (Spec 160):** Read `docs/sessions/signals.md` for trust signals (type tag `[trust]`):
-   a. **Aggregate corrections by check type**: For each check type that appears in trust signals, count:
-      - Total spec closures where this check type was machine-verified (estimate from CHANGELOG close count)
-      - Number of human corrections for this check type
-   b. **Apply calibration rules** (from `docs/process-kit/gate-categories.md`):
-      - 0 corrections over 10+ closures → recommend confirming as machine-verifiable (no change needed)
-      - 2+ corrections in 5 closures → recommend escalating to confidence-gated or human-judgment-required
-      - Confidence-gated check consistently HIGH with 0 corrections → recommend graduating to machine-verifiable
+   c. A win recurring ≥2 times: recommend graduating it into project memory or a strategy/process-kit doc (`docs/process-kit/positive-signal-taxonomy.md`).
+   d. No `[positive]` entries since last review: "Positive signals: none captured since last review — consider whether wins are going unrecorded (the taxonomy was historically ~54:1 failure-biased)." Advisory only.
+8b. **Trust calibration review (Spec 160):** Read `docs/sessions/signals.md` for `[trust]` signals.
+   a. **Aggregate by check type**: count machine-verified closures (estimate from CHANGELOG close count) and human corrections, per check type.
+   b. **Apply calibration rules** (`docs/process-kit/gate-categories.md`):
+      - 0 corrections over 10+ closures → confirm machine-verifiable (no change)
+      - 2+ corrections in 5 closures → escalate to confidence-gated or human-judgment-required
+      - Confidence-gated check consistently HIGH with 0 corrections → graduate to machine-verifiable
    c. **Present recommendations** (if any adjustments are warranted):
       ```
       Trust Calibration — <date>
@@ -302,17 +271,17 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       > | **2** | 2 | `apply <N>` | Selective acceptance; apply only some adjustments | Apply a specific recommendation (type the row number) |
       > | **3** | — | `defer` | Insufficient data; revisit later | Revisit all recommendations next cycle |
       > | **4** | — | `dismiss` | Recommendations not warranted | Dismiss all — no adjustments warranted |
-   c2. **Apply-surface cool-down (Spec 500 R4)**: `apply all` / `apply <N>` writes `gate-categories.md` —
+   c2. **Apply-surface cool-down (Spec 500 R4)**: `apply all`/`apply <N>` writes `gate-categories.md` —
       an applied self-modification. Before writing, pass **Step AS** (apply-surface cool-down). On
-      `GATE [evolve-apply-cool-down]: BLOCK`, record the proposed category changes in the evolve session
-      log and do NOT write `gate-categories.md`. On PASS, write and append the `outcome: applied` audit entry.
+      `GATE [evolve-apply-cool-down]: BLOCK`, record the proposed category changes in the session log and
+      do NOT write. On PASS, write and append the `outcome: applied` entry.
    d. If no trust signals exist or no adjustments are warranted: report "Trust calibration: no adjustments needed (N closures reviewed, 0 corrections)."
 
 8c. **CQO advisory dispatch (Spec 187)**: If `forge.dispatch_rules.enabled` is `true` in AGENTS.md:
    - Read `.claude/agents/cqo.md` for the role preamble.
-   - Spawn CQO as an isolated sub-agent with the signal pattern analysis results (step 8) and trust calibration results (step 8b).
+   - Spawn CQO with the signal pattern analysis (step 8) and trust calibration results (step 8b).
    - Prompt: "Review the signal pattern analysis and trust calibration data. Assess whether quality gaps are systemic, acceptance criteria rigor is declining, or trust calibration adjustments are warranted. Produce your standard review block."
-   - Present the CQO advisory inline after the trust calibration results:
+   - Present inline:
      ```
      ### CQO Advisory — Quality Review
      <CQO review block>
@@ -332,12 +301,8 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
        Signal references: SIG-NNN, SIG-NNN
        ```
     b. Limit proposals to `max_proposals_per_cycle` (default 5) — rank by severity × occurrences, take top N.
-    c. **Review Router (Spec 159)**: Before presenting proposals, run the review router on the full set:
-       - Select perspectives: **DA** (always — risk check on generated proposals) + **COO** (always — process impact). Add **MT** if proposal count > 3 (are we solving the right problems?).
-       - Display selection rationale.
-       - Run selected perspectives on the proposal set as a whole.
-       - Present the Review Brief before the choice block.
-    d. Present all proposals together. For each proposal, include its `Objective:` field in the disposition block so operators can evaluate what each proposal is for without having to re-read the full proposal:
+    c. **Review Router (Spec 159)**: before presenting, run the router on the full set — **DA** (always, risk check) + **COO** (always, process impact), add **MT** if proposal count > 3. Display selection rationale, run selected perspectives, present the Review Brief before the choice block.
+    d. Present all proposals together, each with its `Objective:` field:
        ```
        SPEC PROPOSALS — <N> generated from signal patterns
        1. <Title> — <Objective (first sentence)>
@@ -352,13 +317,13 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
        > | **3** | — | `modify <N>` | Operator-driven; refine before commit | Edit a proposal before approving |
        > | **4** | — | `dismiss <N>` | Operator-driven; reason recorded | Dismiss a specific proposal with reason |
        > | **5** | — | `dismiss all` | Operator-driven; clear rejection | Dismiss all proposals |
-    e. On `approve <N>` (or `approve all`): run `/spec` with the proposal title and content to create the draft spec.
-    f. On `modify <N>`: accept operator edits to the proposal, then run `/spec` with revised content.
-    g. On `dismiss <N>` (or `dismiss all`): record dismissal in `docs/sessions/pattern-analysis.md` as `dismissed: YYYY-MM-DD — <reason>`. Suppresses re-proposal for this pattern in subsequent cycles.
+    e. On `approve <N>`/`approve all`: run `/spec` with the proposal title and content.
+    f. On `modify <N>`: accept operator edits, then run `/spec` with revised content.
+    g. On `dismiss <N>`/`dismiss all`: record in `docs/sessions/pattern-analysis.md` as `dismissed: YYYY-MM-DD — <reason>`. Suppresses re-proposal for this pattern.
 
-    h. **Multi-role vetting**: For high-impact proposals (severity `high` or BV >= 4), recommend running `/consensus <proposal>` to gather structured feedback from all registry roles before approving.
+    h. **Multi-role vetting**: for high-impact proposals (severity `high` or BV >= 4), recommend `/consensus <proposal>` before approving.
 After either path:
-- **Deferred scope aging (Spec 199):** Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` and scan for any items tagged as deferred scope (status `deferred` or content with deferred-scope markers). For each deferred item, check its origination date. Flag items older than 14 days without disposition:
+- **Deferred scope aging (Spec 199):** Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json` and scan for deferred-scope items. Flag items older than 14 days without disposition:
   ```
   DEFERRED SCOPE AGING — The following items are >14 days old without disposition:
   - <date> from Spec NNN: <item summary> (<age> days)
@@ -526,11 +491,11 @@ fi
 
 Before returning control to the solve loop, verify all evolve-loop work is complete:
 
-1. **Proposals check**: Confirm all spec proposals from step 10 have been dispositioned (approved, modified, or dismissed). If any proposals are pending: "Undispositioned proposals remain. Resolve before exiting." Do not proceed.
+1. **Proposals check**: confirm all step-10 proposals are dispositioned (approved, modified, or dismissed). Pending proposals: "Undispositioned proposals remain. Resolve before exiting." Do not proceed.
 
-2. **Scratchpad check**: Confirm all `[evolve]` scratchpad notes have been reviewed (resolved, converted to spec, or carried forward). If unreviewed notes remain: list them and ask to resolve or carry forward.
+2. **Scratchpad check**: confirm all `[evolve]` scratchpad notes are reviewed (resolved, converted to spec, or carried forward). Unreviewed notes remain: list them and ask to resolve or carry forward.
 
-3. **Approved proposals captured**: List all approved proposals as session-log artifacts. These are NOT created as specs inline — they are converted to specs only after the operator exits the evolve loop and explicitly runs `/spec`.
+3. **Approved proposals captured**: list all approved proposals as session-log artifacts. Not created as specs inline — converted only after the operator exits and explicitly runs `/spec`.
    ```
    ## Approved proposals (pending spec creation)
    - <proposal title> — approved, create via `/spec` after exiting
@@ -559,21 +524,18 @@ Before returning control to the solve loop, verify all evolve-loop work is compl
 
 <!-- module:nanoclaw -->
 ## [mechanical] Automated delivery (Spec 043 — conditional)
-If `--auto` was in $ARGUMENTS and the config `notify_via=nanoclaw`:
-a. Compile the evolve loop results into a NanoClaw digest message:
-   ```
-   🔄 FORGE Evolve Loop — <date>
-   Specs reviewed: <count>
-   AC drift detected: <yes/no — list if yes>
-   Signal patterns: <N new patterns found>
-   Score calibration: <adjustments summary>
-   Proposed actions (require approval):
-   - [ ] <action 1> — approve? (reply "approve <N>" or "skip <N>")
-   - [ ] <action 2>
-   ```
-b. Send via the configured NanoClaw channel (use `mcp__nanoclaw__send_message` or reference `nanoclaw_task_id` from config).
-c. **Human approval gate**: Do NOT execute any proposed actions (new specs, score changes, backlog updates) without explicit approval. Wait for the operator's reply before proceeding.
-d. Update `docs/sessions/evolve-state.md`: set `last_evolve_loop_run: YYYY-MM-DD` and increment `runs_since_start`.
+If `--auto` was in $ARGUMENTS and the config `notify_via=nanoclaw`, compile results into a NanoClaw digest and send via the configured channel:
+```
+🔄 FORGE Evolve Loop — <date>
+Specs reviewed: <count>
+AC drift detected: <yes/no — list if yes>
+Signal patterns: <N new patterns found>
+Score calibration: <adjustments summary>
+Proposed actions (require approval):
+- [ ] <action 1> — approve? (reply "approve <N>" or "skip <N>")
+- [ ] <action 2>
+```
+Use `mcp__nanoclaw__send_message` or the `nanoclaw_task_id` from config. **Human approval gate**: do NOT execute proposed actions (new specs, score changes, backlog updates) without explicit approval — wait for the operator's reply. Update `docs/sessions/evolve-state.md`: `last_evolve_loop_run: YYYY-MM-DD`, increment `runs_since_start`.
 
 - If `notify_via=log-only`: append results to today's session log under `## Evolve Loop Run`. No NanoClaw message. Record `last_evolve_loop_run` in `docs/sessions/evolve-state.md`.
 - If `docs/sessions/evolve-config.yaml` is absent: treat as `notify_via=log-only`.
@@ -581,26 +543,23 @@ d. Update `docs/sessions/evolve-state.md`: set `last_evolve_loop_run: YYYY-MM-DD
 
 ## [mechanical] Step Z — Heartbeat reschedule (Spec 500 — replaces the Spec 464 cool-down-delay rewake; runs at command exit)
 
-There is **no review cool-down state to write** — admission is signal-based (Step 0-cd). The single
-last-review source `docs/sessions/evolve-state.md` `last_evolve_loop_run:` is updated by the
-Automated-delivery / log-only branch above (Spec 500 R6a). `.forge/state/evolve-cool-down.json` is
-**retired** — do NOT write or read it for review admission.
+No review cool-down state to write — admission is signal-based (Step 0-cd). The single last-review source
+`docs/sessions/evolve-state.md` `last_evolve_loop_run:` is updated by the Automated-delivery/log-only branch
+above (Spec 500 R6a). `.forge/state/evolve-cool-down.json` is **retired** — do NOT write or read it.
 
 1. **Schedule the heartbeat** (gated): read `forge.evolve.scheduled_rewake` from `AGENTS.md` (default `true`).
-   - If `false`: schedule **nothing**. Behavior is identical to a manually-invoked `/evolve`. (Log to the
-     evolve session log that `scheduled_rewake` is `false` so the opt-out is audit-visible — CISO R2.)
-   - If `true`: invoke `ScheduleWakeup` with:
-     - `delay = forge.evolve.rewake_interval_days × 86400` (default `1` day; `ScheduleWakeup` clamps to its
-       own bounds). This is a recurring **signal-check heartbeat**, NOT a cool-down timer (Spec 500 R9).
-     - `prompt = /evolve --auto` (exactly; no extra args — CISO R1).
+   - If `false`: schedule **nothing** — identical to a manual `/evolve`. Log that `scheduled_rewake` is
+     `false` so the opt-out is audit-visible (CISO R2).
+   - If `true`: invoke `ScheduleWakeup` with `delay = forge.evolve.rewake_interval_days × 86400` (default
+     `1` day; clamps to its own bounds) and `prompt = /evolve --auto` (exactly; no extra args — CISO R1).
+     A recurring **signal-check heartbeat**, NOT a cool-down timer (Spec 500 R9).
 
-   The heartbeat re-invokes `/evolve --auto`; the Step 0-cd **signal-admission** check (R2) decides whether
-   the review actually runs. The heartbeat MUST NOT reintroduce any day-count reject.
+   The heartbeat re-invokes `/evolve --auto`; Step 0-cd's signal-admission check (R2) decides whether the
+   review runs. MUST NOT reintroduce any day-count reject.
 
-2. **Safe fallback (Spec 500 R7)**: if `ScheduleWakeup` is unavailable in the host runtime (it degrades to
-   a `CronCreate`-backed no-op per the Spec 464 Step-0 finding), do NOT hard-block or stall — `/now`'s
-   signal-based recommendation (`now.md` Step 12) covers the surfacing. Log that the heartbeat could not be
-   scheduled, and exit cleanly.
+2. **Safe fallback (Spec 500 R7)**: if `ScheduleWakeup` is unavailable (degrades to a `CronCreate`-backed
+   no-op per the Spec 464 Step-0 finding), do NOT hard-block — `/now`'s signal-based recommendation
+   (`now.md` Step 12) covers the surfacing. Log that the heartbeat could not be scheduled and exit cleanly.
 
 
 ## [mechanical] Tab-lane awareness directive (Spec 351)
@@ -614,4 +573,3 @@ Before emitting any next-action choice block in this command, consult the active
 5. Filtered rows are struck through with rank `—` (not silently dropped) so the operator can override by typing the keyword directly.
 
 The guide is the single source of truth for which rows filter vs annotate per lane. This directive is intentionally short — the central guide encodes the rules so every emitter stays consistent.
-

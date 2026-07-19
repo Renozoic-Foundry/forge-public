@@ -138,6 +138,28 @@ $(_adoption_section "$spec_file" 'Acceptance Criteria')"
     | sort -u
 }
 
+# Resolve the specs dir via forge.paths indirection (Spec 564), falling back to the
+# classic default when bash lacks associative-array support or config load fails.
+_adoption_specs_dir() {
+  local repo_root="${1:-.}"
+  local default="docs/specs"
+  if declare -A __adoption_probe 2>/dev/null; then
+    unset __adoption_probe
+    local lib_dir
+    lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck source=/dev/null
+    if source "${lib_dir}/config.sh" 2>/dev/null; then
+      PROJECT_DIR="$repo_root" forge_config_load "$repo_root/AGENTS.md" >/dev/null 2>&1 || true
+      local resolved
+      if resolved="$(PROJECT_DIR="$repo_root" forge_path specs 2>/dev/null)"; then
+        printf '%s\n' "$resolved"
+        return
+      fi
+    fi
+  fi
+  printf '%s\n' "$default"
+}
+
 # Return 0 if a valid `Follow-up adoption spec: NNN` field is present.
 # Present-but-missing-target returns 1 with a stderr message.
 adoption_has_followup() {
@@ -151,7 +173,9 @@ adoption_has_followup() {
     printf 'Follow-up adoption spec field present but no NNN reference parsed.\n' >&2
     return 1
   fi
-  if ! ls "${repo_root}"/docs/specs/"${ref}"-*.md >/dev/null 2>&1; then
+  local specs_dir
+  specs_dir="$(_adoption_specs_dir "$repo_root")"
+  if ! ls "${repo_root}/${specs_dir}"/"${ref}"-*.md >/dev/null 2>&1; then
     printf 'Follow-up adoption spec %s referenced but no such spec exists.\n' "$ref" >&2
     return 1
   fi

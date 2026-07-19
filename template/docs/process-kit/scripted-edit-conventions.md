@@ -4,6 +4,9 @@
 **Last verified:** 2026-06-15
 **Applies to:** FORGE command bodies (`.forge/commands/`) and scripts (`scripts/`, `.forge/lib/`, `.forge/bin/`).
 
+<!-- forge:maintainer-detail:start -->
+> Audience: framework maintainers.
+
 ## The defect class
 
 The **Edit/Write tools error on no-match** — if the `old_string` is not found, the
@@ -101,3 +104,4 @@ you touch a script with a flagged rewrite, add the `assert_*` / grep post-condit
   to fail to match — though `assert_contains` after a create is still cheap insurance.
 - **Idempotent rewrites you intend to no-op** — in that case the no-op is correct;
   prefer `assert_contains` (assert the desired end-state) over `assert_changed`.
+<!-- forge:maintainer-detail:end -->

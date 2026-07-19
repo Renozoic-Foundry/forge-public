@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+# forge:path-literal-ok (file: framework-structure — generates agent-guidance text + operates on framework command tree; Spec 575)
 <#
 .SYNOPSIS
     Generate agent-specific command wrappers from canonical FORGE commands.
@@ -268,6 +269,9 @@ function New-CodexSkill {
 
     $skillDesc = "${description}. Use when the user wants to ${action}. Triggers on: ${triggers}."
 
+    # forge:path-literal-ok (fixture) — the docs/specs, docs/sessions, docs/backlog.md
+    # references below are generated skill doc text describing generic defaults for a
+    # FORGE-managed consumer project; this script does not use them for I/O.
     $skillContent = @"
 ---
 name: forge-${CommandName}

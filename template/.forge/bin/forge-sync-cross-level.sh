@@ -3,7 +3,7 @@
 #
 # Spec 270: Generalized Cross-Level Sync (Template <-> Repo-Root)
 #
-# Sync pairs (canonical -> mirror):
+# Sync pairs (canonical -> mirror):  # forge:path-literal-ok (framework-structure — FORGE's own docs/ tree, not a consumer's)
 #   .forge/commands/*.md           -> template/.forge/commands/*.md (or .md.jinja)
 #   .claude/agents/*.md            -> template/.claude/agents/*.md
 #   docs/process-kit/*.md          -> template/docs/process-kit/*.md (or .md.jinja)
@@ -55,7 +55,7 @@ Options:
   --dry-run   Report what would change without writing files
   --verbose   Show all file comparisons, not just drifted ones
 
-Sync pairs:
+Sync pairs:  # forge:path-literal-ok (framework-structure — FORGE's own docs/ tree, not a consumer's)
   .forge/commands/*.md        -> template/.forge/commands/*
   .claude/agents/*.md         -> template/.claude/agents/*
   docs/process-kit/*.md       -> template/docs/process-kit/*
@@ -396,7 +396,7 @@ if [[ -d "${PROJECT_DIR}/.claude/agents" ]]; then
   echo ""
 fi
 
-# Sync pair 3: docs/process-kit/
+# Sync pair 3: docs/process-kit/  # forge:path-literal-ok (framework-structure — FORGE's own process-kit, mirrored into template/)
 if [[ -d "${PROJECT_DIR}/docs/process-kit" ]]; then
   echo "=== docs/process-kit -> template/docs/process-kit ==="
   _process_dir "${PROJECT_DIR}/docs/process-kit" "docs/process-kit"

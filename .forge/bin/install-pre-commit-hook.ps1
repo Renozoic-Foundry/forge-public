@@ -1,4 +1,5 @@
 # install-pre-commit-hook.ps1 — Install FORGE combined pre-commit hook (Specs 270 + 314 + 320)
+# forge:path-literal-ok (file: framework-structure — framework-repo hook installer; Spec 575)
 #
 # PowerShell counterpart to install-pre-commit-hook.sh. Produces a byte-identical
 # pre-commit hook (UTF-8 no-BOM, LF line endings) so operators on Windows without
@@ -43,6 +44,8 @@ $hook = Join-Path $hooksDir 'pre-commit'
 
 # Hook body — byte-identical to the bash heredoc body in install-pre-commit-hook.sh.
 # Single-quoted here-string (@'...'@) prevents PS variable interpolation.
+# forge:path-literal-ok (framework-structure) — the docs/process-kit reference inside
+# governs FORGE's own repo (cross-level sync), not a generic consumer's process state.
 $hookBody = @'
 #!/usr/bin/env bash
 # FORGE combined pre-commit hook — Specs 270 + 314 + 320

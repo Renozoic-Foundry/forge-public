@@ -1,6 +1,6 @@
 # AGENTS.md Template (Domain-Neutral v2)
 
-> **Claude Code users:** Consider creating a `CLAUDE.md` at the repo root instead of (or alongside) `AGENTS.md`. Claude Code natively loads `CLAUDE.md` at the start of every session. Optimize it for terse, imperative instructions with `- [ ]` checkboxes and `[text](path)` clickable links. Keep `AGENTS.md` as the fuller Codex-compatible reference.
+> **Claude Code users:** Consider creating a `CLAUDE.md` at the repo root instead of (or alongside) `AGENTS.md`. Claude Code natively loads `CLAUDE.md` at the start of every session. Optimize it for terse, imperative instructions with `- [ ]` checkboxes and `text` clickable links. Keep `AGENTS.md` as the fuller Codex-compatible reference.
 
 This file defines how the coding agent and human developer collaborate in this repository.
 

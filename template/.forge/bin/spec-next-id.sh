@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # FORGE fetch-before-mint spec-ID helper (Spec 532 — R2).
 #
-# Prints the next spec ID (zero-padded, e.g. 538) as max+1 over the UNION of:
+# Prints the next spec ID (zero-padded, e.g. 538) as max+1 over the UNION of:  # forge:path-literal-ok (comment)
 #   - the local corpus (docs/specs/ filenames in the current working tree), and
 #   - the remote default branch's docs/specs/ listing (best-effort, time-bounded
 #     `git fetch origin <default-branch>` + `git ls-tree FETCH_HEAD:docs/specs`).
@@ -10,7 +10,7 @@
 # local-only max+1 scan; fetching the remote view first eliminates the dominant
 # stale-local-view cause. The residual true-race window (neither side pushed
 # yet) is detected by check-spec-id-uniqueness.sh at CI and repaired via the
-# NNN[a-z] convention (docs/process-kit/parallelism-guide.md).
+# NNN[a-z] convention (docs/process-kit/parallelism-guide.md).  # forge:path-literal-ok (comment)
 #
 # Degradation contract (Spec 532 R2): offline / no-remote / fetch-failure /
 # timeout → mint from the local-only view, exactly ONE warning line on stderr,
@@ -25,7 +25,24 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -z "$REPO_ROOT" ]; then REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"; fi
+
+# Spec 564: resolve the specs dir via forge.paths indirection (proving consumer).
+# Guarded on bash-4 associative-array support so the pre-564 macOS bash-3.2
+# degradation path survives: without it, the legacy default applies unchanged.
+# An explicit --specs-dir flag below WINS over config resolution (DA precedence).
 SPECS_REL="docs/specs"
+if declare -A __forge_probe 2>/dev/null; then
+  unset __forge_probe
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/../lib/config.sh"
+  PROJECT_DIR="$REPO_ROOT" forge_config_load "$REPO_ROOT/AGENTS.md" >/dev/null 2>&1 || true
+  if __resolved="$(PROJECT_DIR="$REPO_ROOT" forge_path specs)"; then
+    SPECS_REL="$__resolved"
+  else
+    echo "spec-next-id: invalid forge.paths.specs value — see error above" >&2
+    exit 2
+  fi
+fi
 FETCH_TIMEOUT=10
 
 while [ $# -gt 0 ]; do

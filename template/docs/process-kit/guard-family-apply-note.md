@@ -1,5 +1,6 @@
 # Guard-Family Protected-File Apply Note (Spec 503)
 
+<!-- forge:maintainer-detail:start -->
 The FORGE authority/edit/commit/push guard scripts and the autonomy-config files protect
 themselves: they sit in the authority-guard deny set (`.forge/bin/check-authority-guard.sh`),
 so an agent cannot edit them in-session. Both channels deny the write — the Edit/Write
@@ -39,3 +40,4 @@ protected file. These are **accepted/deferred** (Spec 503): the over-block fails
 safe direction, and the same operator-mediated `cp` is the workaround. Revisit only if a
 false-positive recurs in NON-meta guard work (a spec that does not itself edit the guard
 family), or when the managed-settings trust root (ADR-453 §6.1) changes the picture.
+<!-- forge:maintainer-detail:end -->

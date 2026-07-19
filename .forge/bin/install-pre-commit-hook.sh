@@ -65,6 +65,9 @@ RUN_CROSS_LEVEL=0
 RUN_COMMANDS=0
 RUN_CHOICE_BLOCK=0
 RUN_SENTINEL=0
+# forge:path-literal-ok (framework-structure) — this hook governs FORGE's own repo
+# (cross-level sync between .forge/commands, docs/process-kit and template/), not a
+# generic consumer project's process-state location.
 if grep -qE '^(\.forge/commands/|\.claude/agents/|docs/process-kit/|template/)' <<<"${STAGED}"; then
   RUN_CROSS_LEVEL=1
 fi
@@ -82,7 +85,7 @@ fi
 #   - template/{.forge,.claude}/commands/{implement,close,revise}.md
 #   - docs/process-kit/close-validator-coverage.md
 #   - docs/compliance/profile.yaml
-if grep -qE '^((\.forge|\.claude|template/\.forge|template/\.claude)/commands/(implement|close|revise)\.md|docs/process-kit/close-validator-coverage\.md|docs/compliance/profile\.yaml)$' <<<"${STAGED}"; then
+if grep -qE '^((\.forge|\.claude|template/\.forge|template/\.claude)/commands/(implement|close|revise)\.md|docs/process-kit/close-validator-coverage\.md|docs/compliance/profile\.yaml)$' <<<"${STAGED}"; then  # forge:path-literal-ok (framework-structure)
   RUN_SENTINEL=1
 fi
 
@@ -188,7 +191,7 @@ if [[ ${CHOICE_BLOCK_EXIT} -ne 0 ]]; then
   echo "${CHOICE_BLOCK_OUTPUT}" >&2
   echo "" >&2
   echo "Recovery:" >&2
-  echo "  Update the choice block to match docs/process-kit/implementation-patterns.md § Choice Blocks." >&2
+  echo "  Update the choice block to match docs/process-kit/implementation-patterns.md § Choice Blocks." >&2  # forge:path-literal-ok (comment)
 fi
 if [[ ${SENTINEL_EXIT} -ne 0 ]]; then
   echo "" >&2
@@ -199,7 +202,7 @@ if [[ ${SENTINEL_EXIT} -ne 0 ]]; then
   echo "  Re-sync the canonical sentinel block then run:" >&2
   echo "    bash scripts/spec-344-sync-sentinels.sh" >&2
   echo "    bash scripts/validate-spec-integrity-sentinels.sh" >&2
-  echo "  See docs/process-kit/close-validator-coverage.md § Spec 367 CI parity gate" >&2
+  echo "  See docs/process-kit/close-validator-coverage.md § Spec 367 CI parity gate" >&2  # forge:path-literal-ok (comment)
 fi
 
 if [[ ${CROSS_LEVEL_EXIT} -ne 0 || ${COMMANDS_EXIT} -ne 0 || ${CHOICE_BLOCK_EXIT} -ne 0 || ${SENTINEL_EXIT} -ne 0 ]]; then

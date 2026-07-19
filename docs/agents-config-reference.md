@@ -1,3 +1,8 @@
+<!-- GENERATED FILE — do not hand-edit. Regenerate with: .forge/bin/forge-py scripts/gen-agents-config-reference.py
+     Sources: AGENTS.md (live defaults) + scripts/lib/agents-config-reference-content.yaml (descriptions)
+     Source content hash: f9436cbae80c | FORGE plugin version: 3.1.0
+     Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
+
 # AGENTS.md configuration reference
 
 This reference documents every configurable field in your project's AGENTS.md file.
@@ -16,8 +21,12 @@ These fields appear in YAML code blocks within the **Project Context** section o
 
 | Field | Type | Default | Description | Behavioral consequence |
 |-------|------|---------|-------------|----------------------|
-| `forge.strategic_scope` | YAML block (multiline string) | Template-provided scope statement | Defines what the project IS and IS NOT; consumed by `/matrix` when evaluating spec fit. | When present, `/matrix` classifies draft specs as on-mission, borderline, or scope-creep against this definition. When absent, `/matrix` infers scope from the CLAUDE.md project description. |
+| `forge.strategic_scope` | YAML block (multiline string) | YAML block — see AGENTS.md | Defines what the project IS and IS NOT; consumed by `/matrix` when evaluating spec fit. | When present, `/matrix` classifies draft specs as on-mission, borderline, or scope-creep against this definition. When absent, `/matrix` infers scope from the CLAUDE.md project description. |
 | `forge.context.session_briefing` | boolean | `true` | Controls whether `/now` includes the "Last time on [project]" continuity brief. | When `true`, `/now` reads recent session logs, signals, and scratchpad to provide a session-start brief. When `false`, the brief is skipped. |
+| `forge.context.optimization.level` | enum | `minimal` | Context-compaction aggressiveness. Valid values: `minimal`, `balanced`, `aggressive` (Spec 256). | Compaction fires only after `/close`, never mid-command. `minimal` compacts least; `balanced` uses the threshold below; `aggressive` compacts most. |
+| `forge.context.optimization.compact_threshold_pct` | integer (percent) | `60` | Context-window percentage that triggers compaction (`balanced` level only). | When the context window exceeds this percentage after a `/close`, compaction runs. |
+| `forge.output.verbosity` | enum | `lean` | Chat output density. Valid values: `lean` (default), `verbose` (Spec 225). | `lean` suppresses non-actionable diagnostics and routes detail to file artifacts with a one-line pointer; choice blocks, FAILed gates, and operator prompts are never suppressed. |
+| `forge.process_kit.freshness_threshold_days` | integer (days) | `180` | Staleness threshold for process-kit guide `Last verified:` markers (Spec 278). | `/now` flags guides whose marker is older than this many days. |
 
 ### Runtime configuration (`forge:` block)
 
@@ -58,9 +67,10 @@ These fields appear in the `forge:` YAML block under the **Runtime Configuration
 | `forge.dispatch_rules.enabled` | boolean | `false` | Enables intelligent role dispatch based on spec characteristics. | When `true`, CxO advisory roles are auto-invoked when spec characteristics match dispatch conditions. |
 | `forge.dispatch_rules.skip_threshold.effort` | integer | `1` | Effort score at or below which extra dispatch is skipped. | Low-effort specs matching all threshold conditions use DA only. |
 | `forge.dispatch_rules.skip_threshold.risk` | integer | `1` | Risk score at or below which extra dispatch is skipped. | Low-risk specs matching all threshold conditions use DA only. |
-| `forge.dispatch_rules.roles` | YAML block | See template | Maps CxO roles to trigger conditions. | Defines which conditions (e.g., `cross_cutting`, `security`, `high_risk`) invoke which advisory roles. |
-| `forge.dispatch_rules.evolve_loop` | YAML block | See template | Roles invoked during `/evolve --full`. | Controls which CxO roles participate in Evolve Loop steps (signal analysis, trust calibration, etc.). |
+| `forge.dispatch_rules.roles` | YAML block | YAML block — see AGENTS.md | Maps CxO roles to trigger conditions. | Defines which conditions (e.g., `cross_cutting`, `security`, `high_risk`) invoke which advisory roles. |
+| `forge.dispatch_rules.evolve_loop` | YAML block | YAML block — see AGENTS.md | Roles invoked during `/evolve --full`. | Controls which CxO roles participate in Evolve Loop steps (signal analysis, trust calibration, etc.). |
 | `forge.dispatch_rules.touchpoints` | list of strings | `[spec_review, da_gate, close_review, evolve_loop]` | Lifecycle points where dispatch fires. | Determines when in the spec lifecycle advisory roles are consulted. |
+| `forge.agents.model_tier_override` | enum or null | `null` | Single-knob global model-tier override for subagent frontmatter. Valid values: `null`, `haiku`, `sonnet`, `opus`, `inherit` (Spec 462). | Operator policy, not enforcement — see the agent-roles guide. `null` keeps each agent file’s own tier. |
 
 ### Runtime and agent adapters
 
@@ -95,7 +105,7 @@ These blocks tune signal-driven review, the `/now` dashboard, scheduled routines
 |-------|------|---------|-------------|----------------------|
 | `forge.now.watch_default_min_delay` | integer (seconds) | `60` | Lower bound for `/loop` dynamic re-runs of `/now --watch`. | Clamps how often a self-paced `/now` watch loop re-fires (upper bound 3600). |
 | `forge.now.unclosed_spec_cap` | integer | `3` | Threshold at which `/now` warns about implemented-but-unclosed specs. | When the count exceeds this, `/now` Step 1b flags the deferred-close pile-up (count, IDs, file-overlap pairs). |
-| `forge.evolve.signal_thresholds` | YAML block | See below | Per-signal counts that admit an `/evolve` review. | Single source read by both `/now` (recommend) and `/evolve --auto` (admit). Keys: `unreviewed_signals` (15), `open_evolve_scratchpad` (4), `error_autopsies` (3), `deferred_scope_items` (5), `spec_velocity` (5). |
+| `forge.evolve.signal_thresholds` | YAML block | YAML block — see AGENTS.md | Per-signal counts that admit an `/evolve` review. | Single source read by both `/now` (recommend) and `/evolve --auto` (admit). Keys: `unreviewed_signals` (15), `open_evolve_scratchpad` (4), `error_autopsies` (3), `deferred_scope_items` (5), `spec_velocity` (5). |
 | `forge.evolve.admission_hysteresis` | boolean | `true` | Debounce on threshold crossings. | A count hovering at a boundary does not flap admit/skip. |
 | `forge.evolve.time_fallback_days` | integer | `30` | Soft time-based nudge for an overdue review. | Recommendation only — never a hard admission block. |
 | `forge.evolve.rewake_interval_days` | integer | `1` | `/evolve --auto` heartbeat cadence. | How often the scheduled signal-checking heartbeat re-wakes (`ScheduleWakeup` clamps the lower bound). |
@@ -106,7 +116,8 @@ These blocks tune signal-driven review, the `/now` dashboard, scheduled routines
 | `forge.routines.execution_mode` | enum | `on-box` | Where routines run. Valid values: `on-box`, `remote`. | `on-box`: stays in the org boundary. `remote`: requires InfoSec approval. |
 | `forge.reconcile.stub_min_files` | integer | `3` | File-count threshold for `/reconcile` to draft a stub spec. | A git-history cluster touching at least this many distinct files routes to a draft stub spec. |
 | `forge.reconcile.stub_min_lines` | integer | `100` | Line-count threshold for `/reconcile` to draft a stub spec. | A cluster changing at least this many total lines routes to a stub spec; smaller clusters become memory notes. |
-| `forge.implement.live_keywords` | list of strings | See template | Test-Plan phrases that flag a live/smoke step. | When a spec's Test Plan matches a keyword, `/implement` Step 6e prompts the operator to execute (or defer) a real run before `/close`. |
+| `forge.implement.live_keywords` | list of strings | `[live dry-run, smoke test, against the live repo, against FORGE-self, against the codebase, production data sample]` | Test-Plan phrases that flag a live/smoke step. | When a spec's Test Plan matches a keyword, `/implement` Step 6e prompts the operator to execute (or defer) a real run before `/close`. |
+| `forge.routines.pausable` | boolean | `true` | Whether scheduled routines can be paused without losing state. | When `true`, a paused routine resumes from its saved state instead of restarting. |
 
 ## Consensus tracking
 
@@ -115,6 +126,7 @@ These blocks tune signal-driven review, the `/now` dashboard, scheduled routines
 | `consensus_tracking.enabled` | boolean | `true` | Logs consensus outcomes in session JSON sidecars. | When `true`, accept/modify/reject outcomes are recorded per session. |
 | `consensus_tracking.acceptance_rate.formula` | string | `accepted / (accepted + modified + rejected)` | How the acceptance rate is computed. | Surfaced in `/evolve` and `/now`; never auto-escalates autonomy. |
 | `consensus_tracking.acceptance_rate.window_days` | integer | `30` | Lookback window for the acceptance rate. | Defines the rolling window over `docs/sessions/*.json`. |
+| `consensus_tracking.acceptance_rate.data_source` | string (glob) | `docs/sessions/*.json` | Where consensus outcomes are read from for the acceptance-rate rollup. | The rate is computed over session JSON sidecars matching this glob. |
 
 ## Autonomy levels
 
@@ -219,4 +231,19 @@ Three enforcement modes determine how gate approval happens:
 
 ---
 
-Last verified against Spec 507 on 2026-06-29. | STALE: re-verify — Spec 531 changed AGENTS.md config (/close 2026-07-09, Spec 509)
+## Provenance and revision history
+
+This document is **generated** by `scripts/gen-agents-config-reference.py` — defaults are read live from `AGENTS.md`
+(descriptions from `scripts/lib/agents-config-reference-content.yaml`; source content hash
+`f9436cbae80c`, FORGE plugin v3.1.0). Do not edit it by hand — changes belong in the
+sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
+
+Recent changes to AGENTS.md:
+
+<!-- forge:gen:volatile:start -->
+- 2026-07-08 `141138b` Spec 546 — spec-authoring pitfall-rule ports (verify-before-build, redirect reachability, wireframe)
+- 2026-07-08 `6b610d0` Spec 544 — presentation/visualization artifact spec-gate exemption (AGENTS.md + template surfaces)
+- 2026-07-07 `dca7580` Spec 531 — minimal autopilot envelope (option-1 reframe): forge.autopilot block, python-core validator, blocking /close gate, consent runbook + honesty doctrine, ADR-531 addendum
+<!-- forge:gen:volatile:end -->
+
+For the full change record, see `git log -- AGENTS.md` and `docs/specs/CHANGELOG.md`.

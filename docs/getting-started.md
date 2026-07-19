@@ -9,11 +9,12 @@ The underlying methodology is Evidence-Gated Iterative Delivery (EGID). You will
 ## Contents
 
 - [Prerequisites](#prerequisites) — what you need installed
-- [Step 1 — Install FORGE](#step-1--install-forge)
+- [Step 1 — Install the FORGE plugin](#step-1--install-the-forge-plugin)
 - [Step 2 — Bootstrap a project](#step-2--bootstrap-a-project)
-- [Step 3 — Create a spec](#step-3--create-a-spec)
-- [Step 4 — Implement the spec](#step-4--implement-the-spec)
-- [Step 5 — Close the spec](#step-5--close-the-spec)
+- [Step 3 — Run onboarding](#step-3--run-onboarding)
+- [Step 4 — Create a spec](#step-4--create-a-spec)
+- [Step 5 — Implement the spec](#step-5--implement-the-spec)
+- [Step 6 — Close the spec](#step-6--close-the-spec)
 - [What you completed](#what-you-completed) — the full Solve Loop
 - [Next steps](#next-steps) — where to go from here
 
@@ -21,36 +22,23 @@ The underlying methodology is Evidence-Gated Iterative Delivery (EGID). You will
 
 ## Prerequisites
 
-Before starting, ensure these are installed:
-
-- **Python 3.9+** — required by Copier
+- **Claude Code** — [claude.ai/code](https://claude.ai/code) (CLI, desktop app, or IDE extension)
 - **Git** — version control
-- **Copier 9.0+** — template engine (`pip install copier`)
-- **An AI IDE** — Claude Code is recommended, but any AI assistant that reads `AGENTS.md` works
 
-> **Note:** On Windows, use Git Bash or WSL for the bash commands in this tutorial. PowerShell is supported for the install step but not for all FORGE commands.
+That is the whole list for the plugin path — no Python, no template engine. Using a different
+AI IDE (Cursor, Windsurf, Copilot)? The legacy Copier scaffold path applies instead; see the
+[README's collapsed cross-IDE section](../README.md#quickstart) and the pinned tool versions in
+[CONTRIBUTING.md](../CONTRIBUTING.md#prerequisites).
+
+> **Windows note:** all the slash commands in this tutorial run identically on Windows. Where a
+> shell command differs, both forms are shown — `bash` (Git Bash) and PowerShell.
 
 ---
 
-## Step 1 — Install FORGE
+## Step 1 — Install the FORGE plugin
 
-Run the one-liner install script for your platform.
-
-**bash (macOS / Linux / Git Bash on Windows):**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash
-```
-
-**PowerShell (Windows):**
-
-```powershell
-irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
-```
-
-The install script adds FORGE's slash commands to your Claude Code configuration. It does not modify your project files.
-
-**Claude Code plugin install (alternative):** instead of the install script, Claude Code users can install the FORGE command, agent, skill, and hook payload as a plugin — no checkout required:
+FORGE v3 delivers the entire framework surface — slash commands, agent roles, skills, and hooks —
+as a signed Claude Code plugin:
 
 ```bash
 claude plugin marketplace add Renozoic-Foundry/forge-public
@@ -62,50 +50,90 @@ then, inside Claude Code:
 /plugin install forge@forge
 ```
 
-Or, from a local `forge-public` checkout:
+Or, from a local checkout:
 
 ```bash
+# bash (macOS / Linux / Git Bash on Windows)
 git clone https://github.com/Renozoic-Foundry/forge-public.git
 cd forge-public
-# In Claude Code, from the checkout:
 claude plugin install ./
 ```
 
-The plugin and the install script both deliver the framework surface (slash commands and roles); project scaffolding still happens via Copier in Step 2.
+```powershell
+# PowerShell (Windows)
+git clone https://github.com/Renozoic-Foundry/forge-public.git
+cd forge-public
+claude plugin install ./
+```
 
-> **Warning:** If your IDE is already open, reload the window after running the install script to pick up the new commands.
+The plugin installs into Claude Code's plugin cache — it does not modify your project files.
+Restart or reload Claude Code if it was already open so the new commands register.
 
 ---
 
 ## Step 2 — Bootstrap a project
 
-Create a new project from the FORGE template using Copier:
+Open Claude Code in (or create) your project directory and run:
 
-```bash
-copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project
+```
+/forge init
 ```
 
-Copier will prompt you for project details (name, description, etc.) and then generate the project scaffold. The resulting directory includes:
+`/forge init` detects your situation:
 
-- `CLAUDE.md` — project instructions for your AI assistant
-- `AGENTS.md` — agent role definitions and capabilities
-- `docs/specs/` — where specs live
-- `docs/sessions/` — session logs
-- `docs/process-kit/` — scoring rubric, runbook, checklists
-- `.forge/` — FORGE configuration and module manifests
-- `.claude/commands/` — slash commands (`/implement`, `/close`, `/spec`, etc.)
+- **New/empty directory** — writes the plugin-native project scaffold: spec and session
+  directories, a backlog, a quick reference, and thin `AGENTS.md` / `CLAUDE.md`
+  files with your project's runtime block. No Copier involved.
+- **Existing repo (brownfield)** — adds the same FORGE process files alongside your code without
+  touching existing sources, then offers a bounded `/reconcile` pass to seed the spec corpus
+  from your git history.
+- **Pre-plugin FORGE project** — offers the upgrade path instead.
 
-Copier also creates `.copier-answers.yml` in the project root. This file records your template answers and enables future updates via `copier update`.
+### Choosing a layout: contained vs classic
 
-```bash
-cd my-project
-```
+`/forge init` asks where FORGE's process data (specs, sessions, decisions, backlog) should live:
+
+- **`contained` (default for new scaffolds)** — everything under `.forge/project/`
+  (`.forge/project/specs/`, `.forge/project/sessions/`, `.forge/project/backlog.md`). Keeps
+  FORGE files cleanly segregated from your solution's own `docs/` tree — recommended for
+  multi-developer projects and any repo where `docs/` belongs to the product.
+- **`classic`** — the traditional `docs/specs/`, `docs/sessions/`, `docs/backlog.md` layout.
+  Choose it with `--layout classic` if your team wants process data front-and-center in `docs/`.
+
+Both layouts write `.forge/ownership.yaml`, a machine-readable manifest of FORGE-owned paths,
+so you can always partition framework files from your project's files. Existing projects are
+unaffected until they opt in — switching later is a `/configure` → Layout change plus the
+`/forge retrofit` migration. See `docs/process-kit/layout-guide.md` for the full comparison.
+
+The scaffold is your project's *data*; the framework itself stays in the plugin and updates with
+it. (The classic full-template Copier render remains available as an explicit fallback:
+`/forge init --copier`.)
 
 ---
 
-## Step 3 — Create a spec
+## Step 3 — Run onboarding
 
-Every change in FORGE starts with a spec — a versioned document that captures the objective, scope, acceptance criteria, and test plan. Open your AI IDE in the project directory and run:
+```
+/onboarding
+```
+
+Onboarding is the one-time guided setup — it asks a short series of questions (project identity,
+primary stack, test/lint commands, autonomy level, optional features) and writes the answers into
+your project's configuration. FORGE's other commands read that configuration, so run this before
+anything else. When it completes, run:
+
+```
+/now
+```
+
+`/now` is your home base: it reviews project state and recommends the next action. When in doubt,
+run `/now`.
+
+---
+
+## Step 4 — Create a spec
+
+Every change in FORGE starts with a spec — a versioned document that captures the objective, scope, acceptance criteria, and test plan. Run:
 
 ```
 /spec "add a --version flag to configlint"
@@ -118,6 +146,7 @@ The AI assistant generates a spec file in `docs/specs/` containing:
 - **Requirements** — the specific deliverables
 - **Acceptance criteria** — measurable conditions that define "done"
 - **Test plan** — how to verify the change works
+- **Docs impact** — which documentation surfaces the change touches (checked at close)
 
 The spec is assigned a number (e.g., `001`) and starts in `draft` status. The assistant may ask clarifying questions before finalizing.
 
@@ -125,7 +154,7 @@ The spec is assigned a number (e.g., `001`) and starts in `draft` status. The as
 
 ---
 
-## Step 4 — Implement the spec
+## Step 5 — Implement the spec
 
 With the spec created, run:
 
@@ -139,8 +168,9 @@ The AI assistant reads the spec and begins implementation. During this process, 
 
 1. Reads the spec's requirements and acceptance criteria
 2. Makes the code changes described in the spec
-3. Runs tests defined in the test plan
-4. Produces evidence gate outcomes — structured PASS/FAIL results for each acceptance criterion
+3. Runs targeted tests as it completes each vertical slice (`/test <path>` gives fast feedback)
+4. Runs the full configured test suite and lint at the delivery gate
+5. Produces evidence gate outcomes — structured PASS/FAIL results for each acceptance criterion
 
 Evidence gates are hard stops that require demonstrable proof before a spec can proceed. Each gate produces a verifiable outcome, not just an assertion. If a gate fails, the assistant reports what went wrong and what needs to change.
 
@@ -148,7 +178,7 @@ When implementation completes, the spec transitions to `implemented` status.
 
 ---
 
-## Step 5 — Close the spec
+## Step 6 — Close the spec
 
 After implementation, the operator reviews the results and closes the spec:
 
@@ -159,12 +189,13 @@ After implementation, the operator reviews the results and closes the spec:
 During close, the operator:
 
 1. Reviews the evidence gate results from implementation
-2. Confirms all deliverables match the acceptance criteria
+2. Confirms all deliverables match the acceptance criteria (only the relevant sections of the
+   human-validation runbook apply — not the whole checklist)
 3. Approves the spec transition from `implemented` to `closed`
 
 The close process also captures signals — observations about what worked well, what friction occurred, and what process improvements to consider. These signals feed the Evolve Loop, where FORGE's own process improves over time.
 
-> **Note:** Closing a spec is a human decision. FORGE does not auto-close specs — the operator retains final authority over what ships.
+> **Note:** Closing a spec is a human decision. FORGE does not auto-close specs — the operator retains final authority over what ships. `/close` must be explicitly invoked by you; a session summary calling it "the next step" is not authorization.
 
 ---
 
@@ -182,10 +213,7 @@ This cycle repeats for every change, whether it is a one-line fix or a multi-wee
 
 ## Next steps
 
+- [Implementation and testing guide](implementation-and-testing.md) — lanes, executable acceptance criteria, fast test feedback, live-smoke runs
 - [Concept overview](concept-overview.md) — how FORGE works and why it is structured this way
-- [Command reference](command-reference.md) — every slash command with usage and examples
+- [Command reference](command-reference.md) — every command, generated from the canonical source
 - [FAQ](faq.md) — common questions about adoption, AI compatibility, and process overhead
-
----
-
-*Last verified against Spec 507 on 2026-06-29.* | STALE: re-verify — Spec 535 changed an install/distribution surface (/close 2026-07-13, Spec 509)

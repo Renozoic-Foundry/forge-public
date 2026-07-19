@@ -1,13 +1,18 @@
 # Versioning Policy
 
-FORGE uses [Copier](https://copier.readthedocs.io/) to distribute template updates. This document defines what constitutes a breaking vs non-breaking change and how `/forge stoke` (Copier update) handles each category.
+FORGE v3 is distributed as a **signed Claude Code plugin** — the plugin version
+(`.claude-plugin/plugin.json`) is the framework version. The legacy Copier template scaffold is
+versioned by the same release tags for projects still on that path. This document defines the
+version scheme, what constitutes a breaking change on each surface, and how updates land.
 
 ## Version Scheme
 
-FORGE uses semantic version tags. Released tags to date: **v1.0.0**, **v2.0.0**, **v2.1.0**, with **v3.0.0** as the next MAJOR (the plugin-primary release). Each tag corresponds to a commit on the `main` branch of the upstream source; consumer projects also record the exact synced commit in `.copier-answers.yml` as `_commit`.
+FORGE uses semantic version tags. Released tags to date: **v1.0.0**, **v2.0.0**, **v2.1.0**, and
+**v3.0.0** (released 2026-07-16 — the plugin-primary release). Each tag corresponds to a commit on
+the `main` branch of the upstream source.
 
 The scheme follows:
-- **MAJOR**: Breaking template changes (file renames, removed variables, restructured directories)
+- **MAJOR**: Breaking changes (removed/renamed commands, removed variables, restructured directories, delivery-model changes)
 - **MINOR**: New features, new files, new commands (backward-compatible)
 - **PATCH**: Bug fixes, documentation updates, process-only changes
 
@@ -16,70 +21,65 @@ The scheme follows:
 | v1.0.0 | — | First tagged release of the FORGE template. |
 | v2.0.0 | MAJOR | Template restructure and command-surface changes. |
 | v2.1.0 | MINOR | Additive commands and process refinements. |
-| v3.0.0 | MAJOR (pending cut) | Plugin-primary distribution; Copier `_min_copier_version` pin (Spec 294) and always-on signal capture (Spec 340). See migration note below. |
+| v3.0.0 | MAJOR | **Plugin-primary distribution** (released 2026-07-16): the framework surface ships as a Claude Code plugin; `/forge init` scaffolds projects with no Copier; Copier retained as the explicit legacy path. Also: Copier `_min_copier_version` pin (Spec 294), always-on signal capture (Spec 340). See migration note below. |
+
+## Two versioned surfaces
+
+| Surface | Versioned by | How updates arrive |
+|---|---|---|
+| **Plugin (the framework runtime)** | `plugin.json` `version` — matches the release tag | Reinstall/update the plugin; commands, agents, skills, and hooks all move together |
+| **Project scaffold (your project's data)** | The release that scaffolded it; legacy Copier projects record the exact synced commit in `.copier-answers.yml` (`_commit`) | Plugin-native scaffolds: nothing to re-render — project files are yours; generated docs refresh with the plugin. Legacy Copier projects: `/forge stoke` / `copier update` |
+
+Generated reference documents (quick reference, command reference, configuration reference) carry
+a provenance header naming the plugin version and source content hash, plus a revision-history
+section — you can always tell which framework version produced them.
 
 ## What's Breaking
 
-A **breaking change** requires consumer action during `/forge stoke`:
+A **breaking change** requires consumer action:
 
 | Category | Example | Consumer Impact |
 |----------|---------|-----------------|
-| **File rename/move** | `.forge/commands/foo.md` → `.claude/commands/foo.md` | Old path orphaned; new path created as untracked |
-| **Removed Copier variable** | `use_wsl2` removed from `copier.yml` | `.copier-answers.yml` has stale key; Copier may warn |
-| **Changed directory structure** | `docs/process-kit/` → `.forge/docs/` | Existing files at old path not moved automatically |
-| **Removed file from template** | `template/.forge/commands/deprecated.md` deleted | Consumer's copy persists (Copier doesn't delete) |
-| **Changed Copier variable semantics** | `project_slug` now used differently in paths | Existing projects may have wrong paths after update |
+| **Removed/renamed command** | A standalone command's function is folded into `/close` and the old name retired | Muscle memory + automation referencing the old name breaks |
+| **Delivery-model change** | v3 plugin-primary cutover | One-time migration (see v3.0.0 notes) |
+| **File rename/move** (legacy scaffold) | `.forge/commands/foo.md` → `.claude/commands/foo.md` | Old path orphaned on `copier update` |
+| **Removed Copier variable** (legacy scaffold) | `use_wsl2` removed from `copier.yml` | `.copier-answers.yml` has stale key; Copier may warn |
+| **Changed directory structure** (legacy scaffold) | `docs/process-kit/` → `.forge/docs/` | Existing files at old path not moved automatically |
 
 ## What's Not Breaking
 
-These changes are absorbed by `/forge stoke` automatically:
+These changes are absorbed automatically:
 
 | Category | Example | Why Safe |
 |----------|---------|----------|
-| **New file added** | New command file in `template/.claude/commands/` | Copier creates it; no conflict with existing files |
-| **Content update to existing file** | Updated instructions in `implement.md` | Copier merges via `update-manifest.yaml` classification |
-| **New Copier variable with default** | New `copier.yml` question with sensible default | Default applies; no user action needed |
-| **Process-kit updates** | Revised runbook, scoring rubric, checklist | Merge or overwrite per manifest classification |
-| **Bug fixes in scripts** | Fixed path handling in `forge-install.sh` | Overwrite per manifest classification |
+| **New command/skill/agent** | New command in the plugin payload | Arrives with the plugin update; purely additive |
+| **Content update to an existing command** | Updated instructions in `implement.md` | Plugin update replaces the payload atomically |
+| **Generated-doc refresh** | Quick reference regenerated | Provenance header records the new source version |
+| **Process-kit updates** (legacy scaffold) | Revised runbook, scoring rubric | Merge or overwrite per `update-manifest.yaml` classification |
 
-## How `/forge stoke` Handles Updates
+## How legacy Copier updates are handled
 
-Each template file has a classification in `.forge/update-manifest.yaml`:
-
-| Classification | Behavior | Use For |
-|---------------|----------|---------|
-| `merge` | Copier attempts 3-way merge | Command files, CLAUDE.md, AGENTS.md |
-| `overwrite` | Replace consumer's copy entirely | Scripts, libraries, CI configs |
-| `skip` | Never update (consumer owns it) | Project-specific files |
-| `prompt` | Ask consumer before updating | Files that may have local customizations |
-
-When conflicts occur during merge, `/forge stoke` pauses for manual resolution.
+For projects on the legacy scaffold path, each template file has a classification in
+`.forge/update-manifest.yaml` (`merge` / `overwrite` / `skip` / `prompt`); `/forge stoke` applies
+them and pauses on merge conflicts for manual resolution.
 
 ## Migration Notes
 
 When a breaking change ships, it is documented here with migration steps.
 
-### Format
-
-```
-## vX.Y.Z (or commit hash) — YYYY-MM-DD
-
-**Breaking**: <description>
-
-Migration steps:
-1. <step>
-2. <step>
-```
-
-### v3.0.0 — plugin-primary release
+### v3.0.0 — plugin-primary release (2026-07-16)
 
 **Breaking**:
-- **Copier minimum-version pin** (Spec 294): `copier.yml` now sets `_min_copier_version`. Consumers on an older Copier must upgrade before `/forge stoke` / `copier update` will run.
-- **Always-on signal capture** (Spec 340): signal capture is no longer opt-in. Closing a spec records retro signals automatically.
+- **Plugin-primary distribution**: the framework surface (commands, agents, skills, hooks) is delivered by the installed plugin, not by files rendered into your project. Pre-v3 projects keep working, but framework updates arrive via the plugin from here on.
+- **Copier minimum-version pin** (Spec 294): `copier.yml` sets `_min_copier_version` — legacy-path consumers on an older Copier must upgrade before `copier update` runs.
+- **Always-on signal capture** (Spec 340): closing a spec records retro signals automatically.
 
-**Also in v3.0.0** (additive, non-breaking): the FORGE command/agent/skill/hook payload is now installable as a Claude Code plugin from a checkout (`claude plugin install ./`), alongside the existing Copier project-scaffolding path.
+Migration steps (pre-v3 FORGE project → plugin consumer):
+1. Install the plugin: `claude plugin marketplace add Renozoic-Foundry/forge-public`, then `/plugin install forge@forge`.
+2. Run `/forge init` in the project — it detects the pre-plugin layout and offers the upgrade path (project-local command copies are superseded by the plugin's).
+3. Staying on the legacy Copier path instead? Upgrade Copier (`pip install -U copier`) to satisfy the version pin, then `/forge stoke`.
 
-Migration steps:
-1. Upgrade Copier to satisfy the new `_min_copier_version` pin: `pip install -U copier`.
-2. Run `/forge stoke` (Claude Code) or `copier update` (other IDEs) to pull the v3.0.0 template.
-3. Resolve any merge prompts per your `update-manifest.yaml` classifications.
+**Erratum (2026-07-17)**: the v3.0.0 release notes initially described `/forge-init` greenfield
+scaffolding as Copier-free before the zero-Copier scaffolder had shipped in the public cut; the
+capability landed with the Spec 557 cutover included in v3.0.0's final re-cut. The public
+CHANGELOG carries the corresponding erratum entry.

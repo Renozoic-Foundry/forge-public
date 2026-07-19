@@ -1,10 +1,17 @@
+# Framework: FORGE
 # Spec 001 - Hello World CLI
 
 - Status: closed
 - Change-Lane: `small-change`
-- Priority-Score: BV=5 E=1 R=1 SR=5 -> score=50
+- Priority-Score: <!-- BV=5 E=1 R=1 SR=5 -> (5x3)+((6-1)x2)+((6-1)x2)+(5x1) = 15+10+10+5 = 40 -->
+- Trigger: other — first deliverable; validates the toolchain and FORGE workflow end-to-end
+- Docs-Impact: README.md (run instructions)
 - Owner: operator
+- Author: Claude
+- Reviewer: operator
+- Approver: operator
 - Last updated: 2026-01-15
+- valid-until: 2026-04-15
 
 ## Objective
 
@@ -32,6 +39,10 @@ Out of scope:
 2. `pytest tests/` exits with code 0
 3. README.md documents how to run the program
 
+## Constraints
+
+- Must NOT add CLI argument parsing, packaging, or any structure beyond the single script + test.
+
 ## Test Plan
 
 ```bash
@@ -52,16 +63,15 @@ python -m pytest tests/ -v
 ## Evidence
 
 - Tests/lint/output summary:
-  - `python hello.py` -> "Hello, FORGE!" (PASS)
-  - `pytest tests/ -v` -> 1 passed (PASS)
-  - `ruff check .` -> All checks passed (PASS)
-
-GATE implementation: PASS
-GATE close: PASS
+  - GATE [completeness]: PASS — Objective, Scope, ACs, Test Plan, Change-Lane present at approval
+  - GATE [test-execution]: PASS — `pytest tests/ -v` -> 1 passed; `ruff check .` -> all checks passed
+  - GATE [post-implementation]: PASS — AC1 `python hello.py` -> "Hello, FORGE!" verbatim; AC2 pytest exit 0; AC3 README run instructions present
+  - GATE [docs-impact]: PASS — README.md declared and updated
+  - Human validation at /close: operator ran `python hello.py` and confirmed output; signals captured (none — clean first cycle)
 
 ## Revision Log
 
-- 2026-01-15: Created. Status -> draft.
-- 2026-01-15: Approved by operator. Status -> in-progress.
-- 2026-01-15: Implementation complete. Status -> implemented.
-- 2026-01-15: All gates passed. Status -> closed.
+- 2026-01-15: Created via /spec after /forge init + /onboarding (plugin install -> scaffold -> onboarding -> first spec). Status -> draft.
+- 2026-01-15: Approved inline via /implement. Status -> in-progress.
+- 2026-01-15: Implemented — targeted test run per slice, full suite + lint at the delivery gate. Status -> implemented.
+- 2026-01-15: Closed via /close — operator reviewed evidence, confirmed ACs, signals captured. Status -> closed.

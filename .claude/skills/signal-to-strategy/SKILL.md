@@ -3,6 +3,13 @@ name: signal-to-strategy
 description: "Turn external research signals into scored FORGE advantage hypotheses"
 disable-model-invocation: false
 ---
+
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
 # Framework: FORGE
 # Model-Tier: sonnet
 Run the Signal-to-Strategy Loop: review external AI/software-development research, map it to

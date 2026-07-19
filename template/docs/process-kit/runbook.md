@@ -18,7 +18,7 @@ Process-kit guides that reference **external authorities** — Anthropic docs, S
 
 ### The `Last verified:` marker
 
-Guides that cite external sources MUST carry a freshness marker within the **first 10 lines** of the file:
+Guides that cite external sources carry a freshness marker within the first 10 lines of the file:
 
 ```markdown
 <!-- Last verified: YYYY-MM-DD against <source-url> -->
@@ -56,7 +56,7 @@ Guides that are purely FORGE-internal (process descriptions, role definitions, m
 
 ## Kill Switch Procedure
 
-The kill switch is a mandatory safeguard at all autonomy levels. It immediately halts agent activity, preserves state for review, and reverts to L1 (human-gated) autonomy.
+The kill switch is a safeguard available at every autonomy level — it halts agent activity immediately and preserves state for review (Step 5 covers the autonomy reset).
 
 ### When to Trigger
 
@@ -233,15 +233,15 @@ in the shared sink `.forge/state/score-audit.jsonl`.
 
 - **During `/evolve`** — when reviewing whether to trim redundant roles (CTO/CEfO, COO/CXO) or
   promote under-dispatched ones (CMO, CRO, COO, CResO, CCO). Run
-  `bash .forge/lib/score-audit.sh role-audit` for a per-role table: dispatch count, acceptance %,
+  `bash "${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh" role-audit` for a per-role table: dispatch count, acceptance %,
   avg concerns, stage distribution, most-common concern. This is the empirical input the
-  scratchpad item (e) trim/promote decision needs — replace hunches with logged data.
+  scratchpad item (e) trim/promote decision needs.
 - **After ~20+ logged specs** — acceptance rates become meaningful at N≥20; below that, treat
   the table as directional. Operators who reflexively `skip-all` the `/close` acceptance prompt
   produce dispatch-count data without acceptance signal (a known limitation, Spec 305 VS c-i) —
   dispatch counts and concern frequencies are still useful.
-- **Machine-readable**: `bash .forge/lib/score-audit.sh role-audit --json` for piping into other
-  analysis. (PowerShell parity: `pwsh .forge/lib/score-audit.ps1 role-audit [--json]`.)
+- **Machine-readable**: `bash "${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh" role-audit --json` for piping into other
+  analysis. (PowerShell parity: `pwsh "$(if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { '.' })/.forge/lib/score-audit.ps1" role-audit [--json]`.)
 
 The sink is **gitignored local-only telemetry** — it does not propagate across clones. The
 rollup is read-only and the logging is advisory (the helper always exits 0; it never blocks a

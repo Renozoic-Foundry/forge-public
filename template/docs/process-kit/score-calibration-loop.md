@@ -89,7 +89,7 @@ TC uses `tc_overrun_derived`, a boolean computed by the helper from the same pro
 
 ## Bias report at /evolve F4
 
-The `/evolve` F4 step invokes `bash .forge/lib/score-audit.sh bias-report <mode>` (or the PowerShell parity). The helper:
+The `/evolve` F4 step invokes `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh bias-report <mode>` (or the PowerShell parity). The helper:
 
 1. Reads predicted/observed pairs grouped by `(lane, kind_tag)`.
 2. For each cell, counts same-direction deviations per dimension (E, SR).

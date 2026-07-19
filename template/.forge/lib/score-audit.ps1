@@ -20,6 +20,23 @@
 
 $script:AtomicBound = 4000
 
+# Resolve forge.paths.<key> via runtime_config.py (Spec 564 — no config.ps1 twin exists;
+# python is the Windows-side resolution surface). Falls back to the classic default on
+# any resolution failure. Runs relative to cwd (this helper has no repo-root parameter).
+function Get-ScoreAuditPathsKey {
+    param([string]$Key, [string]$Default)
+    $libDir = $PSScriptRoot
+    $core = Join-Path $libDir 'runtime_config.py'
+    $forgePy = Join-Path $libDir '..\bin\forge-py.cmd'
+    if (-not (Test-Path $forgePy)) { $forgePy = Join-Path $libDir '..\bin\forge-py' }
+    if (-not (Test-Path $core) -or -not (Test-Path $forgePy)) { return $Default }
+    try {
+        $out = & $forgePy $core path $Key --dir . 2>$null
+        if ($LASTEXITCODE -eq 0 -and $out) { return ($out | Select-Object -First 1).Trim() }
+    } catch { }
+    return $Default
+}
+
 function Get-AuditFile {
     if ($env:SCORE_AUDIT_FILE) { return $env:SCORE_AUDIT_FILE }
     return ".forge/state/score-audit.jsonl"
@@ -109,7 +126,8 @@ function Invoke-RecordObserved {
     }
     $spec_id_raw = $rest[0]
     $spec_file = $null
-    $matches = Get-ChildItem -Path "docs/specs/$spec_id_raw-*.md" -ErrorAction SilentlyContinue
+    $specsDir = Get-ScoreAuditPathsKey -Key 'specs' -Default 'docs/specs'
+    $matches = Get-ChildItem -Path "$specsDir/$spec_id_raw-*.md" -ErrorAction SilentlyContinue
     if ($matches) { $spec_file = $matches[0].FullName }
 
     $creation_iso_ts = ""
@@ -146,7 +164,8 @@ function Invoke-RecordObserved {
     }
 
     $session_count = 0
-    $sessFiles = Get-ChildItem -Path "docs/sessions/*.json" -ErrorAction SilentlyContinue
+    $sessionsDir = Get-ScoreAuditPathsKey -Key 'sessions' -Default 'docs/sessions'
+    $sessFiles = Get-ChildItem -Path "$sessionsDir/*.json" -ErrorAction SilentlyContinue
     if ($sessFiles) {
         $session_count = (@($sessFiles | Where-Object { (Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue) -match "`"$spec_id_raw`"" }).Count)
     }

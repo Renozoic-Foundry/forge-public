@@ -20,6 +20,7 @@
 # output; a stamp there is erased by the next generator run — that IS the refresh
 # semantics (regeneration = re-verification). Hand-maintained docs clear the stamp by
 # re-verifying and updating the marker per docs/process-kit/runbook.md § Freshness.
+# forge:path-literal-ok (comment)
 #
 # Consumer projects: the mapped docs are FORGE-repo public docs and do not exist in
 # rendered consumer projects — missing docs are skipped silently (no false noise).

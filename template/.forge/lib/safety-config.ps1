@@ -30,6 +30,23 @@
 $script:SafetyTrivialPatterns = @('wip','ok','later','fix','tbd','n/a','na','none','pass','done')
 
 # Load patterns array from a yaml registry file. Emits one pattern per line.
+# Resolve forge.paths.<key> via runtime_config.py (Spec 564 — no config.ps1 twin exists;
+# python is the Windows-side resolution surface). Falls back to the classic default on
+# any resolution failure.
+function Get-SafetyConfigPathsKey {
+  param([string]$Key, [string]$RepoRoot = '.', [string]$Default)
+  $libDir = $PSScriptRoot
+  $core = Join-Path $libDir 'runtime_config.py'
+  $forgePy = Join-Path $libDir '..\bin\forge-py.cmd'
+  if (-not (Test-Path $forgePy)) { $forgePy = Join-Path $libDir '..\bin\forge-py' }
+  if (-not (Test-Path $core) -or -not (Test-Path $forgePy)) { return $Default }
+  try {
+    $out = & $forgePy $core path $Key --dir $RepoRoot 2>$null
+    if ($LASTEXITCODE -eq 0 -and $out) { return ($out | Select-Object -First 1).Trim() }
+  } catch { }
+  return $Default
+}
+
 function Get-SafetyConfigPatterns {
     param([Parameter(Mandatory)][string]$YamlFile)
     if (-not (Test-Path -LiteralPath $YamlFile -PathType Leaf)) {
@@ -250,6 +267,7 @@ function Test-SafetyConfigSection {
         if ($inSection) { $section.Add($line) | Out-Null }
     }
     if ($section.Count -eq 0) {
+        # forge:path-literal-ok (comment) — fixed pointer to the FORGE repo's own template guide, not a consumer forge.paths key
         [Console]::Error.WriteLine('Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md.')
         return $false
     }
@@ -257,6 +275,7 @@ function Test-SafetyConfigSection {
     $npLine  = $section | Where-Object { $_ -match '^Negative-path test: ' }    | Select-Object -First 1
     $valLine = $section | Where-Object { $_ -match '^Validates' }                | Select-Object -First 1
     if (-not $epLine -or -not $npLine -or -not $valLine) {
+        # forge:path-literal-ok (comment) — fixed pointer to the FORGE repo's own template guide, not a consumer forge.paths key
         [Console]::Error.WriteLine('Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md.')
         return $false
     }
@@ -275,7 +294,8 @@ function Test-SafetyConfigSection {
             return $false
         }
         $refNum = $ref -replace 'Spec ', ''
-        $refFile = Get-ChildItem -Path (Join-Path $RepoRoot 'docs/specs') -Filter "$refNum-*.md" -ErrorAction SilentlyContinue | Select-Object -First 1
+        $specsDir = Get-SafetyConfigPathsKey -Key 'specs' -RepoRoot $RepoRoot -Default 'docs/specs'
+        $refFile = Get-ChildItem -Path (Join-Path $RepoRoot $specsDir) -Filter "$refNum-*.md" -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $refFile) {
             [Console]::Error.WriteLine("Referenced $ref does not exist.")
             return $false

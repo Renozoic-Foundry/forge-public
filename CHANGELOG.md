@@ -9,11 +9,68 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 
 ---
 
+## v3.1.0 — 2026-07-18
+
+**MINOR bump — additive; no migration required.** Multi-developer readiness release: contained
+project layout, cross-IDE runtime consumption, brownfield retrofit, and a self-maintaining
+documentation pipeline. Four Surface-2 MINOR drivers; aggregate MINOR. 14 specs closed +
+2 deprecated-with-successor in the window (baseline v3.0.0, 2026-07-16 → 2026-07-17).
+
+**Audit**: v3.0.0 → v3.1.0 window classified per the three-surface contract (private forge repo,
+live-audit first refresh 2026-07-17; frozen as an ADR at this cut). Surface 1 (`copier.yml`)
+untouched; Surface 3 still N/A.
+
+### New features (MINOR drivers)
+
+| Spec | Surface | Addition |
+|------|---------|----------|
+| **575** | S2 | **Contained project layout** — `/forge init --layout contained\|classic` (contained is the greenfield default): all FORGE process data lives under `.forge/project/`, leaving `docs/` to your product. Ships `.forge/ownership.yaml`, a machine-readable manifest that partitions FORGE files from solution files; `/configure` can switch presets (config-only). Existing projects are untouched until they opt in. |
+| **576** | S2 | **Cross-IDE runtime consumption** — a pinned git checkout at a user-level path serves as the FORGE runtime for non-Claude environments (resolution chain `CLAUDE_PLUGIN_ROOT` → `FORGE_RUNTIME_ROOT` → `~/.forge/runtime-root` pointer → project-local). Scaffolds ship thin `bin/forge` + `bin/forge.ps1` launchers with a new `status` builtin for no-AI developers and an advisory runtime-pin check (`forge.runtime.pin`). |
+| **577** | S2 | **`/forge retrofit`** — four-phase brownfield cleanup (inventory → de-vendor → reorganize → reconcile) for pre-v3 projects: removes vendored framework files the plugin supersedes (pristine-only, snapshot + rollback), moves process data to the contained layout with history preserved, and blocks de-vendoring when no replacement runtime is installed (including a mixed-team gate). Brownfield `/forge init` now ends with a bounded `/reconcile` offer. |
+| **567** | S2 | **`/forge stoke` consumer-defect bundle** — update-path consent prompt, conflict-scanner precision fixes, sentinel gitignore, and update integrity (`_commit` recording + vcs-ref self-pinning). |
+
+### Improvements
+
+- **Self-maintaining reference docs** (Spec 571) — command reference, quick references, and the
+  config reference are now generated from canonical sources with provenance headers and revision
+  history, drift-gated in CI (`forge-parity` Surface 7); consumers receive current copies with
+  every plugin update.
+- **v3 consumer journey rewrite** (Spec 572) — Getting Started, README, FAQ, and VERSIONING now
+  describe the plugin-primary path end-to-end; prerequisites single-sourced; new
+  implementation-and-testing guide.
+- **Conceptual docs reconciliation** (Spec 573) — one canonical Five-Foundations definition,
+  honest roadmap with per-row citations, refreshed example specs.
+- **Link-integrity gate + plugin-root sweep** (Spec 574) — zero broken references enforced across
+  the published and distributed doc sets; distributed process-kit docs are plugin-root-aware.
+- **Process-state path indirection** (Spec 564) — `forge.paths.*` config family with bash/python
+  resolution helpers (the mechanism behind the 575 layout presets).
+- Release/publish hardening (Specs 561, 562, 566, 569; internal tooling).
+
+### Deprecations
+
+- **Spec 565** (consumer-side path-resolution sweep) — superseded by **Spec 575**, which absorbed
+  its scope; findings carried forward.
+- **Spec 568** (stoke update integrity D8/D9) — superseded by **Spec 567**, which delivered the
+  D8/D9 scope.
+
+### Signed payload
+
+The plugin payload is minisign-signed at this cut (trusted comment `tier=forge-public
+version=3.1.0`). See the v3.1.0 GitHub Release notes for pubkey verification.
+
 ## v3.0.0 — 2026-07-16
 
 **MAJOR bump — breaking changes; migration required.** The plugin-primary distribution pivot lands: FORGE now installs as a Claude Code plugin, with Copier reduced to project scaffolding. Three MAJOR drivers; aggregate MAJOR.
 
 > **Re-cut note**: an initial v3.0.0 tag (2026-06-30) was withdrawn the following day — see `## Yanked Tags` below. This 2026-07-16 cut supersedes it and additionally carries the specs closed 2026-07-01 → 2026-07-15; the release window spans the full v2.1.0 → 2026-07-16 range (234 audited specs, fifth audit refresh).
+
+> **Erratum (2026-07-17)**: early v3.0.0 release text (including the withdrawn 2026-06-30 tag)
+> described `/forge init` greenfield scaffolding as Copier-free before the zero-Copier scaffolder
+> had actually shipped — at that point `/forge-init` still invoked Copier. The capability landed
+> with the Spec 557 cutover (closed 2026-07-15) and IS included in this 2026-07-16 final cut:
+> `/forge init`'s default path scaffolds with no Copier invocation, and `--copier` remains the
+> explicit legacy fallback. Historical entries below are unchanged; this note corrects the record
+> for readers of the earlier text. (Documentation audit 2026-07-16; Spec 572.)
 
 **Audit**: `ADR-501-v2.1.0-to-v3.0.0-audit.md` plus the 2026-07-16 fifth-refresh expansion (private forge repo). Base resolved v2.1.0 → v3.0.0 via the Spec 505 Path C resolver (immutable tag graph; fail-loud).
 

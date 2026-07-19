@@ -34,8 +34,22 @@ $ErrorActionPreference = 'Stop'
 # --- Path resolution ---
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
-$ForgeCommandsDir = Join-Path $ProjectDir '.forge' 'commands'
-$ClaudeCommandsDir = Join-Path $ProjectDir '.claude' 'commands'
+# --- Runtime-root resolution chain (Spec 576): plugin -> env -> pointer file -> project ---
+$ForgeRoot = $null
+foreach ($cand in @($env:CLAUDE_PLUGIN_ROOT, $env:FORGE_RUNTIME_ROOT)) {
+    if ($cand -and (Test-Path (Join-Path $cand '.forge' 'commands'))) { $ForgeRoot = $cand; break }
+}
+if (-not $ForgeRoot) {
+    $ptrFile = Join-Path $env:USERPROFILE '.forge' 'runtime-root'
+    if (Test-Path $ptrFile) {
+        $ptr = (Get-Content $ptrFile -TotalCount 1).Trim()
+        if ($ptr -and (Test-Path (Join-Path $ptr '.forge' 'commands'))) { $ForgeRoot = $ptr }
+    }
+}
+if (-not $ForgeRoot) { $ForgeRoot = $ProjectDir }
+
+$ForgeCommandsDir = Join-Path $ForgeRoot '.forge' 'commands'
+$ClaudeCommandsDir = Join-Path $ForgeRoot '.claude' 'commands'
 
 # Resolve commands directory
 if (Test-Path $ForgeCommandsDir) {
@@ -47,6 +61,27 @@ elseif (Test-Path $ClaudeCommandsDir) {
 else {
     Write-Error "No commands directory found. Expected: .forge/commands/ or .claude/commands/"
     exit 3
+}
+
+# --- Runtime-pin advisory (Spec 576 R4/AC8) ---
+# forge.runtime.pin: <tag-or-sha> in the project AGENTS.md — warn on mismatch, never block.
+$agentsMd = Join-Path $ProjectDir 'AGENTS.md'
+if ((Test-Path $agentsMd) -and ($ForgeRoot -ne $ProjectDir)) {
+    # YAML leaf only (indented pin: with a real value) — never prose mentions/placeholders.
+    $pinLine = Get-Content $agentsMd | Where-Object { $_ -match '^\s+pin:\s*[^<\s]' } | Select-Object -First 1
+    if ($pinLine -and $pinLine -match '^\s+pin:\s*(\S+)') {
+        $pin = $Matches[1]
+        $head = ''
+        $pinSha = ''
+        try { $head = (git -C $ForgeRoot rev-parse HEAD 2>$null) } catch {}
+        try { $pinSha = (git -C $ForgeRoot rev-parse $pin 2>$null) } catch {}
+        if ($head -and $pinSha -and ($head -ne $pinSha)) {
+            [Console]::Error.WriteLine("WARN: runtime checkout HEAD ($($head.Substring(0,8))) != project pin '$pin' ($($pinSha.Substring(0,8))) — advisory (Spec 576); update the checkout or the pin.")
+        }
+        elseif ($head -and -not $pinSha) {
+            [Console]::Error.WriteLine("WARN: project pins forge.runtime.pin='$pin' but the runtime checkout cannot resolve it — advisory (Spec 576).")
+        }
+    }
 }
 
 # --- Version ---
@@ -271,6 +306,35 @@ if ($Command -eq '--version' -or $Command -eq '-v') {
 switch ($Command) {
     'list' {
         Show-CommandList
+        exit 0
+    }
+    'status' {
+        # Spec 576 AC5 — non-AI developer status: project identity + runtime root + spec counts.
+        $localTag = if ($ForgeRoot -eq $ProjectDir) { ' (project-local)' } else { '' }
+        Write-Host "FORGE status — project: $(Split-Path -Leaf $ProjectDir)"
+        Write-Host "  runtime root: $ForgeRoot$localTag"
+        # Resolve the specs dir via runtime_config when available (Spec 564 paths family).
+        $specsDir = 'docs/specs'  # forge:path-literal-ok (fallback when runtime lacks the helper)
+        $forgePy = Join-Path $ForgeRoot '.forge' 'bin' 'forge-py.cmd'
+        $rtCfg = Join-Path $ForgeRoot '.forge' 'lib' 'runtime_config.py'
+        if ((Test-Path $forgePy) -and (Test-Path $rtCfg)) {
+            try {
+                $resolved = (& $forgePy $rtCfg path specs 2>$null)
+                if ($LASTEXITCODE -eq 0 -and $resolved) { $specsDir = "$resolved".Trim() }
+            } catch {}
+        }
+        $specsPath = Join-Path $ProjectDir $specsDir
+        if (Test-Path $specsPath) {
+            foreach ($st in @('draft', 'in-progress', 'implemented', 'closed')) {
+                $n = @(Get-ChildItem -Path $specsPath -Filter '*.md' -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -match '^[0-9]' } |
+                    Where-Object { Select-String -Path $_.FullName -Pattern "^- Status: $st\b" -Quiet }).Count
+                Write-Host "  specs ${st}: $n"
+            }
+        }
+        else {
+            Write-Host "  specs: none yet ($specsDir absent) — create the first with bin/forge spec"
+        }
         exit 0
     }
     'help' {

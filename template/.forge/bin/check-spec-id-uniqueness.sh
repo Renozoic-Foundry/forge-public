@@ -17,7 +17,17 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-SPECS_DIR="$REPO_ROOT/docs/specs"
+
+# Spec 575 — resolve process-state paths via forge.paths (classic defaults when unset)
+SPECS_REL="docs/specs"
+_cfg="${SCRIPT_DIR}/../lib/config.sh"
+if [ -f "$_cfg" ]; then
+  # shellcheck source=/dev/null
+  . "$_cfg"
+  PROJECT_DIR="$REPO_ROOT" forge_config_load "$REPO_ROOT/AGENTS.md" >/dev/null 2>&1 || true
+  __resolved="$(PROJECT_DIR="$REPO_ROOT" forge_path specs 2>/dev/null)" && SPECS_REL="$__resolved"
+fi
+SPECS_DIR="$REPO_ROOT/$SPECS_REL"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -86,7 +96,7 @@ for path, fn_id, hdr_id in sorted(mismatches):
 
 if fail:
     print("check-spec-id-uniqueness: FAIL — repair convention: the not-yet-merged "
-          "side re-suffixes to NNN[a-z] (see docs/process-kit/parallelism-guide.md)")
+          "side re-suffixes to NNN[a-z] (see docs/process-kit/parallelism-guide.md)")  # forge:path-literal-ok (comment)
     raise SystemExit(1)
 print(f"check-spec-id-uniqueness: OK — {len(by_id)} unique spec IDs")
 PY

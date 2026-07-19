@@ -9,7 +9,8 @@ Validates the minimal `forge.autopilot` envelope declared in AGENTS.md:
 
 Checks (always-strict — no advisory mode):
   * `scheduled.enabled: true` requires a matching consent entry in
-    docs/sessions/config-change-audit.md — matching means the entry names
+    docs/sessions/config-change-audit.md (forge:path-literal-ok comment; actual
+    default resolved via runtime_config below) — matching means the entry names
     `forge.autopilot.scheduled` AND carries `Outcome: applied`.
     HONESTY (tier-qualified, CISO 2026-07-07): this audit-entry check is a
     SPEED BUMP against accidental self-modification, NOT a security boundary —
@@ -25,6 +26,7 @@ Exit codes: 0 = valid (or block absent — consumer-safe silence);
 
 Usage: forge-py .forge/lib/autopilot_envelope.py [--agents-md AGENTS.md]
                                                  [--audit docs/sessions/config-change-audit.md]
+                                                 # forge:path-literal-ok (comment) — usage example; real default resolved via runtime_config
 """
 
 from __future__ import annotations
@@ -33,6 +35,27 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+_LIB_DIR = Path(__file__).resolve().parent
+if str(_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(_LIB_DIR))
+try:
+    from runtime_config import resolve_path as _rc_resolve_path  # Spec 564 helper
+except ImportError:
+    _rc_resolve_path = None
+
+
+def _default_audit_path() -> str:
+    """Resolve forge.paths.sessions via runtime_config; fall back to the classic default."""
+    sessions = "docs/sessions"
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(Path("."), "sessions")
+            if not error and value:
+                sessions = value
+        except Exception:
+            pass
+    return f"{sessions}/config-change-audit.md"
 
 if sys.version_info < (3, 10):
     sys.stderr.write("error: Python 3.10+ required\n")
@@ -90,7 +113,7 @@ def audit_has_consent(audit_path: Path) -> bool:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Validate the forge.autopilot envelope")
     p.add_argument("--agents-md", default="AGENTS.md")
-    p.add_argument("--audit", default="docs/sessions/config-change-audit.md")
+    p.add_argument("--audit", default=_default_audit_path())
     args = p.parse_args(argv)
 
     agents_path = Path(args.agents_md)
@@ -150,9 +173,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if enabled:
         if not audit_has_consent(Path(args.audit)):
-            print("check-autopilot-envelope: FAIL — scheduled.enabled is true but "
-                  "docs/sessions/config-change-audit.md has no entry naming "
-                  "forge.autopilot.scheduled with Outcome: applied. Run /config-change "
+            print(f"check-autopilot-envelope: FAIL — scheduled.enabled is true but "
+                  f"{args.audit} has no entry naming "
+                  f"forge.autopilot.scheduled with Outcome: applied. Run /config-change "
                   f"first (3-step runbook: authority-constitution-guide.md). {SPEED_BUMP}",
                   file=sys.stderr)
             return 3

@@ -7,7 +7,7 @@
 # convention as Spec 093/540 browser evidence:
 #   tmp/evidence/SPEC-NNN-browser-YYYYMMDD/manifest.json
 # There is exactly one manifest family — this fixture does not invent a second
-# convention. See docs/process-kit/human-validation-runbook.md section H.
+# convention. See docs/process-kit/human-validation-runbook.md section H.  # forge:path-literal-ok (comment)
 #
 # Usage:
 #   forge-visual-verify.sh <spec-number> <artifact-path> [options]

@@ -15,6 +15,7 @@
 # it is append-by-convention, NOT tamper-evident, and MUST NOT be promoted to an
 # authority for any "approved/verified" claim without a hash-chain/signing scheme.
 # See docs/process-kit/telemetry-capture-guide.md.
+# forge:path-literal-ok (comment)
 #
 # Ledger path: $FORGE_SECURITY_GATE_FILE (default: .forge/state/security-gate.jsonl).
 # This helper is advisory; failures emit WARN to stderr but always exit 0.

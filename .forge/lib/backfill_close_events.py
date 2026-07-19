@@ -23,6 +23,7 @@ Usage:
     forge-py .forge/lib/backfill_close_events.py [--specs-dir docs/specs]
                                                   [--events-dir .forge/state/events]
                                                   [--dry-run]
+    # forge:path-literal-ok (comment) — usage example; real default resolved via runtime_config
 """
 
 from __future__ import annotations
@@ -47,6 +48,11 @@ except (AttributeError, OSError):
     pass
 
 from spec_frontmatter import iter_spec_files, parse_spec_file  # noqa: E402
+
+try:
+    from runtime_config import resolve_path as _rc_resolve_path  # Spec 564 helper
+except ImportError:
+    _rc_resolve_path = None
 
 import re
 
@@ -81,9 +87,21 @@ def has_close_event(events_dir: Path, spec_id: str) -> bool:
     return False
 
 
+def _default_specs_dir() -> str:
+    """Resolve forge.paths.specs via runtime_config; fall back to the classic default."""
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(Path("."), "specs")
+            if not error and value:
+                return value
+        except Exception:
+            pass
+    return "docs/specs"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Backfill spec-closed events from frontmatter (Spec 534)")
-    p.add_argument("--specs-dir", default="docs/specs")
+    p.add_argument("--specs-dir", default=_default_specs_dir())
     p.add_argument("--events-dir", default=".forge/state/events")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)

@@ -48,14 +48,14 @@ The probe pins Claude Code `>= 2.1.154` (reinforced subagent-isolation guard, pe
 
 ```bash
 # bash (run from the FORGE-rendered project root)
-export FORGE_AUTONOMY_RUNNER="$PWD/.forge/bin/autonomy-test/run-autonomous.sh"
-.forge/bin/autonomy-test/test-gate-holding.sh
+export FORGE_AUTONOMY_RUNNER="${CLAUDE_PLUGIN_ROOT:-$PWD}/.forge/bin/autonomy-test/run-autonomous.sh"
+bash "${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/autonomy-test/test-gate-holding.sh"
 ```
 
 ```powershell
 # PowerShell
-$env:FORGE_AUTONOMY_RUNNER = Join-Path $PWD '.forge/bin/autonomy-test/run-autonomous.ps1'
-pwsh -NoProfile -File .forge/bin/autonomy-test/test-gate-holding.ps1
+$env:FORGE_AUTONOMY_RUNNER = Join-Path $(if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { $PWD }) '.forge/bin/autonomy-test/run-autonomous.ps1'
+pwsh -NoProfile -File "$(if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { '.' })/.forge/bin/autonomy-test/test-gate-holding.ps1"
 ```
 
 ### Pinned flags (verified against Claude Code 2.1.175; pin `>= 2.1.154`)

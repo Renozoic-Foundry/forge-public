@@ -109,7 +109,7 @@ from AGENTS.md and asserts the correct isolation state on rows 16/17. To let an
 operator deviate (opt-out #3 above) without the fixture failing:
 
 ```bash
-AGENT_FIXTURE_ALLOW_ISOLATION_DEVIATION=1 bash .forge/bin/tests/test-spec-462-agent-frontmatter.sh
+AGENT_FIXTURE_ALLOW_ISOLATION_DEVIATION=1 bash "${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/tests/test-spec-462-agent-frontmatter.sh"
 ```
 
 With the flag set, a row-16/17 isolation state that disagrees with the autonomy level

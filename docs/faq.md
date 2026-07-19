@@ -8,11 +8,15 @@ No. FORGE works with any AI assistant that reads AGENTS.md and follows markdown-
 
 ## Does this work with Cursor / Copilot / Windsurf / Cline?
 
-Yes, with varying integration depth. The core workflow — specs, evidence gates, session logs — is IDE-independent and lives in plain markdown files. AI assistants that read project markdown files can follow FORGE's process. You lose the native slash-command experience, but the methodology itself is portable.
+Yes, with varying integration depth. The core workflow — specs, evidence gates, session logs — is IDE-independent and lives in plain markdown files. AI assistants that read project markdown files can follow FORGE's process. You lose the native slash-command experience, but the methodology itself is portable. Since Spec 576, non-Claude teammates don't need to vendor the framework either: a user-level pinned checkout plus the `~/.forge/runtime-root` pointer gives them the full command surface through `bin/forge`, with the same clean repo a plugin consumer has.
 
 ## How do I install FORGE in Claude Code?
 
-Two paths. The install script (`install.sh` / `install.ps1`) plants the bootstrap command, or — for Claude Code specifically — you can install the FORGE command, agent, skill, and hook payload directly from a `forge-public` checkout with `claude plugin install ./`. Either way, you still scaffold an individual project with Copier (`/forge-bootstrap` or `copier copy`). The plugin delivers the framework surface; Copier lays down the per-project spec/session/process-kit structure.
+Install the plugin — it is the runtime and the primary path: `claude plugin marketplace add Renozoic-Foundry/forge-public`, then `/plugin install forge@forge` (or `claude plugin install ./` from a checkout). Then scaffold your project with `/forge init` — the plugin-native scaffolder writes the project structure with no Copier involved. The legacy install script + Copier render remain available for other IDEs and as the explicit `/forge init --copier` fallback.
+
+## How do I uninstall FORGE?
+
+Two independent pieces: remove the plugin from Claude Code (`/plugin` → uninstall forge, or `claude plugin uninstall forge`), and — if you want to strip the process files from a project — delete the `.forge/` and FORGE-owned `docs/` directories. Your code has no FORGE runtime dependency, so nothing else changes (see "What happens if I outgrow FORGE" below).
 
 ## What does FORGE cost per session?
 
@@ -28,15 +32,15 @@ CLAUDE.md tells the AI how to behave. FORGE gives it a structured delivery proce
 
 ## Can I use FORGE on an existing project (brownfield)?
 
-Yes. Run the install script or `copier copy` in an existing repo. FORGE adds its process files (`.forge/`, `docs/`, `CLAUDE.md`, `AGENTS.md`) alongside your code without modifying existing source files. The onboarding flow detects brownfield projects and adapts accordingly.
+Yes. Run `/forge init` in the existing repo — it detects brownfield projects and adds FORGE's process files (`docs/specs/`, `docs/sessions/`, `AGENTS.md`, `CLAUDE.md`) alongside your code without modifying existing source files. Then `/onboarding` adapts the configuration to your stack. Work already committed outside FORGE can be reconciled into the spec corpus later with `/reconcile`.
 
 ## Does FORGE work without an AI assistant at all?
 
 The spec format, evidence gates, and session logs work as a manual development process. Several methodologies FORGE synthesizes — Stage-Gate, KCS, Architecture Decision Records — predate AI entirely. The AI assistant accelerates the workflow but is not a runtime dependency.
 
-## How do I keep FORGE updated when the template changes?
+## How do I keep FORGE updated?
 
-Run `/forge stoke` (or `copier update` directly). Copier tracks the template version in `.copier-answers.yml` and merges upstream changes into your project, presenting conflicts for manual resolution. Your customizations are preserved through Copier's standard merge strategy.
+Update the plugin — framework behavior (commands, agents, skills, hooks) always comes from the installed plugin version, so re-running the marketplace install (or `claude plugin install ./` from a refreshed checkout) updates everything at once. Projects scaffolded by the legacy Copier path additionally use `/forge stoke` (or `copier update`) to merge scaffold-file changes, with conflicts presented for manual resolution.
 
 ## Is the compliance engine (Lane B) production-ready?
 
@@ -54,7 +58,7 @@ Run it before you stop working — that is the short answer. Throughout your ses
 
 `/evolve` is the Evolve Loop — the second half of FORGE's KCS v6 double-loop structure. While the Solve Loop (spec, implement, close) delivers individual changes, the Evolve Loop reviews accumulated signals and proposes improvements to the process itself: priority re-scoring, scoring formula calibration, watchlist graduation, workflow adjustments.
 
-It runs at two cadences. A **fast-path** check (F1 + F4) runs inline after every `/close`, reviewing fresh signals and updating priorities. A **full review** (F1-F4) triggers every 5 closed specs or 30 days, whichever comes first. The `/now` command also monitors five signal-based thresholds that can recommend an early evolve review. You do not need to remember to run it — FORGE tells you when it is time.
+It is admitted by **signals, not a calendar**. A fast-path check (F1 + F4) runs inline after every `/close`, reviewing fresh signals and updating priorities. The full review (F1–F4) is recommended when accumulated signal counts cross configured thresholds — unreviewed signals, open evolve-tagged scratchpad items, error autopsies, deferred scope items, or spec velocity (the `forge.evolve.signal_thresholds` block in AGENTS.md). A 30-day fallback exists only as a soft nudge, never a hard trigger. `/now` watches the thresholds and tells you when a review is warranted — you do not need to remember to run it.
 
 ## Do I need to run /spec manually?
 

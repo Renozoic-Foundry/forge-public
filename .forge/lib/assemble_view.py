@@ -11,6 +11,7 @@ round 1).
 Usage:
     python3 .forge/lib/assemble_view.py <curated-parent-path>
 
+# forge:path-literal-ok (comment) — illustrative examples in the module docstring
 Examples:
     python3 .forge/lib/assemble_view.py docs/backlog.md
     python3 .forge/lib/assemble_view.py docs/specs/CHANGELOG.md
@@ -36,6 +37,27 @@ if sys.version_info < (3, 10):
     sys.stderr.write(f"error: Python 3.10+ required (found {sys.version_info.major}.{sys.version_info.minor})\n")
     sys.exit(1)
 from pathlib import Path
+
+_LIB_DIR = Path(__file__).resolve().parent
+if str(_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(_LIB_DIR))
+try:
+    from runtime_config import resolve_path as _rc_resolve_path  # Spec 564 helper
+except ImportError:
+    _rc_resolve_path = None
+
+
+def _paths_key(root: Path, key: str, default: str) -> str:
+    """Resolve a forge.paths.<key> value via runtime_config, falling back to default."""
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(root, key)
+            if not error and value:
+                return value
+        except Exception:
+            pass
+    return default
+
 
 # Marker regex: line-anchored, single-line, whitespace-tolerant inside the comment.
 # Captures the relative path. The marker MUST occupy the entire line content
@@ -76,7 +98,7 @@ def _is_stale(parent_path: Path, generated_paths: list[Path]) -> bool:
     else:
         return False
 
-    specs_dir = root / "docs" / "specs"
+    specs_dir = root / _paths_key(root, "specs", "docs/specs")
     events_dir = root / ".forge" / "state" / "events"
 
     if not generated_paths:

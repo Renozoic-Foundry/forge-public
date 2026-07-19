@@ -2,6 +2,9 @@
 
 > Spec 480. Establishes one canonical source for FORGE's behavioral payload, with every other surface generated from it and a parity gate that fails on drift.
 
+<!-- forge:maintainer-detail:start -->
+> Audience: framework maintainers.
+
 ## Canonical direction — LOCKED
 
 The **repo-root tree is the single canonical source**. Everything else is a generated downstream artifact.
@@ -45,6 +48,7 @@ Two gates run the same `forge-parity.sh --check`:
 
 1. **CI**: `.github/workflows/template-parity.yml` fails the build on any drift between canonical and a generated surface.
 2. **`/close` Step 2d^2**: the single-source parity gate runs `forge-parity.sh --check` before a spec closes, offering a `regen` action that runs `forge-parity.sh` to restore parity.
+<!-- forge:maintainer-detail:end -->
 
 ## Plugin-root-relative helper resolution in commands/skills (Spec 538)
 
@@ -101,8 +105,12 @@ checks for existence. It does **not** apply to:
 invocation. See `docs/process-kit/plugin-architecture.md` for the companion
 `resolve-root.{sh,ps1}` contract used inside `.sh`/`.ps1` scripts themselves.
 
+<!-- forge:maintainer-detail:start -->
+> Audience: framework maintainers.
+
 ## Out of scope (separate follow-up specs)
 
 - **Merging** `forge-sync-commands.sh` and `forge-sync-cross-level.sh` into one script — deferred (their accreted edge-case handling makes a merge high-risk).
 - The plugin manifest / `claude plugin install` — Spec 463 (NC-1b).
 - Inverting the canonical direction to make `.claude/` the source — rejected (fights the existing topology).
+<!-- forge:maintainer-detail:end -->

@@ -128,10 +128,10 @@ A: Every `/evolve` loop is a natural cadence — pattern analysis already review
 
 ## Cross-references
 
-- [Spec 327](../specs/327-...) — body lint gate (Step 7c)
-- [Spec 330](../specs/330-...) — prose↔YAML drift detector (Step 7d)
-- [Spec 332](../specs/332-...) — advisory→strict flip plan
-- [Spec 326](../specs/326-...) — body-violation triage outcomes
+- Spec 327 — body lint gate (Step 7c)
+- Spec 330 — prose↔YAML drift detector (Step 7d)
+- Spec 332 — advisory→strict flip plan
+- Spec 326 — body-violation triage outcomes
 - [advisory-to-strict-flip-plan.md](advisory-to-strict-flip-plan.md) — the flip-plan companion doc
 - [scripts/agents-md-action-aliases.yaml](../../scripts/agents-md-action-aliases.yaml) — the alias map
 - AGENTS.md § *Authorization-required commands* — the prose authority

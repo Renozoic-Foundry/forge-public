@@ -18,6 +18,7 @@
 # will FAIL verification against this builder (the file set differs) and must be RE-SIGNED.
 # That failure is by design, not corruption. See docs/process-kit/sync-runbook.md
 # § Signed-manifest migration (Spec 508).
+# forge:path-literal-ok (comment)
 set -uo pipefail
 
 # Payload roots relative to the asset root (the plugin payload set per Spec 487).

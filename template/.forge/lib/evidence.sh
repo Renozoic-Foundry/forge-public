@@ -164,7 +164,7 @@ forge_evidence_diff_summary() {
 }
 
 # --- Generate AC checklist artifact ---
-# Usage: forge_evidence_ac_checklist "docs/specs/031-evidence-capture.md"
+# Usage: forge_evidence_ac_checklist "docs/specs/031-evidence-capture.md"  # forge:path-literal-ok (comment/fixture)
 # Parses the ## Acceptance Criteria section and produces a pass/fail checklist.
 forge_evidence_ac_checklist() {
   local spec_file="${1:?forge_evidence_ac_checklist requires a spec file path}"

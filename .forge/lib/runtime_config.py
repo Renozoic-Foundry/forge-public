@@ -23,8 +23,17 @@ Requests for them exit 4.
 Usage:
     forge-py .forge/lib/runtime_config.py get <key> [--dir DIR]
     forge-py .forge/lib/runtime_config.py all [--dir DIR]
+    forge-py .forge/lib/runtime_config.py path <key> [--dir DIR]
 
-Exit codes: 0 ok; 3 unknown key; 4 consent-gated key refused.
+The `path` action (Spec 564) resolves forge.paths.{specs,sessions,decisions,research,
+process_kit,backlog} from the nested `forge: paths:` subsection of the AGENTS.md
+`## Runtime Configuration` fenced YAML — a NEW nested-block parser, distinct from the
+flat `forge.project:` parser above (DA 2026-07-16). This file is the SINGLE python-side
+definition point for process-state path defaults (Req 2); bash twin: config.sh
+forge_path(). Validation (CISO consensus findings): rejects backslashes, absolute /
+drive-letter / UNC paths, `..` segments, and symlink escapes from the repo root.
+
+Exit codes: 0 ok; 3 unknown key; 4 consent-gated key refused; 5 invalid path value.
 Stdlib only (ADR-359).
 """
 import argparse
@@ -49,6 +58,89 @@ CONSENT_GATED = (
     "include_advanced_autonomy",
     "include_two_stage_review",
 )
+
+# ---- Process-state path indirection (Spec 564) ----
+PATH_DEFAULTS = {
+    "specs": "docs/specs",
+    "sessions": "docs/sessions",
+    "decisions": "docs/decisions",
+    "research": "docs/research",
+    "process_kit": "docs/process-kit",
+    "backlog": "docs/backlog.md",
+}
+
+
+def _parse_runtime_paths(agents_md: Path):
+    """Extract forge: -> paths: keys from the ## Runtime Configuration fenced YAML.
+
+    Returns {key: value} or {} on absence/malformed (defaults then apply). This is a
+    deliberate minimal line-walker matching config.sh's forge_config_load semantics
+    (section / one-level subsection / leaf), not a general YAML parser.
+    """
+    try:
+        text = agents_md.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    m = re.search(r"^## Runtime Configuration\b.*?```yaml\n(.*?)\n```", text, re.M | re.S)
+    if not m:
+        return {}
+    out = {}
+    section = subsection = None
+    for line in m.group(1).splitlines():
+        if re.match(r"^\s*#", line) or not line.strip():
+            continue
+        top = re.match(r"^([a-z_]+):\s*(.*?)\s*$", line)
+        two = re.match(r"^  ([a-z_]+):\s*$", line)
+        leaf = re.match(r"^\s+([a-z_]+):\s*(.*?)\s*$", line)
+        if top:
+            section, subsection = top.group(1), None
+            continue
+        if two:
+            subsection = two.group(1)
+            continue
+        if leaf and section == "forge" and subsection == "paths":
+            value = leaf.group(2).split("#", 1)[0].strip().strip("\"'")
+            if value:
+                out[leaf.group(1)] = value
+    return out
+
+
+def _validate_path_value(key: str, value: str, project_dir: Path):
+    """Return an error string (naming the key) for an invalid forge.paths value, else None."""
+    err = f"runtime_config: invalid forge.paths.{key} value '{value}':"
+    if not value:
+        return f"{err} empty value"
+    if "\\" in value:
+        return f"{err} backslash in path — values are repo-relative forward-slash paths"
+    if value.startswith("/"):
+        return f"{err} absolute or UNC path rejected (must be repo-relative)"
+    if re.match(r"^[A-Za-z]:", value):
+        return f"{err} drive-letter path rejected (must be repo-relative)"
+    if ".." in value.split("/"):
+        return f"{err} '..' segment rejected"
+    try:
+        root = project_dir.resolve()
+        canon = (root / value).resolve()
+    except OSError as exc:
+        return f"{err} unresolvable ({exc})"
+    if root != canon and root not in canon.parents:
+        return f"{err} resolves outside the repo root (symlink escape) — '{canon}' not under '{root}'"
+    return None
+
+
+def resolve_path(project_dir: Path, key: str):
+    """Resolve one forge.paths key. Returns (value, None) or (None, error-string)."""
+    if key not in PATH_DEFAULTS:
+        return None, (
+            f"runtime_config: unknown path key '{key}' "
+            f"(known: {', '.join(PATH_DEFAULTS)})"
+        )
+    configured = _parse_runtime_paths(project_dir / "AGENTS.md")
+    value = configured.get(key) or PATH_DEFAULTS[key]
+    error = _validate_path_value(key, value, project_dir)
+    if error:
+        return None, error
+    return value, None
 
 
 def _parse_project_block(agents_md: Path):
@@ -105,10 +197,18 @@ def resolve_all(project_dir: Path) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="FORGE non-security runtime-config resolver")
-    ap.add_argument("action", choices=["get", "all"])
+    ap.add_argument("action", choices=["get", "all", "path"])
     ap.add_argument("key", nargs="?")
     ap.add_argument("--dir", default=".")
     args = ap.parse_args()
+
+    if args.action == "path":
+        value, error = resolve_path(Path(args.dir), args.key or "")
+        if error:
+            print(error, file=sys.stderr)
+            return 3 if error.startswith("runtime_config: unknown path key") else 5
+        print(value)
+        return 0
 
     if args.action == "get":
         if args.key in CONSENT_GATED:

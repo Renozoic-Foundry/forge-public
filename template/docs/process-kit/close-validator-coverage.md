@@ -53,6 +53,7 @@ This list is the single canonical source. It is referenced by the guard logic in
 
 ---
 
+<!-- forge:maintainer-detail:start -->
 ## Lane-gate sentinel (Reqs 9–11) — single canonical source
 
 This is the **canonical text** of the lane-gate sentinel region. The block below is byte-identical to the fenced `# >>> spec-344 lane-gate` / `# <<< spec-344 lane-gate` regions inside:
@@ -106,9 +107,11 @@ See: docs/process-kit/close-validator-coverage.md § Lane-gate sentinel — cano
 4. Update `docs/compliance/profile.yaml` schema (Spec 035) if the recognized-set definition changed.
 
 **Future hardening**: Spec 367 (CI parity gate for spec-integrity sentinel regions) promotes this to an automated CI assertion — token-set coherence between `profile.yaml` and the canonical recognized-set across the 12 sentinel regions, plus automated md5sum byte-parity. Spec 367 must follow Spec 344 /implement.
+<!-- forge:maintainer-detail:end -->
 
 ---
 
+<!-- forge:maintainer-detail:start -->
 ## Spec 367 CI parity gate
 
 `scripts/validate-spec-integrity-sentinels.sh` (and PowerShell sibling
@@ -174,6 +177,7 @@ includes one of:
 
 Other commits skip the validator (no overhead). When the validator does fire
 it runs both checks and exits non-zero on any failure.
+<!-- forge:maintainer-detail:end -->
 
 ### Recovery
 

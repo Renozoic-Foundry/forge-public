@@ -22,7 +22,7 @@ FORGE is structured so that the workflow exists to produce evidence — specs, g
 - [Five Foundations](#five-foundations--why-these-five-and-how-they-interlock) — the methodology's roots
 - [Autonomy Levels](#autonomy-levels--trust-as-a-gradient) — graduated delegation
 - [Lean Over Ceremony](#lean-over-ceremony--why-forge-audits-before-adding-gates) — process minimalism
-- [Template Is the Product](#template-is-the-product--why-framework-improvements-must-ship) — shipping discipline
+- [The Plugin Is the Product](#the-plugin-is-the-product--why-framework-improvements-must-ship) — shipping discipline
 
 ---
 
@@ -85,6 +85,13 @@ Rahul Garg's writing on [context anchoring](https://martinfowler.com/articles/re
 
 ## Five Foundations — Why These Five and How They Interlock
 
+> **This section is the canonical definition of FORGE's five foundations** (Spec 573). Other
+> documents (README, Concept Overview) reference it rather than restating the list, so the
+> definitions cannot diverge again. Additional acknowledged influences — Architecture Decision
+> Records (Nygard) and Context Anchoring (Garg) — are credited in
+> [ACKNOWLEDGEMENTS.md](../ACKNOWLEDGEMENTS.md) and woven through the sections above; they
+> inform the five rather than extending the list.
+
 **What this unlocks for you:** Each foundation addresses a specific failure mode of AI-assisted development. Together, they form a closed system — removing any one creates a gap that the others cannot compensate for.
 
 | Foundation | Failure mode it addresses | What breaks without it |
@@ -93,11 +100,11 @@ Rahul Garg's writing on [context anchoring](https://martinfowler.com/articles/re
 | **Stage-Gate (Cooper)** | Unverified transitions — AI claims completion without proof | Bugs ship, specs close without evidence, quality erodes |
 | **AAIF (Linux Foundation)** | Unbounded autonomy — AI agents act without guardrails | Out-of-scope changes, unauthorized operations, unpredictable behavior |
 | **Spec Kit** | Context loss — decisions evaporate between sessions | Repeated work, contradictory decisions, inability to onboard new team members |
-| **Copier** | Distribution decay — framework improvements never reach downstream projects | Consumer projects diverge from upstream, bug fixes don't propagate |
+| **Plugin-primary distribution** | Distribution decay — framework improvements never reach downstream projects | Consumer projects diverge from upstream, bug fixes don't propagate |
 
-**KCS v6** provides the learning architecture (Solve/Evolve loops). **Stage-Gate** provides the evidence checkpoints within each loop. **AAIF** defines what the AI agent is allowed to do at each checkpoint. **Spec Kit** ensures every decision is captured in a persistent, reviewable artifact. **Copier** ensures improvements propagate to every project using the framework.
+**KCS v6** provides the learning architecture (Solve/Evolve loops). **Stage-Gate** provides the evidence checkpoints within each loop. **AAIF** defines what the AI agent is allowed to do at each checkpoint. **Spec Kit** ensures every decision is captured in a persistent, reviewable artifact. **Plugin-primary distribution** ensures improvements propagate to every project using the framework — a plugin update delivers the entire command/agent/skill/hook surface at once (Copier remains the legacy cross-IDE scaffolding path).
 
-The interlock is deliberate: KCS v6 discovers that a gate is too heavy → an Evolve Loop spec proposes removing it → the spec goes through Stage-Gate evidence checks → AAIF ensures the agent has permission to modify the gate → Copier distributes the change to all downstream projects. Each foundation constrains and enables the others.
+The interlock is deliberate: KCS v6 discovers that a gate is too heavy → an Evolve Loop spec proposes removing it → the spec goes through Stage-Gate evidence checks → AAIF ensures the agent has permission to modify the gate → the next plugin release distributes the change to every consumer. Each foundation constrains and enables the others.
 
 ---
 
@@ -137,13 +144,13 @@ FORGE's architectural principle is explicit: *prefer removing friction over addi
 
 ---
 
-## Template Is the Product — Why Framework Improvements Must Ship
+## The Plugin Is the Product — Why Framework Improvements Must Ship
 
-**What this unlocks for you:** When you run `copier update`, you receive every improvement FORGE has made since your last sync. Bug fixes, new commands, refined gates, better defaults — they all propagate automatically. You don't need to track a changelog and manually apply patches.
+**What this unlocks for you:** When you update the FORGE plugin, you receive every improvement FORGE has made since your last update — bug fixes, new commands, refined gates, better defaults — as one signed, atomic package. You don't need to track a changelog and manually apply patches, and there are no per-file merge conflicts: the framework surface is replaced whole.
 
-Copier's upstream sync model makes this practical. Unlike fork-and-merge approaches, Copier can update template-derived files while preserving your local customizations. The update manifest classifies each file as `merge`, `overwrite`, or `skip` — so framework improvements land cleanly without overwriting your project-specific configuration.
+Since v3.0.0 (2026-07-16), the Claude Code plugin is the delivery mechanism for the framework surface (commands, agents, skills, hooks). Your project keeps only its own data — specs, sessions, process docs — so framework updates never collide with your work. Generated reference docs carry a provenance header naming the plugin version that produced them. For projects on the legacy Copier scaffold path, Copier's update model still applies: the update manifest classifies each file as `merge`, `overwrite`, or `skip`, and `/forge stoke` merges upstream scaffold changes while preserving customizations.
 
-**How it works internally:** FORGE's repo separates framework tracking (`docs/`, `CLAUDE.md`, `AGENTS.md`) from the deliverable template (`template/`). The architectural principle is explicit: *changes to FORGE's own process are valuable only when they ship in `template/`*. An improvement to FORGE's internal workflow that doesn't propagate to the template has zero user impact. Every spec that modifies a command, gate, or process checks whether the template copy needs the same change — automated sync verification catches drift before it ships.
+**How it works internally:** FORGE's repo treats the repo-root tree as the single canonical source; the plugin payload and the legacy `template/` surface are *generated* downstream artifacts, and parity gates fail any drift between canonical and generated. The architectural principle is explicit: *changes to FORGE's own process are valuable only when they ship to consumers* — an improvement that doesn't reach the plugin payload has zero user impact. (This principle was named "Template is the Product" in the Copier era; the plugin-primary cutover — ADR-502, Spec 557 — moved the shipping surface without changing the principle.)
 
 ---
 

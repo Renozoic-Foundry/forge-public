@@ -7,13 +7,13 @@ Last updated: 2026-03-13
 
 **Test new and changed functionality. Spot-check adjacent areas that could plausibly have been affected. Do not run sections unrelated to the change.**
 
-This is not a regression suite. A full regression exists in the automated test suite. This runbook ensures the human can see that what the AI built actually works for the changed surface, and that nothing obviously adjacent broke.
+This is not a regression suite — that's the automated test suite's job. This runbook lets the human confirm the changed surface actually works.
 
 ---
 
 ## When to run this
 
-**Every session ends with section G (Session Capture). No exceptions.**
+Section G (Session Capture) runs every session — see AGENTS.md's two hard rules.
 
 | What changed | Run |
 |---|---|
@@ -218,7 +218,7 @@ See [shadow-validation-guide.md](shadow-validation-guide.md) for strategy detail
 
 - **Spec status stays `in-progress`** — do not revert to `draft`. Rationale: reverting to `draft` loses the signal that real progress was made and risks re-work of already-completed acceptance criteria.
 - Document the partial state in the session log (see G1 checklist below).
-- Use [Spec 119 (JSON session handoff)](../specs/119-json-session-handoff.md) to capture structured state for the next session, and [Spec 123 (checkpoint resume)](../specs/123-checkpoint-resume-on-context-overflow.md) for mid-command recovery on context overflow.
+- Use Spec 119 (JSON session handoff) to capture structured state for the next session, and Spec 123 (checkpoint resume) for mid-command recovery on context overflow.
 
 ### G1. Review the session log
 
@@ -254,9 +254,8 @@ See [shadow-validation-guide.md](shadow-validation-guide.md) for strategy detail
 > (a report, dashboard, generated page, or similar). This section is self-contained —
 > a spec's "Human validation steps" line can reference `H` on its own.
 
-File-exists or markup-lints checks do not confirm an HTML/visual artifact actually
-**renders** correctly. This section closes that gap with a render-time check that
-records a real observation, not an assumption.
+File-exists or markup-lint checks don't confirm an HTML/visual artifact actually
+renders. This section adds a render-time check that records a real observation.
 
 ### Quick Check (always run)
 - [ ] Artifact opened in the render target (browser) (H1)
@@ -278,7 +277,7 @@ Run the fixture to record the check in the shared evidence-ledger convention
 browser evidence — one manifest convention, not a second parallel one):
 
 ```bash
-.forge/bin/forge-visual-verify.sh <spec-number> <artifact-path>
+bash "${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-visual-verify.sh" <spec-number> <artifact-path>
 ```
 
 The fixture walks through the H1 checklist interactively and writes the manifest

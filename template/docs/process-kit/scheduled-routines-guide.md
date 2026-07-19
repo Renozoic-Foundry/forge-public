@@ -2,8 +2,8 @@
 
 <!-- Last verified: 2026-06-15 against Spec 459 -->
 
-Spec: [459](../specs/459-scheduled-strategy-routines.md). Extends Spec
-[458](../specs/458-signal-to-strategy-loop-prd.md) (Signal-to-Strategy Loop —
+Spec: 459. Extends Spec
+458 (Signal-to-Strategy Loop —
 supplies the loop-contract shape reused here). Under the Spec 449 (Claude Code 2026
 Alignment) umbrella.
 

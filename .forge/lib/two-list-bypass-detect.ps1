@@ -22,6 +22,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 try { [Console]::Error.Encoding = [System.Text.Encoding]::UTF8 } catch { }
 
 function Show-Usage {
+    # forge:path-literal-ok (comment/fixture) — heredoc help text below references docs/specs/411-...md
     @'
 two-list-bypass-detect.ps1 — Spec 411 coordinated two-list bypass detector (PowerShell parity)
 
@@ -36,6 +37,7 @@ Exit codes:
   1  One or more coordinated bypasses found (FAIL)
   2  Usage / config error
 
+# forge:path-literal-ok (docstring/prose — classic-default spelling in help text; Spec 575)
 See: docs/specs/411-two-list-bypass-detector.md
 '@
 }

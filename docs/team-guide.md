@@ -66,17 +66,26 @@ The key difference: FORGE automates the *enforcement* of these patterns through 
 
 ## Making changes without FORGE
 
-You don't need FORGE to contribute. Here's how to decide what to do:
+You don't need FORGE to contribute — but know the project's ground rule: FORGE projects operate
+under "**every change has a matching spec**" (it's in the repo's `AGENTS.md`). The only codified
+exemption is for presentation/visualization artifacts produced as communication output — slide
+decks, diagrams, one-off HTML summaries (Spec 544). Everything else eventually gets a spec — the
+question is just *who writes it and when*:
 
 **Is your change trivial?** (typo fix, config update, dependency bump, comment correction)
-- Just make the change, commit with a descriptive message, and submit your PR. No spec needed.
+- Make the change, commit with a descriptive message, and submit your PR. You don't have to write
+  the spec yourself: the project's FORGE operator periodically runs `/reconcile`, which scans git
+  history for commits without a matching spec and folds them into the spec corpus automatically —
+  small ambient changes become memory notes, larger clusters become retroactive draft specs. Your
+  descriptive commit message is what makes that reconciliation accurate.
 
 **Is your change a bug fix?**
-- If it's a one-file fix with an obvious cause, commit and PR. No spec needed.
-- If it touches multiple files or changes behavior, consider creating a spec. Copy the [spec template](specs/_template.md), fill in the Objective and Acceptance Criteria, and reference it in your PR. The other sections can stay as placeholders.
+- One-file fix with an obvious cause: commit and PR with a clear message — `/reconcile` picks it
+  up as above.
+- If it touches multiple files or changes behavior, write the spec yourself. Copy the [spec template](../template/docs/specs/_template.md), fill in the Objective and Acceptance Criteria, and reference it in your PR. The other sections can stay as placeholders.
 
 **Is your change a new feature or significant refactor?**
-- Create a spec from the [spec template](specs/_template.md). This isn't bureaucracy — it's a context anchor that helps reviewers understand what you're doing and why. Fill in at minimum: Objective, Scope (what's in and out), and Acceptance Criteria (how to verify it's done).
+- Create a spec from the [spec template](../template/docs/specs/_template.md). This isn't bureaucracy — it's a context anchor that helps reviewers understand what you're doing and why. Fill in at minimum: Objective, Scope (what's in and out), and Acceptance Criteria (how to verify it's done).
 - If you use Claude Code, run `/spec` to generate one from a brief description. If you don't, copy the template manually.
 
 **Not sure?**

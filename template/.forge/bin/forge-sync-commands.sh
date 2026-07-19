@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# forge:path-literal-ok (file: framework-structure — generates agent-guidance text + operates on framework command tree; Spec 575)
 # FORGE forge-sync-commands — generate agent-specific command wrappers from canonical source
 # Usage: forge-sync-commands.sh [--agents claude-code,cursor,copilot] [--scope user|project|both] [--dry-run] [--force]
 set -euo pipefail
@@ -318,6 +319,9 @@ generate_codex_skill() {
   # Generate SKILL.md from template
   local skill_desc="${description}. Use when the user wants to ${action}. Triggers on: ${triggers}."
 
+  # forge:path-literal-ok (fixture) — the docs/specs, docs/sessions, docs/backlog.md
+  # references below are generated skill doc text describing generic defaults for a
+  # FORGE-managed consumer project; this script does not use them for I/O.
   cat > "$skill_dir/SKILL.md" <<SKILL_EOF
 ---
 name: forge-${cmd_name}

@@ -2,6 +2,13 @@
 # Install: copy this file to ~/.claude/commands/forge-bootstrap.md
 # Usage: run /forge-bootstrap in any project directory
 
+> **LEGACY — scaffolding-only (v3, Spec 572).** FORGE v3 delivers the framework as a Claude Code
+> plugin, and `/forge init` (plugin-native, zero Copier) is the primary bootstrap path. This
+> command remains supported for the legacy Copier full-template render — cross-IDE consumers and
+> pre-v3 workflows. **Migration**: install the plugin (`claude plugin marketplace add
+> Renozoic-Foundry/forge-public`, then `/plugin install forge@forge`) and run `/forge init` in
+> your project; see README § Quickstart and VERSIONING.md § v3.0.0 migration notes.
+
 > This command clones a template repository. It does not push, publish, or modify external systems.
 
 Bootstrap FORGE into the current project directory using the public GitHub template.
@@ -12,9 +19,9 @@ Bootstrap FORGE into the current project directory using the public GitHub templ
 
 Check that required tools are installed:
 
-1. **Python 3.9+**: run `python3 --version` or `python --version`. Extract major.minor version.
+1. **Python** (floor per [CONTRIBUTING.md § Prerequisites](CONTRIBUTING.md#prerequisites) — the single source for pinned versions): run `python3 --version` or `python --version`. Extract major.minor version.
 2. **Git**: run `git --version`.
-3. **Copier 9.0+**: run `python -m copier --version`.
+3. **Copier** (floor enforced at render time by `_min_copier_version` in `copier.yml`; pinned version in [CONTRIBUTING.md § Prerequisites](CONTRIBUTING.md#prerequisites)): run `python -m copier --version`.
 
 For each missing prerequisite, report what's missing and offer to install:
 
@@ -25,8 +32,8 @@ The following tools are required but not found:
 
 | # | Tool | Install command |
 |---|------|----------------|
-| 1 | Python 3.9+ | `winget install Python.Python.3.12` (Windows) / `brew install python` (macOS) / `apt install python3` (Linux) |
-| 2 | Copier 9.0+ | `pip install copier>=9.0` |
+| 1 | Python (pinned floor: see CONTRIBUTING.md § Prerequisites) | `winget install Python.Python.3.12` (Windows) / `brew install python` (macOS) / `apt install python3` (Linux) |
+| 2 | Copier (pinned floor: see CONTRIBUTING.md § Prerequisites) | `pip install -U copier` |
 
 Install now? (yes / no)
 ```

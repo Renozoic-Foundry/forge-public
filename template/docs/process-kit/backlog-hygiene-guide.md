@@ -4,14 +4,14 @@ _Documents the two backlog hygiene scans (deprecation, deferral) that `/matrix` 
 
 ## Why hygiene lives in `/matrix`
 
-Hygiene = deprecating bottom-of-backlog drafts whose moment has passed, and deferring drafts whose timing is wrong but design is correct. Before Spec 370, hygiene was operator-discretionary: the 2026-04-29 session executed three manual hygiene passes producing CHANGELOG entries for 11 specs touched, each useful but each costing the cognitive load of remembering, framing, and executing.
+Hygiene = deprecating bottom-of-backlog drafts whose moment has passed, and deferring drafts whose timing is wrong but design is correct. Before Spec 370, hygiene was operator-discretionary — the 2026-04-29 session needed three manual passes across 11 specs to get equivalent coverage.
 
-`/matrix` is the right home because /matrix already iterates the backlog row-by-row for rank/score refresh — the hygiene scans piggyback on that iteration. Other commands fail the placement test:
+`/matrix` already iterates the backlog row-by-row for rank/score refresh, so the hygiene scans piggyback on that iteration. Other commands fail the placement test:
 
 - `/now` would fire hygiene on every invocation (too noisy)
 - `/session` doesn't always touch the backlog (wrong frequency)
 - `/evolve` is for process review, not backlog grooming (wrong scope)
-- A separate `/hygiene` command would re-introduce the "operator must remember" problem the spec exists to solve
+- A separate `/hygiene` command would reintroduce the "operator must remember" problem
 
 ## The two scans
 
@@ -90,11 +90,12 @@ Common templates the operator can adapt at the deferral prompt:
 
 ## Operator engagement signal (per /implement directive 3)
 
-`/close` captures hygiene-step engagement (apply-rate vs skip-rate per category) into `docs/sessions/signals.md` to feed the next `/evolve` cycle. If reflexive-skip dominates (e.g., > 80% skip across 5 /matrix runs), revisit MT's "name only, no apply" reframe (recorded as deferred design alternative — see Spec 370 Scope § Out of scope).
+`/close` captures hygiene-step engagement (apply-rate vs skip-rate per category) into `docs/sessions/signals.md` to feed the next `/evolve` cycle. If reflexive-skip dominates (e.g., > 80% skip across 5 /matrix runs), revisit MT's "name only, no apply" reframe (see Spec 370 Scope § Out of scope).
 
 ## Cross-edit invariant — sentinel block ↔ canonical doc
 
-**Warning to future maintainers**: edits to the hygiene-pass scan rules require simultaneous re-sync of all 4 mirrored sentinel regions (`.forge/commands/matrix.md`, `.claude/commands/matrix.md`, `template/.forge/commands/matrix.md`, `template/.claude/commands/matrix.md`). A maintainer who edits the canonical block in this guide without re-running `scripts/spec-370-sync-matrix-hygiene.sh` will silently push divergent scan rules into the four mirrors — the prose remains in sync with one mirror but drifts from the other three.
+<!-- forge:maintainer-detail:start -->
+**Warning to future maintainers**: edits to the hygiene-pass scan rules require simultaneous re-sync of all 4 mirrored sentinel regions (`.forge/commands/matrix.md`, `.claude/commands/matrix.md`, `template/.forge/commands/matrix.md`, `template/.claude/commands/matrix.md`). Editing the canonical block without re-running `scripts/spec-370-sync-matrix-hygiene.sh` silently pushes divergent scan rules into the four mirrors.
 
 **Mitigation today (doc-only)**: any change to the hygiene-pass scan rules requires:
 
@@ -104,6 +105,7 @@ Common templates the operator can adapt at the deferral prompt:
 4. If a new scan rule is added, also extend the regression test fixtures at `.forge/bin/tests/test-spec-370-hygiene.sh`.
 
 **Future hardening**: Spec 367 (CI parity gate for spec-integrity sentinel regions) extends the same automated md5sum byte-parity assertion to the spec-370 sentinel set. Spec 367 must follow Spec 370 /implement.
+<!-- forge:maintainer-detail:end -->
 
 ## Scope-coordination follow-up — Spec 370b (deferred)
 

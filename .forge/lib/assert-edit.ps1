@@ -21,6 +21,7 @@
 # decides whether a non-zero return halts the surrounding flow.
 #
 # See docs/process-kit/scripted-edit-conventions.md.
+# forge:path-literal-ok (comment)
 
 $ErrorActionPreference = 'Continue'
 

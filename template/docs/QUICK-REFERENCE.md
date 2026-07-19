@@ -1,15 +1,17 @@
+<!-- GENERATED FILE — do not hand-edit. Regenerate with: scripts/gen-quick-reference.sh
+     Canonical sources: .forge/commands/*.md + invocation-policy.yaml
+     Source content hash: d49f58a8314e | FORGE plugin version: 3.1.0
+     Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 # FORGE Quick Reference
-
-> **Framework context:** For FORGE's mission, design philosophy, concept overview, and articles, see [github.com/Renozoic-Foundry/forge-public](https://github.com/Renozoic-Foundry/forge-public). This quick reference covers the operating surface your project inherits; the linked repo holds the deeper "why FORGE works the way it does" content.
 
 ## Core Commands
 
 | Command | Purpose |
 |---------|---------|
-| `/now` | Review project state and get the next recommended action |
-| `/spec` | Create or update a spec for a planned change |
+| `/now` | Review current project state and suggest next action |
+| `/spec` | Create a new spec from the template |
 | `/implement` | Build a spec end-to-end with evidence gates |
-| `/close` | Close a spec: validate, capture signals, update tracking |
+| `/close` | Close a spec: confirm human validation, capture signals, update priorities |
 
 **When in doubt, run `/now`.**
 
@@ -28,64 +30,86 @@
 
 ## Command Reference (by stage)
 
-### Session & Orientation
+**Form** (Spec 491): `command` — slash command, never model-invoked; `skill (auto)` — Claude
+may invoke it opportunistically (read-only / additive / reversible); `skill (explicit)` — invoked
+only when you name it. All entries also run outside Claude Code as `bin/forge <name>`
+(Windows: `bin\forge.ps1 <name>`).
 
-| Command | Purpose | Model Tier |
-|---------|---------|------------|
-| `/now` | Review project state, validation queue, and next action | haiku |
-| `/session` | Create or update the session log with auto-drafted content | haiku |
-| `/note` | Quick-capture a thought to the scratchpad | haiku |
-| `/insights` | Review error and chat insight logs | haiku |
-| `/tab` | Manage multi-tab work claims | sonnet |
-| `/handoff` | Generate a handoff brief for another agent or session | sonnet |
+### Session and orientation
 
-### Planning & Discovery
+| Command | Purpose | Form |
+|---------|---------|------|
+| `/insights` | Mine FORGE process data for cross-session insights | skill (auto) |
+| `/note` | Add a scratchpad note for the next process checkpoint | skill (auto) |
+| `/now` | Review current project state and suggest next action | skill (auto) |
+| `/session` | Create or update the session log | command |
+| `/tab` | Initialize or close a multi-tab session for parallel development | command |
 
-| Command | Purpose | Model Tier |
-|---------|---------|------------|
-| `/explore` | Pre-spec investigation — produces research artifacts before committing to a full spec | sonnet |
-| `/brainstorm` | Discover spec opportunities from signals and roadmap | haiku |
-| `/interview` | Socratic elicitation for thinking through problems | sonnet |
-| `/spec` | Create a new spec from a description | sonnet |
-| `/spec-gate` | Check if a proposed change needs a spec | sonnet |
-| `/matrix` | Display and re-rank the backlog priority matrix | haiku |
+### Planning and discovery
+
+| Command | Purpose | Form |
+|---------|---------|------|
+| `/brainstorm` | Discover spec opportunities from signals and roadmap | skill (auto) |
+| `/consensus` | Run a proposal through all registry roles for structured consensus | skill (explicit) |
+| `/decision` | Create a new Architecture Decision Record (ADR) | skill (explicit) |
+| `/explore` | Pre-spec investigation — produces research artifacts before committing to a full spec | skill (auto) |
+| `/interview` | Socratic elicitation for thinking through problems | skill (explicit) |
+| `/matrix` | Update and present the prioritization matrix | skill (explicit) |
+| `/reconcile` | Reconcile git history into the spec corpus — draft stub specs / memory notes for work committed outside FORGE | command |
+| `/revise` | Revise an existing spec based on feedback or correction | skill (explicit) |
+| `/spec` | Create a new spec from the template | command |
 
 ### Implementation
 
-| Command | Purpose | Model Tier |
-|---------|---------|------------|
-| `/implement` | Build a spec end-to-end with evidence gates | sonnet |
-| `/close` | Validate and close an implemented spec | sonnet |
-| `/revise` | Revise a spec after devil's advocate or review findings | sonnet |
-| `/trace` | Trace a spec's evidence chain end-to-end | sonnet |
-| `/parallel` | Run multiple independent specs simultaneously | sonnet |
-| `/scheduler` | Dependency-aware multi-agent parallel execution | sonnet |
-| `/test` | Run project test suite with evidence capture | sonnet |
+| Command | Purpose | Form |
+|---------|---------|------|
+| `/close` | Close a spec: confirm human validation, capture signals, update priorities | command |
+| `/debug` | Structured debugging session — hypothesis-first, verify before fixing | command |
+| `/implement` | Build a spec end-to-end with evidence gates | command |
+| `/parallel` | Run multiple specs in parallel using git worktrees | command |
+| `/scheduler` | Run multi-agent scheduler for dependency-aware parallel execution | command |
+| `/test` | Run the test suite and report results | skill (auto) |
+| `/trace` | Generate bidirectional traceability matrix from spec annotations | skill (auto) |
 
-### Lifecycle & Maintenance
+### Lifecycle and maintenance
 
-| Command | Purpose | Model Tier |
-|---------|---------|------------|
-| `/forge init` | Bootstrap FORGE into a new or existing project | sonnet |
-| `/forge stoke` | Pull upstream FORGE updates and integrate safely | sonnet |
-| `/forge status` | Quick project status overview | sonnet |
-| `/forge help` | List all available FORGE commands | sonnet |
-| `/onboarding` | First-session interactive project configuration (2-interaction fast-path) | sonnet |
-| `/configure` | Adjust any defaulted onboarding setting (stack, agents, autonomy, methodology, features, MCP servers) | sonnet |
-| `/config-change` | Propose a configuration change with impact analysis | sonnet |
+| Command | Purpose | Form |
+|---------|---------|------|
+| `/config-change` | Propose and apply changes to agent configuration files | command |
+| `/configure` | Adjust any defaulted onboarding setting (stack, agents, autonomy, methodology, features, MCP servers) | command |
+| `/forge` | Unified FORGE project lifecycle command | command |
+| `/forge-init` | Bootstrap FORGE into a new or existing project, upgrade legacy pre-Copier projects, or create new projects from scratch | command |
+| `/forge-stoke` | Pull upstream FORGE updates into this project using Copier | command |
+| `/onboarding` | First-session interactive project configuration | command |
 
-### Process & Review
+### Process and review
 
-| Command | Purpose | Model Tier |
-|---------|---------|------------|
-| `/evolve` | Full process review — backlog, signals, watchlist | sonnet |
-| `/synthesize` | Synthesize accumulated project artifacts into refined documents | sonnet |
-| `/retro` | Run a retrospective on recent work | sonnet |
-| `/bug` | File a bug report as a hotfix spec | sonnet |
-| `/harvest` | Extract reusable patterns from completed specs | sonnet |
-| `/decision` | Record an architecture decision (ADR) | sonnet |
-| `/consensus` | Multi-role structured review with vote tally and divergence signal | sonnet |
-| `/dependency-audit` | Audit project dependencies for risk | sonnet |
+| Command | Purpose | Form |
+|---------|---------|------|
+| `/configure-nanoclaw` | Configure NanoClaw hardware key enrollment and messaging | command |
+| `/dependency-audit` | Scan for dependency changes and produce a structured risk report | skill (auto) |
+| `/evolve` | Run the KCS Evolve Loop review | skill (explicit) |
+| `/nanoclaw` | Manage the NanoClaw container — start, stop, status, logs | command |
+| `/signal-to-strategy` | Turn external research signals into scored FORGE advantage hypotheses | skill (auto) |
+| `/synthesize` | Synthesize accumulated project artifacts into refined documents | skill (explicit) |
+
+### /forge subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `/forge init` | Bootstrap FORGE into a new or existing project |
+| `/forge stoke` | Pull upstream FORGE updates and integrate safely |
+| `/forge status` | Show FORGE project status overview (validation queue, backlog summary, active work) |
+| `/forge baselines` | List available Copier baselines from ~/.forge/baselines/ (Spec 090) |
+| `/forge retrofit` | Guided consumer retrofit: inventory -> de-vendor -> reorganize -> reconcile (Spec 577) |
+| `/forge help` | List all available FORGE commands grouped by workflow stage |
+
+**Role-value rollup (Spec 305)** — not a slash command; a helper subcommand:
+`bash .forge/lib/score-audit.sh role-audit [--json]` (PowerShell: `pwsh .forge/lib/score-audit.ps1 role-audit`)
+rolls up which advisory roles fired across `/spec`/`/implement`/`/close`/`/consensus`, their
+recommendations, and operator acceptance (per-role dispatch count, acceptance %, avg concerns,
+stage distribution). Reads the shared gitignored sink `.forge/state/score-audit.jsonl`. See
+`docs/process-kit/role-dispatch-schema.md`.
 
 ### Typical Workflow
 
@@ -97,23 +121,62 @@ For new projects: `/forge init` → `/onboarding` → `/interview` → `/spec` �
 
 ---
 
-## First-Run Setup
+## Process-State Path Keys (`forge.paths.*`, Specs 564/575)
 
-After bootstrapping FORGE into your project (via `/forge init` or `copier copy`), arm the
-pre-commit safety net so cross-level template sync (Spec 270) and `.forge/commands/` ↔
-`.claude/commands/` sync (Spec 314) drift cannot land silently:
+Path indirection for FORGE process state, with two named **layout presets** (Spec 575):
+`classic` (the `docs/...` defaults below — what an absent block means) and `contained`
+(everything under `.forge/project/` — the default for new scaffolds; keeps FORGE files
+segregated from your solution's docs). Choose at `/forge init` (`--layout`), switch later via
+`/configure` (config-only; physical moves ride the Spec 577 retrofit). Every scaffold also
+writes `.forge/ownership.yaml` — the machine-readable FORGE-vs-solution file partition
+(`forge-py .forge/lib/ownership.py --list | --partition`). See the layout guide in process-kit.
 
-```bash
-bash .forge/bin/install-pre-commit-hook.sh
+Set under the `forge:` section of the AGENTS.md `## Runtime Configuration` YAML block;
+absent keys keep the classic defaults (zero behavior change):
+
+```yaml
+forge:
+  paths:
+    specs: docs/specs            # default
+    sessions: docs/sessions      # default
+    decisions: docs/decisions    # default
+    research: docs/research      # default
+    process_kit: docs/process-kit  # default
+    backlog: docs/backlog.md     # default
 ```
 
-This installs a single combined hook into `.git/hooks/pre-commit` that runs both sync
-checks on staged changes. To bypass (e.g. emergency commit) without disabling the hook,
-set `FORGE_SKIP_SYNC=1` for that one commit — the hook emits a stderr audit trail and
-exits 0. Do **not** use `git commit --no-verify`.
+**Validation rules** (helpers exit nonzero, naming the offending key): values must be
+repo-relative, forward-slash paths. Rejected: backslashes, POSIX absolutes (`/x`),
+drive-letter paths (`C:/x`), UNC paths (`//server/share`), any `..` segment, and any
+value that canonicalizes (symlinks resolved) outside the repo root.
+
+**Resolution surfaces**: bash — `forge_path <key>` in `.forge/lib/config.sh`; python —
+`forge-py .forge/lib/runtime_config.py path <key> [--dir DIR]` (exit 5 = invalid value,
+3 = unknown key). Consumers resolve through these helpers only (sweep: Spec 565).
 
 ## Key References
 
-- [CLAUDE.md](../CLAUDE.md) — Operating rules and project context
-- [AGENTS.md](../AGENTS.md) — Agent roles, autonomy levels, evidence gates
-- [Process Kit](process-kit/) — Scoring rubric, checklists, runbook, templates
+- `CLAUDE.md` — Operating rules and project context (in your bootstrapped project)
+- `AGENTS.md` — Agent roles, autonomy levels, evidence gates (in your bootstrapped project)
+- `docs/process-kit/` — Scoring rubric, checklists, runbook, templates (in your bootstrapped project)
+
+---
+
+## Provenance and revision history
+
+This document is **generated** by `scripts/gen-quick-reference.sh` from the canonical command surface
+(`.forge/commands/` + `invocation-policy.yaml`; source content hash `d49f58a8314e`,
+FORGE plugin v3.1.0). Do not edit it by hand — changes belong in the canonical
+sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
+
+Recent changes to the canonical command surface:
+
+<!-- forge:gen:volatile:start -->
+- 2026-07-17 `4dde359` Spec 577 implemented — consumer retrofit: de-vendor, reorganize, init→reconcile
+- 2026-07-17 `1b49f30` Spec 575 implemented — contained project layout: presets, sweep, ownership manifest, guard
+- 2026-07-17 `2851ede` Spec 571 implemented — consumer docs generation pipeline + revision history
+- 2026-07-16 `3f8b80d` Close Spec 567 — stoke consumer-defect bundle: 6 defects (sentinel gitignore, guarded cwd-relative hooks, conflict-scanner precision, update-consent docs, _commit recording, vcs-ref default) — validator 9/9; kills the smiley1 D6 data-loss chain
+- 2026-07-15 `f2f1d36` Spec 557 implemented — Copier retirement slice 1 (ADR-502 Phase 2): plugin-native scaffolder + runtime config
+<!-- forge:gen:volatile:end -->
+
+For the full change record, see `docs/specs/CHANGELOG.md` and `git log -- .forge/commands/`.

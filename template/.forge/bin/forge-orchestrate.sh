@@ -52,9 +52,13 @@ if [[ -z "$SPEC_ID" ]]; then
   exit 1
 fi
 
+# Spec 575 — resolve the specs dir via forge.paths (classic default when unset)
+forge_config_load "${PROJECT_DIR}/AGENTS.md" >/dev/null 2>&1 || true
+SPECS_REL="$(forge_path specs 2>/dev/null || echo docs/specs)"
+
 # --- Find the spec file ---
 SPEC_FILE=""
-for f in "${PROJECT_DIR}"/docs/specs/${SPEC_ID}-*.md "${PROJECT_DIR}"/docs/specs/${SPEC_ID}*.md; do
+for f in "${PROJECT_DIR}/${SPECS_REL}"/${SPEC_ID}-*.md "${PROJECT_DIR}/${SPECS_REL}"/${SPEC_ID}*.md; do
   if [[ -f "$f" ]]; then
     SPEC_FILE="$f"
     break

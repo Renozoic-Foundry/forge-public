@@ -22,8 +22,26 @@ set -euo pipefail
 # --- Path resolution ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-FORGE_COMMANDS_DIR="${PROJECT_DIR}/.forge/commands"
-CLAUDE_COMMANDS_DIR="${PROJECT_DIR}/.claude/commands"
+
+# --- Runtime-root resolution chain (Spec 576) ---
+# CLAUDE_PLUGIN_ROOT (plugin) -> FORGE_RUNTIME_ROOT (env) -> ~/.forge/runtime-root
+# (pointer file: one line, path to a pinned framework checkout) -> project-local.
+FORGE_ROOT=""
+for _cand in "${CLAUDE_PLUGIN_ROOT:-}" "${FORGE_RUNTIME_ROOT:-}"; do
+    if [[ -n "${_cand}" && -d "${_cand}/.forge/commands" ]]; then
+        FORGE_ROOT="${_cand}"; break
+    fi
+done
+if [[ -z "${FORGE_ROOT}" && -f "${HOME}/.forge/runtime-root" ]]; then
+    _ptr="$(head -1 "${HOME}/.forge/runtime-root" | sed 's/$//')"
+    if [[ -n "${_ptr}" && -d "${_ptr}/.forge/commands" ]]; then
+        FORGE_ROOT="${_ptr}"
+    fi
+fi
+[[ -z "${FORGE_ROOT}" ]] && FORGE_ROOT="${PROJECT_DIR}"
+
+FORGE_COMMANDS_DIR="${FORGE_ROOT}/.forge/commands"
+CLAUDE_COMMANDS_DIR="${FORGE_ROOT}/.claude/commands"
 
 # Resolve the commands directory — prefer .forge/commands, fall back to .claude/commands
 if [[ -d "${FORGE_COMMANDS_DIR}" ]]; then
@@ -32,8 +50,25 @@ elif [[ -d "${CLAUDE_COMMANDS_DIR}" ]]; then
     COMMANDS_DIR="${CLAUDE_COMMANDS_DIR}"
 else
     echo "Error: No commands directory found." >&2
-    echo "Expected: .forge/commands/ or .claude/commands/" >&2
+    echo "Looked in: ${FORGE_ROOT} (runtime chain: CLAUDE_PLUGIN_ROOT -> FORGE_RUNTIME_ROOT -> ~/.forge/runtime-root -> project)." >&2
+    echo "Set up a runtime: git clone the FORGE repo/mirror, pin a release tag, and write its path to ~/.forge/runtime-root" >&2
     exit 3
+fi
+
+# --- Runtime-pin advisory (Spec 576 R4/AC8) ---
+# forge.runtime.pin: <tag-or-sha> in the project AGENTS.md — warn on mismatch, never block.
+if [[ -f "${PROJECT_DIR}/AGENTS.md" && "${FORGE_ROOT}" != "${PROJECT_DIR}" ]]; then
+    # YAML leaf only (indented pin: with a real value) — never prose mentions/placeholders.
+    _pin="$(grep -m1 -E '^[[:space:]]+pin:[[:space:]]*[^<[:space:]]' "${PROJECT_DIR}/AGENTS.md" 2>/dev/null | sed 's/.*pin:[[:space:]]*//' | tr -d '' || true)"
+    if [[ -n "${_pin}" ]]; then
+        _head="$(git -C "${FORGE_ROOT}" rev-parse HEAD 2>/dev/null || true)"
+        _pin_sha="$(git -C "${FORGE_ROOT}" rev-parse "${_pin}" 2>/dev/null || true)"
+        if [[ -n "${_head}" && -n "${_pin_sha}" && "${_head}" != "${_pin_sha}" ]]; then
+            echo "WARN: runtime checkout HEAD (${_head:0:8}) != project pin '${_pin}' (${_pin_sha:0:8}) — advisory (Spec 576); update the checkout or the pin." >&2
+        elif [[ -n "${_head}" && -z "${_pin_sha}" ]]; then
+            echo "WARN: project pins forge.runtime.pin='${_pin}' but the runtime checkout cannot resolve it — advisory (Spec 576)." >&2
+        fi
+    fi
 fi
 
 # --- Version ---
@@ -337,6 +372,28 @@ fi
 case "${COMMAND}" in
     list)
         list_commands
+        exit 0
+        ;;
+    status)
+        # Spec 576 AC5 — non-AI developer status: project identity + runtime root + spec counts.
+        echo "FORGE status — project: $(basename "${PROJECT_DIR}")"
+        echo "  runtime root: ${FORGE_ROOT}$([[ "${FORGE_ROOT}" == "${PROJECT_DIR}" ]] && echo ' (project-local)')"
+        if [[ -f "${FORGE_ROOT}/.forge/lib/config.sh" ]]; then
+            # shellcheck source=/dev/null
+            source "${FORGE_ROOT}/.forge/lib/config.sh" 2>/dev/null || true
+            forge_config_load "${PROJECT_DIR}/AGENTS.md" >/dev/null 2>&1 || true
+            _specs_dir="$(forge_path specs 2>/dev/null || echo docs/specs)"
+        else
+            _specs_dir="docs/specs"  # forge:path-literal-ok (fallback when runtime lacks config.sh)
+        fi
+        if [[ -d "${PROJECT_DIR}/${_specs_dir}" ]]; then
+            for _st in draft in-progress implemented closed; do
+                _n=$(grep -lE "^- Status: ${_st}\b" "${PROJECT_DIR}/${_specs_dir}"/[0-9]*.md 2>/dev/null | wc -l)
+                echo "  specs ${_st}: ${_n}"
+            done
+        else
+            echo "  specs: none yet (${_specs_dir} absent) — create the first with bin/forge spec"
+        fi
         exit 0
         ;;
     doctor)

@@ -36,4 +36,4 @@ Use this kit when you want:
 
 ## Upstream
 
-This process kit is maintained in the FORGE framework repo. Improvements discovered in downstream projects should be contributed upstream via the process described in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+This process kit is maintained in the FORGE framework repo. Improvements discovered in downstream projects should be contributed upstream via the process described in CONTRIBUTING.md.

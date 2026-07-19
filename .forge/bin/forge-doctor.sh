@@ -119,7 +119,8 @@ compute_currency() {
 # mode values: full | summary | summary-verbose. provenance: pinned | unpinned | "".
 # Overridable for hermetic tests (Spec 535 — the 520 suite's read-only assert
 # must not see history appends land in the live tracked file).
-HISTORY_FILE="${FORGE_DOCTOR_HISTORY_FILE:-${ROOT}/docs/sessions/doctor-history.jsonl}"
+_dh_sessions="$(forge_path sessions 2>/dev/null || echo docs/sessions)"  # classic-default fallback
+HISTORY_FILE="${FORGE_DOCTOR_HISTORY_FILE:-${ROOT}/${_dh_sessions}/doctor-history.jsonl}"
 LAST_FULL_FILE="${STATE_DIR}/doctor-last-full.state"
 
 read_cached_full() {
@@ -458,6 +459,50 @@ PYVER
       fi
     done <<< "$MATCH_LINES"
   fi
+fi
+echo ""
+
+# ================================ D-PATHS (Spec 575) ============================
+# Process-state path health: each forge.paths key (configured or defaulted) must
+# exist and be writable, and no key may be in SPLIT-BRAIN state — process files
+# present in BOTH the classic default location and a configured non-default
+# location (the designed interim state between a /configure preset switch and the
+# Spec 577 migration; detection is what makes it visible — Spec 565 carry-forward).
+echo "== D-PATHS =="
+_dp_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)"
+declare -A _DP_CLASSIC=([specs]="docs/specs" [sessions]="docs/sessions" [decisions]="docs/decisions" [research]="docs/research" [process_kit]="docs/process-kit" [backlog]="docs/backlog.md")
+if [[ -f "AGENTS.md" ]] && [[ -f "${_dp_lib}/config.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${_dp_lib}/config.sh"
+  forge_config_load "AGENTS.md" >/dev/null 2>&1 || true
+  _dp_fail=0
+  for _k in specs sessions decisions research process_kit backlog; do
+    _resolved="$(forge_path "$_k" 2>/dev/null)" || { echo "  HIGH  forge.paths.${_k}: invalid value (validator rejected)"; _dp_fail=1; continue; }
+    _classic="${_DP_CLASSIC[$_k]}"
+    if [[ "$_k" == "backlog" ]]; then
+      _res_exists=0; [[ -f "$_resolved" ]] && _res_exists=1
+      _cls_exists=0; [[ -f "$_classic" ]] && _cls_exists=1
+    else
+      _res_exists=0; [[ -d "$_resolved" ]] && _res_exists=1
+      _cls_exists=0; [[ -d "$_classic" && -n "$(ls -A "$_classic" 2>/dev/null)" ]] && _cls_exists=1
+    fi
+    if [[ "$_res_exists" -eq 0 ]]; then
+      if [[ "$_resolved" != "$_classic" && "$_cls_exists" -eq 1 ]]; then
+        echo "  WARN  forge.paths.${_k}: configured '${_resolved}' absent while classic '${_classic}' holds data — pre-migration state; run the Spec 577 migration flow"
+      fi
+      # absent in BOTH locations: silent — optional dirs materialize on first use
+    elif [[ "$_k" != "backlog" && ! -w "$_resolved" ]]; then
+      echo "  HIGH  forge.paths.${_k}: '${_resolved}' not writable"; _dp_fail=1
+    fi
+    if [[ "$_resolved" != "$_classic" && "$_cls_exists" -eq 1 && "$_res_exists" -eq 1 ]]; then
+      echo "  HIGH  forge.paths.${_k}: SPLIT-BRAIN — files present in BOTH '${_classic}' (classic) and configured '${_resolved}'. Run the Spec 577 migration flow (or consolidate manually) so one location owns the data."
+      _dp_fail=1
+      HIGH_COUNT=$(( ${HIGH_COUNT:-0} + 1 ))
+    fi
+  done
+  [[ "$_dp_fail" -eq 0 ]] && echo "  OK    all process-state paths resolve, exist-or-flagged, writable; no split-brain"
+else
+  echo "  SKIP  no AGENTS.md/config.sh at cwd — path check applies to FORGE project roots"
 fi
 echo ""
 

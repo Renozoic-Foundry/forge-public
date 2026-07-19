@@ -30,7 +30,7 @@ verbatim — never renumbered — including spec-scoped sub-ID forms
 `/close` Step 5d runs the propagation before the status transition:
 
 ```bash
-.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py \
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py \
   --apply --session-only=YYYY-MM-DD-NNN --spec=NNN
 ```
 
@@ -119,8 +119,8 @@ The 30 stubs backfilled at the Spec 452 close are the one-line form. The
 migration script upgrades them in place:
 
 ```bash
-.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --enrich-stubs --dry-run
-.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --enrich-stubs --apply
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --enrich-stubs --dry-run
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py scripts/migrate-spec-452-backfill-orphaned-signals.py --enrich-stubs --apply
 ```
 
 - Re-reads every session log to recover each entry's structured fields, then

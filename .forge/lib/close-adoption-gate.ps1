@@ -26,6 +26,23 @@ function Test-AdoptionKnownField {
   return ($script:AdoptionKnownFields -contains $Candidate)
 }
 
+# Resolve forge.paths.<key> via runtime_config.py (Spec 564 — no config.ps1 twin exists;
+# python is the Windows-side resolution surface, per test-spec-564-path-indirection.ps1).
+# Falls back to the classic default on any resolution failure.
+function Get-AdoptionPathsKey {
+  param([string]$Key, [string]$RepoRoot = '.', [string]$Default)
+  $libDir = $PSScriptRoot
+  $core = Join-Path $libDir 'runtime_config.py'
+  $forgePy = Join-Path $libDir '..\bin\forge-py.cmd'
+  if (-not (Test-Path $forgePy)) { $forgePy = Join-Path $libDir '..\bin\forge-py' }
+  if (-not (Test-Path $core) -or -not (Test-Path $forgePy)) { return $Default }
+  try {
+    $out = & $forgePy $core path $Key --dir $RepoRoot 2>$null
+    if ($LASTEXITCODE -eq 0 -and $out) { return ($out | Select-Object -First 1).Trim() }
+  } catch { }
+  return $Default
+}
+
 # Return $true if the spec is the adoption-gate's own defining spec (Spec 402),
 # which names tokens definitionally (in its ACs as examples), not as shipped
 # machinery — self-excluded, mirroring the lib/tests/guide exclusion.
@@ -119,7 +136,8 @@ function Test-AdoptionFollowup {
     return $false
   }
   $ref = $m.Value
-  $hit = Get-ChildItem -Path (Join-Path $RepoRoot 'docs/specs') -Filter "$ref-*.md" -ErrorAction SilentlyContinue
+  $specsDir = Get-AdoptionPathsKey -Key 'specs' -RepoRoot $RepoRoot -Default 'docs/specs'
+  $hit = Get-ChildItem -Path (Join-Path $RepoRoot $specsDir) -Filter "$ref-*.md" -ErrorAction SilentlyContinue
   if (-not $hit) {
     [Console]::Error.WriteLine("Follow-up adoption spec $ref referenced but no such spec exists.")
     return $false

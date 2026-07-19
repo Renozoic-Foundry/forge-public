@@ -112,6 +112,80 @@ forge_config_get() {
   echo "${FORGE_CONFIG[$key]:-$default}"
 }
 
+# ---- Process-state path indirection (Spec 564) ----
+# forge.paths.{specs,sessions,decisions,research,process_kit,backlog} — the SINGLE
+# bash-side definition point for process-state path defaults (Req 2). Python twin:
+# runtime_config.py `path <key>` action. Config source: nested `forge: paths:` in the
+# AGENTS.md `## Runtime Configuration` YAML (parsed by forge_config_load above).
+# Defaults are byte-identical to the pre-564 hardcoded layout — absent config changes
+# nothing. Works without forge_config_load having run (defaults apply).
+declare -gA FORGE_PATH_DEFAULTS=(
+  [specs]="docs/specs"
+  [sessions]="docs/sessions"
+  [decisions]="docs/decisions"
+  [research]="docs/research"
+  [process_kit]="docs/process-kit"
+  [backlog]="docs/backlog.md"
+)
+
+# Validate a forge.paths.* value (Spec 564 Req 1 + CISO consensus findings).
+# Rejects: backslashes (own invalid class — DA c), POSIX absolutes, drive-letter,
+# UNC (//server), `..` segments, and symlink escapes from the repo root.
+# Exit nonzero with an error NAMING the offending key.
+_forge_path_validate() {
+  local key="$1" value="$2"
+  local err="forge_path: invalid forge.paths.${key} value '${value}':"
+  if [[ -z "$value" ]]; then
+    echo "$err empty value" >&2; return 1
+  fi
+  if [[ "$value" == *\\* ]]; then
+    echo "$err backslash in path — values are repo-relative forward-slash paths" >&2; return 1
+  fi
+  if [[ "$value" == /* ]]; then
+    echo "$err absolute or UNC path rejected (must be repo-relative)" >&2; return 1
+  fi
+  if [[ "$value" =~ ^[A-Za-z]: ]]; then
+    echo "$err drive-letter path rejected (must be repo-relative)" >&2; return 1
+  fi
+  if [[ "$value" == ".." || "$value" == ../* || "$value" == */../* || "$value" == */.. ]]; then
+    echo "$err '..' segment rejected" >&2; return 1
+  fi
+  # Symlink-escape canonicalization: resolve and require containment in the repo
+  # root. `realpath -m` (GNU coreutils: Git Bash, Linux); fallback = nearest existing
+  # directory-ancestor cd/pwd -P walk (resolves dir symlinks; see Spec 564 Test Plan 4).
+  local root="${PROJECT_DIR:-$(pwd)}"
+  local root_canon
+  root_canon="$(cd "$root" 2>/dev/null && pwd -P)" || { echo "$err repo root '$root' unresolvable" >&2; return 1; }
+  local canon=""
+  if command -v realpath >/dev/null 2>&1 && realpath -m / >/dev/null 2>&1; then
+    canon="$(realpath -m "$root_canon/$value" 2>/dev/null)" || canon=""
+  fi
+  if [[ -z "$canon" ]]; then
+    local anc="$root_canon/$value"
+    while [[ ! -d "$anc" && "$anc" == "$root_canon/"* ]]; do anc="${anc%/*}"; done
+    if [[ -d "$anc" ]]; then canon="$(cd "$anc" && pwd -P)"; else canon="$root_canon"; fi
+  fi
+  case "$canon" in
+    "$root_canon"|"$root_canon"/*) : ;;
+    *) echo "$err resolves outside the repo root (symlink escape) — '$canon' not under '$root_canon'" >&2; return 1 ;;
+  esac
+  return 0
+}
+
+# forge_path <key> — print the resolved repo-relative path for a process-state key.
+# Config value (forge.paths.<key>) wins over the default; invalid values exit nonzero.
+forge_path() {
+  local key="${1:-}"
+  local default="${FORGE_PATH_DEFAULTS[$key]:-}"
+  if [[ -z "$default" ]]; then
+    echo "forge_path: unknown path key '${key}' (known: specs sessions decisions research process_kit backlog)" >&2
+    return 2
+  fi
+  local value="${FORGE_CONFIG[forge.paths.${key}]:-$default}"
+  _forge_path_validate "$key" "$value" || return 1
+  echo "$value"
+}
+
 # Parse budget ceilings from AGENTS.md
 forge_config_get_budget() {
   local lane="$1"

@@ -15,12 +15,18 @@ If you are maintaining a private fork of FORGE, these scripts are your QA toolki
 | `smoke-test-template.sh` | Run `copier copy --defaults`, verify output renders cleanly (no Jinja2 artifacts, key files present, `.copier-answers.yml` generated) | After any template change |
 | `smoke-test-runtime.sh` | Bootstrap a project, then exercise the agent runtime pipeline in `--dry-run` mode | After modifying runtime scripts in `template/.forge/bin/` or `template/.forge/adapters/` |
 
-### Build
+### Build (generated reference docs — Spec 571)
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
-| `gen-command-reference.sh` | Regenerate `docs/command-reference.md` from command source files in `template/.claude/commands/` | After adding or modifying slash commands |
+| `gen-command-reference.sh` | Regenerate `docs/command-reference.md` from the canonical command source (`.forge/commands/` + `invocation-policy.yaml`) | After adding or modifying slash commands (`--write` to write in place) |
+| `gen-quick-reference.sh` | Regenerate both `docs/QUICK-REFERENCE.md` and `template/docs/QUICK-REFERENCE.md` from the same canonical source | After adding or modifying slash commands (`--write`) |
+| `gen-agents-config-reference.py` | Regenerate `docs/agents-config-reference.md` — defaults read live from `AGENTS.md`, descriptions from `scripts/lib/agents-config-reference-content.yaml` | After changing an AGENTS.md config block (run via `.forge/bin/forge-py`, `--write`) |
 | `compose-modules.sh` | Assemble command files from core + enabled modules based on `onboarding.yaml` | Used by `/onboarding`; run manually with `--check` to inspect module status |
+
+Generated docs carry a provenance header (source content hash + plugin version) and a
+revision-history section; `bash .forge/bin/forge-parity.sh --check` (Surface 7) fails when a
+committed generated doc is stale relative to its canonical sources.
 
 ### Internal (not distributed to forge-public)
 
@@ -42,17 +48,19 @@ bash scripts/validate-bash.sh
 # Validate with verbose output
 bash scripts/validate-bash.sh --verbose
 
-# Check cross-level parity (repo-root canonical ↔ template/ mirrors)
-bash .forge/bin/forge-sync-cross-level.sh --check
+# Full generated-surface parity check (mirrors, plugin payload, skills, generated docs)
+bash .forge/bin/forge-parity.sh --check
 
-# Full template smoke test
+# Full template smoke test (legacy Copier scaffold path)
 bash scripts/smoke-test-template.sh
 
 # Runtime smoke test
 bash scripts/smoke-test-runtime.sh
 
-# Regenerate command reference doc
-bash scripts/gen-command-reference.sh
+# Regenerate the reference docs after command/config changes
+bash scripts/gen-command-reference.sh --write
+bash scripts/gen-quick-reference.sh --write
+.forge/bin/forge-py scripts/gen-agents-config-reference.py --write
 
 # Check module status without modifying files
 bash scripts/compose-modules.sh --check
@@ -62,16 +70,17 @@ bash scripts/compose-modules.sh --check
 
 If you are maintaining a private fork of this repository:
 
-1. **After modifying template files**, run the validation suite:
+1. **After modifying framework files**, run the validation suite:
    ```bash
    bash scripts/validate-bash.sh
-   bash .forge/bin/forge-sync-cross-level.sh --check
+   bash .forge/bin/forge-parity.sh --check
    bash scripts/smoke-test-template.sh
    ```
 
-2. **After adding new commands**, also run:
+2. **After adding new commands**, regenerate the reference docs:
    ```bash
-   bash scripts/gen-command-reference.sh
+   bash scripts/gen-command-reference.sh --write
+   bash scripts/gen-quick-reference.sh --write
    ```
 
 3. **CI integration**: These scripts exit non-zero on failure, making them suitable for CI pipelines. A minimal GitHub Actions workflow:

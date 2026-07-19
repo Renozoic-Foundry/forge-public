@@ -1,6 +1,10 @@
 # FORGE forge-sync-cross-level (PowerShell sibling) — Spec 270
+# forge:path-literal-ok (file: framework-structure — framework-repo mirror sync tooling; Spec 575)
 # Propagates canonical repo-root sources to template/ mirrors.
 #
+# forge:path-literal-ok (framework-structure) — this script syncs FORGE's own docs/
+# tree into template/ mirrors; the docs/process-kit references below are not a
+# generic consumer project's process-state location.
 # Sync pairs:
 #   .forge/commands/*.md        -> template/.forge/commands/*
 #   .claude/agents/*.md         -> template/.claude/agents/*

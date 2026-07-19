@@ -10,6 +10,7 @@
 # Spec 508 will FAIL verification against this builder (the file set differs) and must be
 # RE-SIGNED. That failure is by design, not corruption. See docs/process-kit/sync-runbook.md
 # § Signed-manifest migration (Spec 508).
+# forge:path-literal-ok (comment)
 #
 # Usage:
 #   . ./payload-manifest.ps1 ; Get-ForgeManifest -Root <dir>   # returns the manifest string

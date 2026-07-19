@@ -4,8 +4,8 @@
 > **What is an Infographic Brief?**
 > A condensed, bullet-point synthesis of a project's vision, architecture, pillars, and key
 > metrics — organized as a narrative arc so a wide audience (technical, executive, general)
-> can understand what matters about the project and why. Intended as the authoritative input
-> brief for producing a cinematic or visual architecture infographic.
+> can understand what matters about the project and why. The input brief for a cinematic
+> or visual architecture infographic.
 >
 > **When to produce one:** When the project reaches its first stakeholder-ready milestone
 > (PoC complete, first demo, board presentation, or major phase completion). See
@@ -58,8 +58,8 @@
 
 ## The Core Metaphor
 
-> If the project has a powerful central metaphor, name it here. A good metaphor makes the
-> "before → after" transformation visceral and memorable. Skip this section if there isn't one.
+> Name the project's central metaphor if it has one — a good metaphor makes the "before →
+> after" transformation memorable. Skip this section if there isn't one.
 
 - Before: `<scattered state — e.g., "white light: many sources, no focus">`
 - After: `<focused state — e.g., "business laser: singular focus, inherent direction">`
@@ -69,10 +69,10 @@
 
 ## Foundation: Core Constructs / Pillars of the Domain
 
-> List the foundational concepts the project is built on. For domain platforms, these are
-> often the "laws" or "constructs" of the domain. For technical platforms, these may be
-> the core design principles or architectural invariants.
-> Number them. Include a one-line "what this means" and a one-line "what the platform does with it."
+> List the foundational concepts the project is built on — for domain platforms, the "laws"
+> or "constructs" of the domain; for technical platforms, the core design principles or
+> architectural invariants. Number them, each with a one-line meaning and a one-line
+> platform application.
 
 1. **`<Construct 1 name>`** — "`<tagline>`" → `<what the platform surfaces or enables for this>`
 2. **`<Construct 2 name>`** — "`<tagline>`" → `<what the platform surfaces or enables for this>`
@@ -150,10 +150,9 @@
 
 ## Leadership / Design Principles
 
-> If the project is grounded in an explicit set of leadership or design principles (from
-> the organization, from a methodology, or defined by the project), list them here.
-> These differ from engineering principles above — they describe *how the team works* and
-> *how the product should feel to use*.
+> List leadership/design principles if the project has an explicit set (organizational,
+> methodology-based, or project-defined). These differ from engineering principles above:
+> they describe *how the team works* and *how the product should feel to use*.
 
 1. **`<Principle>`** — `<one-sentence application to the product>`
 2. **`<Principle>`** — `<one-sentence application to the product>`

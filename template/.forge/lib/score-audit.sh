@@ -23,6 +23,28 @@
 SCORE_AUDIT_FILE="${SCORE_AUDIT_FILE:-.forge/state/score-audit.jsonl}"
 ATOMIC_BOUND_BYTES=4000
 
+# Resolve a forge.paths.<key> value via config.sh's forge_path (Spec 564), falling back
+# to the classic default when bash lacks associative-array support or config load fails.
+# Runs relative to cwd (this helper has no repo-root parameter of its own).
+_score_audit_paths_key() {
+  local key="$1" default="$2"
+  if declare -A __score_audit_probe 2>/dev/null; then
+    unset __score_audit_probe
+    local lib_dir
+    lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck source=/dev/null
+    if source "${lib_dir}/config.sh" 2>/dev/null; then
+      PROJECT_DIR="." forge_config_load "./AGENTS.md" >/dev/null 2>&1 || true
+      local resolved
+      if resolved="$(PROJECT_DIR="." forge_path "$key" 2>/dev/null)"; then
+        printf '%s\n' "$resolved"
+        return
+      fi
+    fi
+  fi
+  printf '%s\n' "$default"
+}
+
 _iso_ts_utc() { date -u +%FT%TZ; }
 
 _git_sha_or_unknown() {
@@ -103,7 +125,9 @@ cmd_record_observed() {
     return 0
   fi
   local spec_id="$1" spec_file=""
-  for f in docs/specs/${spec_id}-*.md; do
+  local specs_dir
+  specs_dir="$(_score_audit_paths_key specs docs/specs)"
+  for f in "${specs_dir}"/${spec_id}-*.md; do
     [ -f "$f" ] && spec_file="$f" && break
   done
 
@@ -139,9 +163,11 @@ cmd_record_observed() {
     wallclock_days="0.00"
   fi
 
+  local sessions_dir
+  sessions_dir="$(_score_audit_paths_key sessions docs/sessions)"
   local session_count=0
-  if compgen -G "docs/sessions/*.json" > /dev/null 2>&1; then
-    session_count=$(grep -l "\"$spec_id\"" docs/sessions/*.json 2>/dev/null | wc -l | tr -d ' ')
+  if compgen -G "${sessions_dir}/*.json" > /dev/null 2>&1; then
+    session_count=$(grep -l "\"$spec_id\"" "${sessions_dir}"/*.json 2>/dev/null | wc -l | tr -d ' ')
   fi
   [ -z "$session_count" ] && session_count=0
 

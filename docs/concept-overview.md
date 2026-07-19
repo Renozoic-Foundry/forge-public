@@ -16,13 +16,14 @@ FORGE's underlying methodology is Evidence-Gated Iterative Delivery (EGID). EGID
 
 ## Foundations
 
-EGID draws on five established frameworks, each contributing a specific structural element:
-
-- **KCS v6** (Consortium for Service Innovation, 2016) — Provides the double-loop structure: the Solve Loop handles per-spec delivery, while the Evolve Loop captures signals and feeds process improvements back into the system.
-- **Stage-Gate** (Robert G. Cooper, 1986) — Establishes the principle that work passes through defined gates with explicit go/no-go criteria, preventing incomplete work from advancing.
-- **AAIF** (Linux Foundation, 2025) — Supplies the autonomy-level framework that lets operators dial AI independence up or down per command, with guardrails at each level.
-- **Architecture Decision Records** (Michael Nygard, 2011) — Contributes the practice of recording architectural decisions as versioned documents, preserving the "why" alongside the "what."
-- **Context Anchoring** (Rahul Garg, 2026, published on martinfowler.com) — Introduces the concept of context anchors: living documents (specs, ADRs, session logs) that persist decision context across AI sessions, team changes, and time.
+EGID draws on five established frameworks — KCS v6's double-loop learning, Stage-Gate's evidence
+checkpoints, AAIF's bounded autonomy, Spec Kit's persistent specs, and plugin-primary distribution.
+The canonical definition of the five, why each was chosen, and how they interlock lives in
+[Design Philosophy § Five Foundations](design-philosophy.md#five-foundations--why-these-five-and-how-they-interlock)
+— it is defined once there so the lists cannot drift apart. Beyond the five, FORGE credits
+additional influences — Architecture Decision Records (Michael Nygard, 2011) for versioned decision
+capture, and Context Anchoring (Rahul Garg, 2026, martinfowler.com) for the living-document pattern
+that specs, ADRs, and session logs embody.
 
 ## How it works
 

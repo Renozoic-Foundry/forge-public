@@ -2,7 +2,7 @@
 
 Operator-facing recovery procedures for the FORGE `/onboarding` lifecycle. Cross-references Spec 315 (mature-repo detector + staged writes).
 
-This page is referenced by `.forge/commands/onboarding.md` and is required reading when any of the following occurs:
+This page is referenced by `${CLAUDE_PLUGIN_ROOT:-.}/.forge/commands/onboarding.md` and is required reading when any of the following occurs:
 - The mature-repo detector auto-completed onboarding incorrectly
 - Atomic application halted partway through with a partial-state report
 - A pre-existing staging directory was found at session start
@@ -102,6 +102,6 @@ Recovery: `git restore .forge/onboarding.yaml` to bring the file back to its com
 
 ## See also
 
-- `.forge/commands/onboarding.md` — the canonical `/onboarding` command body
+- `${CLAUDE_PLUGIN_ROOT:-.}/.forge/commands/onboarding.md` — the canonical `/onboarding` command body
 - `docs/specs/315-onboarding-staged-writes-and-mature-repo-detection.md` — the spec authorizing this recovery procedure
 - `docs/process-kit/runbook.md` — broader operator runbook

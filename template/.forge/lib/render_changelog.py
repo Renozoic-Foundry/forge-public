@@ -7,6 +7,7 @@ event streams (`.forge/state/events/<spec-id>/*.jsonl`).
 Falls back to spec frontmatter `Closed:`/`Status:` fields when no event streams
 exist (greenfield projects, pre-migration state).
 
+# forge:path-literal-ok (comment) — usage example; actual default resolved via runtime_config
 Usage:
     python3 .forge/lib/render_changelog.py [--specs-dir docs/specs] \
                                             [--events-dir .forge/state/events] \
@@ -41,6 +42,23 @@ except (AttributeError, OSError):
 from events import load_events  # noqa: E402
 from spec_frontmatter import iter_spec_files, parse_spec_file  # noqa: E402
 from render_invariant import assert_complete  # noqa: E402
+
+try:
+    from runtime_config import resolve_path as _rc_resolve_path  # Spec 564 helper
+except ImportError:
+    _rc_resolve_path = None
+
+
+def _default_specs_dir() -> str:
+    """Resolve forge.paths.specs via runtime_config; fall back to the classic default."""
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(Path("."), "specs")
+            if not error and value:
+                return value
+        except Exception:
+            pass
+    return "docs/specs"
 
 import re as _re
 
@@ -204,7 +222,7 @@ def render(specs_dir: Path, events_dir: Path, *, header: bool = True) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Render FORGE changelog from event streams")
-    p.add_argument("--specs-dir", default="docs/specs")
+    p.add_argument("--specs-dir", default=_default_specs_dir())
     p.add_argument("--events-dir", default=".forge/state/events")
     p.add_argument("--output", default="-")
     p.add_argument("--no-header", action="store_true")

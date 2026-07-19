@@ -103,7 +103,7 @@ if $CHECK_MODE; then
   echo ""
 
   # Surface 3 (Spec 489 / SIG-487-02): .forge/{bin,lib} canonical <-> template mirror parity.
-  # forge-sync-cross-level only covers .forge/commands, .claude/agents, docs/process-kit — it does
+  # forge-sync-cross-level only covers .forge/commands, .claude/agents, docs/process-kit — it does  # forge:path-literal-ok (comment)
   # NOT cover .forge/{bin,lib}, so those could silently drift. This surface closes that gap.
   # CR-normalized compare (.ps1 mirrors materialize CRLF on Windows checkouts; Spec 482 convention).
   echo "=== Surface 3: .forge/{bin,lib} mirrors (Spec 489 / SIG-487-02) ==="
@@ -200,6 +200,42 @@ PYEOF
       : # OK line printed by the check
     else
       DRIFT_SURFACES+=("consensus-classifier embed (Spec 524 — .forge/workflows/consensus.workflow.js)")
+    fi
+    echo ""
+  fi
+
+  # Surface 7 (Spec 571): generated reference docs — regenerate to temp and diff
+  # against the committed copies. The forge:gen:volatile region (git-log revision
+  # history) is stripped from BOTH sides before comparing: it is the only part of
+  # a generated doc that is not a pure function of tracked file content. Skip
+  # silently if the generators are absent (consumer projects predating Spec 571).
+  GEN_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+  if [ -f "${GEN_ROOT}/scripts/gen-quick-reference.sh" ]; then
+    echo "=== Surface 7: generated reference docs (Spec 571) ==="
+    strip_volatile() {
+      sed '/<!-- forge:gen:volatile:start -->/,/<!-- forge:gen:volatile:end -->/d' "$1"
+    }
+    gen7_tmp="$(mktemp -d "${TMPDIR:-${TEMP:-/tmp}}/forge-surface7-XXXXXX")"
+    gen7_drift=0
+    bash "${GEN_ROOT}/scripts/gen-command-reference.sh"        > "$gen7_tmp/command-reference.md"
+    bash "${GEN_ROOT}/scripts/gen-quick-reference.sh"          > "$gen7_tmp/QUICK-REFERENCE.md"
+    "${SCRIPT_DIR}/forge-py" "${GEN_ROOT}/scripts/gen-agents-config-reference.py" > "$gen7_tmp/agents-config-reference.md" 2>/dev/null
+    while IFS='|' read -r fresh committed label; do
+      if ! diff -q <(strip_volatile "$gen7_tmp/$fresh") <(strip_volatile "${GEN_ROOT}/$committed") >/dev/null 2>&1; then
+        echo "  DRIFT: $committed is stale — regenerate with $label"
+        gen7_drift=1
+      fi
+    done <<'SURFACES'
+command-reference.md|docs/command-reference.md|scripts/gen-command-reference.sh --write
+QUICK-REFERENCE.md|docs/QUICK-REFERENCE.md|scripts/gen-quick-reference.sh --write
+QUICK-REFERENCE.md|template/docs/QUICK-REFERENCE.md|scripts/gen-quick-reference.sh --write
+agents-config-reference.md|docs/agents-config-reference.md|forge-py scripts/gen-agents-config-reference.py --write
+SURFACES
+    rm -rf "$gen7_tmp"
+    if [[ $gen7_drift -eq 0 ]]; then
+      echo "  parity: OK — generated docs match fresh regeneration (volatile region excluded)"
+    else
+      DRIFT_SURFACES+=("generated reference docs (Spec 571 — run the named generators with --write)")
     fi
     echo ""
   fi

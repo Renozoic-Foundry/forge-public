@@ -18,12 +18,16 @@ FORGE is a living framework that improves through use. Downstream projects (proj
 
 ## Prerequisites
 
+> **This section is the single source for FORGE tool-version pins** (Spec 572). Consumer docs
+> intentionally do not restate versions — plugin consumers need only Claude Code + Git; the pins
+> below apply to framework maintainers and the legacy Copier scaffold path.
+
 Before contributing to FORGE you will need:
 
-- **Python 3.9+** — `python3 --version`
+- **Python 3.10+** — `python3 --version` (floor enforced by the `forge-py` runtime wrapper)
 - **Git** — `git --version`
-- **Copier 9.0+** — `pip install copier`
-- **Claude Code** (for testing slash commands) — install from [claude.ai/code](https://claude.ai/code)
+- **Copier 9.4.0+** — `pip install copier` (floor enforced by `_min_copier_version` in `copier.yml`; legacy scaffold path only)
+- **Claude Code** (for testing slash commands and the plugin payload) — install from [claude.ai/code](https://claude.ai/code)
 - **shellcheck** (for validating bash scripts) — `pip install shellcheck-py` or `brew install shellcheck`
 
 Windows users: use Git Bash for all shell operations. PowerShell wrappers are in `template/.forge/bin/*.ps1`.
@@ -58,17 +62,36 @@ The spec is the unit of work. No implementation without one.
 
 ## Testing
 
-After any template change:
+**Fast matrix** — run after any change (all three are green on a clean checkout):
 ```bash
-# Validate bash scripts
+# Shellcheck across all runtime bash scripts
 bash scripts/validate-bash.sh
 
-# Verify generated-surface parity (repo-root .forge/ canonical → plugin payload + template/)
+# Generated-surface parity: canonical source → plugin payload, template mirrors,
+# skills, AND generated reference docs (quick/command/config references — Spec 571)
 bash .forge/bin/forge-parity.sh --check
 
-# Bootstrap a clean project and verify no errors
-bash scripts/smoke-test-runtime.sh
+# Public-doc style/consistency/deprecated-command validation
+bash scripts/validate-public-docs.sh
 ```
+
+**Full matrix** — additionally, before a release or after template/scaffold changes:
+```bash
+# Copier render smoke test (legacy scaffold path)
+bash scripts/smoke-test-template.sh
+
+# Bootstrap a clean project and exercise the runtime pipeline
+bash scripts/smoke-test-runtime.sh
+
+# Plugin payload parity + manifest schema
+bash .forge/bin/plugin-parity-check.sh
+bash .forge/bin/check-plugin-manifest.sh
+```
+
+If you changed a generated reference doc's canonical sources, regenerate before committing:
+`scripts/gen-command-reference.sh --write`, `scripts/gen-quick-reference.sh --write`,
+`.forge/bin/forge-py scripts/gen-agents-config-reference.py --write` — parity `--check` fails on
+stale generated docs, and the publish pipeline refuses to sync them.
 
 Manual validation steps are in `docs/process-kit/human-validation-runbook.md` (available after bootstrapping a project from this template).
 
@@ -121,7 +144,7 @@ Your `_src_path` contains `Renozoic-Foundry/forge-public`. Contribute directly:
 1. Open an issue or PR on [Renozoic-Foundry/forge-public](https://github.com/Renozoic-Foundry/forge-public)
 2. Include the signal entry (SIG-NNN) or insight (CI-NNN) that prompted the improvement
 3. Ensure the change is domain-neutral — no project-specific names, paths, or config
-4. Apply the change to the Copier template files (under `template/`), not your project's copies
+4. Apply the change to the **canonical source** (repo-root `.forge/commands/`, `.forge/bin`, `.forge/lib`, or root docs) — the plugin payload (`.claude/`) and `template/` tree are generated downstream surfaces; regenerate them with `bash .forge/bin/forge-parity.sh` rather than editing copies
 
 ### Path B — Private Fork (org-specific URL)
 

@@ -4,6 +4,13 @@ description: "Framework: FORGE"
 workflow_stage: review
 ---
 
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
+
 # Framework: FORGE
 # Model-Tier: sonnet
 <!-- multi-block mode: serialized — choice blocks fire across distinct mechanical steps; no two blocks present in the same agent message. Each block waits for operator response before the next step proceeds. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
@@ -763,6 +770,24 @@ bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh stamp --spec <NNN> --basel
 **Evaluation** (always exit 0 — no gate outcome, no Review Brief content; surfacing is `/now`'s job):
 - Helper printed `STAMPED <doc> — <reason>` line(s): mark `[x] Doc-freshness stamp — <N> public doc(s) stamped stale`. Include the stamped doc file(s) in the close commit's explicit path list.
 - Helper printed nothing: mark `[x] Doc-freshness stamp — no documented surface changed`. Proceed silently.
+
+### [mechanical] Step 2d+++c — Docs-Impact gate (Spec 571)
+
+Verify the closing spec declares its documentation impact. Read the spec frontmatter's
+`Docs-Impact:` field:
+
+- **Present and substantive** (names one or more doc surfaces, or an explicit
+  `none — internal only` with the dash-rationale form): emit
+  `GATE [docs-impact]: PASS — <value snippet>`. If doc surfaces are named, verify each named
+  surface appears in the spec's changed-files list or Evidence; a named-but-untouched surface
+  downgrades to `GATE [docs-impact]: CONDITIONAL_PASS — declared surface <name> not in changed
+  files; confirm at review`. Proceed.
+- **Present but placeholder** (still the template's angle-bracket text, empty, or
+  whitespace-only): emit `GATE [docs-impact]: FAIL — Docs-Impact is a placeholder. Remediation:
+  declare the doc surfaces this spec touched, or 'none — internal only'.` Stop close.
+- **Absent** (spec predates the Spec 571 template): emit
+  `GATE [docs-impact]: WARN — legacy spec without Docs-Impact frontmatter (advisory; specs
+  created after Spec 571 carry it).` Proceed — never blocks legacy specs.
 
 ### [mechanical] Step 2d++++ — Gate-mediation drift gate (Spec 444 Req 8a/8c)
 

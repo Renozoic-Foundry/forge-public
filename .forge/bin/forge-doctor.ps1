@@ -159,6 +159,7 @@ function Get-Currency {
 # --- Spec 530: durable JSONL history + cached last-full state (bash twin parity) ---
 # mode values: full | summary | summary-verbose. provenance: pinned | unpinned | "".
 # Overridable for hermetic tests (Spec 535).
+# forge:path-literal-ok (classic-default fallback — resolved variant in forge-doctor.sh; ps1 delegates; Spec 575)
 $HistoryFile = if ($env:FORGE_DOCTOR_HISTORY_FILE) { $env:FORGE_DOCTOR_HISTORY_FILE } else { Join-Path $Root 'docs/sessions/doctor-history.jsonl' }
 $LastFullFile = Join-Path $StateDir 'doctor-last-full.state'
 

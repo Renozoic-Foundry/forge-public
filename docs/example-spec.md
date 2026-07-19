@@ -12,14 +12,18 @@ This is a complete example of a closed spec from the configlint project, showing
 - Priority-Score: <!-- BV=3 E=1 R=1 SR=3 → score=32 (see docs/process-kit/scoring-rubric.md) -->
 - Trigger: user correction — operators expect `--version` on any CLI tool; absence causes confusion
 - Dependencies: 001
+- Docs-Impact: README (usage section — new flag documented)
+- DA-Reviewed: 2026-02-11
+- DA-Decision: PASS
 - Owner: operator
 - Author: Claude
 - Reviewer: operator
 - Approver: operator
 - Implementation owner: Claude
 - Last updated: 2026-02-14
+- valid-until: 2026-05-11
 
-> **Why this matters:** The frontmatter block is machine-readable metadata. Status tracks lifecycle position. Change-Lane determines the review depth: a `hotfix` gets fast-tracked, a `standard-feature` gets full evidence gates. The Priority-Score formula (BV x SR / E x R) makes ranking objective. Always set the Trigger — it answers "why now?" when someone reads this spec months later.
+> **Why this matters:** The frontmatter block is machine-readable metadata. Status tracks lifecycle position. Change-Lane determines the review depth: a `hotfix` gets fast-tracked, a `standard-feature` gets full evidence gates. The Priority-Score formula — `(BV×3) + ((6−E)×2) + ((6−R)×2) + (SR×1)` (see the scoring rubric) — makes ranking objective. Always set the Trigger — it answers "why now?" months later. **Docs-Impact** declares which documentation surfaces the change touches (or `none — internal only`) and is verified at `/close`. **valid-until** is the draft's freshness window — `/now` flags drafts that sit unimplemented past it. The DA fields record the adversarial Devil's Advocate review that runs before implementation.
 
 ## Objective
 
@@ -59,6 +63,21 @@ Out of scope:
 5. Version string is read from pyproject.toml at runtime, not hardcoded
 
 > **Why this matters:** Acceptance criteria are the spec's definition of done. Each criterion must be testable — either by a script or by a human following a checklist. Write them as assertions: "X produces Y." If you cannot write a test for a criterion, it is too vague. The evidence gate at `/close` checks these criteria against actual output.
+
+## Constraints
+
+- This implementation must NOT introduce new CLI flags, configuration options, or abstractions beyond `--version`/`-V`.
+- Must NOT hardcode the version string anywhere outside `pyproject.toml`.
+
+> **Why this matters:** Constraints are negative acceptance criteria — what the implementation must NOT do. AI implementers tend to "helpfully" add adjacent features; explicit constraints restore the simplicity pressure. The spec-compliance reviewer evaluates them at `/close`.
+
+## Verification Scope
+
+(a) What the ACs verify: flag parsing, output format, exit code, precedence over validation, and the pyproject.toml source of truth.
+(b) What the ACs do NOT verify: behavior when pyproject.toml is missing or malformed (installer guarantees it exists).
+(c) Residual risks after evidence gates pass: none material — the flag is read-only and side-effect-free.
+
+> **Why this matters:** Verification Scope tells reviewers what the evidence gates do and do not cover. Declaring the gaps explicitly beats discovering them in production — and the Devil's Advocate gate prompts for this section on any spec touching security, data integrity, or behavioral correctness.
 
 ## Test Plan
 
@@ -112,11 +131,12 @@ Human validation steps: see `docs/process-kit/human-validation-runbook.md` secti
 ## Evidence
 
 - Tests/lint/output summary:
-  - GATE 1 — spec-exists: PASS (Spec 003 found in docs/specs/)
-  - GATE 2 — tests-pass: PASS (3/3 tests passed, 0 failures)
-  - GATE 3 — lint-clean: PASS (ruff check: 0 errors, mypy: 0 errors)
-  - GATE 4 — AC-verified: PASS (all 5 acceptance criteria verified)
-  - GATE 5 — human-validation: PASS (operator confirmed version output on macOS and Windows)
+  - GATE [completeness]: PASS — all required sections filled (checked at inline approval)
+  - GATE [devils-advocate]: PASS — 0 findings (two-pass adversarial review)
+  - GATE [test-execution]: PASS — 3/3 tests passed, 0 failures; ruff 0 errors, mypy 0 errors
+  - GATE [post-implementation]: PASS — all 5 acceptance criteria verified with evidence
+  - GATE [docs-impact]: PASS — README usage section updated (declared surface in changed files)
+  - Human validation: PASS — operator confirmed version output on macOS and Windows at /close
 
 ```
 $ pytest tests/test_version.py -v
@@ -143,4 +163,4 @@ configlint 0.4.1
 
 ---
 
-Last verified against Spec 263 on 2026-04-15.
+Last verified against Spec 573 on 2026-07-17 (regenerated to the current spec template: Docs-Impact, valid-until, DA fields, Constraints, Verification Scope, current gate vocabulary).

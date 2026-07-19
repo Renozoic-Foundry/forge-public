@@ -33,6 +33,7 @@
 # to make it fatal; bare call under `set -e` is already fatal).
 #
 # See docs/process-kit/scripted-edit-conventions.md.
+# forge:path-literal-ok (comment)
 
 # Print a content hash of a file. Used to capture a pre-edit baseline.
 # Falls back across sha256sum -> shasum -> cksum so it works on minimal hosts.

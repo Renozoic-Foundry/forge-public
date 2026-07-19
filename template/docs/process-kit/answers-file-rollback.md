@@ -1,8 +1,8 @@
 # Answers-File Rollback Runbook
 
 - Status: **active** (effective 2026-04-24)
-- Spec: [294 — Copier-Native Placeholder Scrub and Migration](../specs/294-canonical-project-yaml-with-answers-projection.md)
-- ADR: [ADR-294 — Copier-Native Placeholder Scrub](../decisions/ADR-294-copier-native-placeholder-scrub.md)
+- Spec: 294 — Copier-Native Placeholder Scrub and Migration
+- ADR: ADR-294 — Copier-Native Placeholder Scrub
 
 This runbook tells operators what to do if the Spec 294 scrub or migration leaves `.copier-answers.yml` in an unexpected state. The helper at `scripts/copier-hooks/scrub_answers.py` is invoked by Copier's `_tasks:` (on every `copier copy`/`copier update`) and `_migrations:` (one-shot on pre-294 → post-294 update). Both are atomic (temp-file + rename); partial writes cannot occur.
 

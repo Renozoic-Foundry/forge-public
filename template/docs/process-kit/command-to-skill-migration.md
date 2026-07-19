@@ -158,6 +158,7 @@ surface coexist. AC4 body-equivalence guarantees that whichever surface answers 
 invocation, the body — and therefore the behavior — is identical. The 16 Category D commands are
 untouched (byte-identical to baseline, AC5).
 
+<!-- forge:maintainer-detail:start -->
 ## Verification
 
 ```bash
@@ -167,6 +168,7 @@ bash .forge/bin/tests/test-spec-461-body-equivalence.sh     # AC4 (+ injected-dr
 grep -c "disable-model-invocation: false" template/.claude/skills/*/SKILL.md  # expect 3 (Cat A)
 grep -c "disable-model-invocation: true"  template/.claude/skills/*/SKILL.md  # expect 10 (Cat B + C)
 ```
+<!-- forge:maintainer-detail:end -->
 
 ## Helper invocations in skill/command bodies (Spec 538)
 

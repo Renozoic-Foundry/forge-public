@@ -136,6 +136,7 @@ historical specs that predate the convention are not flagged. The one-time backf
 audit of specs that *would* have failed is an informational, non-blocking `/evolve`
 pass (Spec 402 AC8) — captured to a markdown report for operator review, not a gate.
 
+<!-- forge:maintainer-detail:start -->
 ## File map
 
 - `.forge/lib/close-adoption-gate.sh` + `.ps1` — detection + adoption-check + gate driver
@@ -143,6 +144,7 @@ pass (Spec 402 AC8) — captured to a markdown report for operator review, not a
 - `template/.forge/lib/close-adoption-gate.{sh,ps1}` — template mirrors
 - `template/.claude/commands/close.md` / `template/.forge/commands/close.md` Step 2g+ — template mirrors
 - `.forge/bin/tests/test-spec-402-adoption-gate.{sh,ps1}` — fixtures (ACs 1-7)
+<!-- forge:maintainer-detail:end -->
 
 ## Cross-references
 

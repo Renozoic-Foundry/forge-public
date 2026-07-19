@@ -32,6 +32,7 @@ ALIAS_MAP_FILE=""
 JSON_OUTPUT=""
 
 usage() {
+    # forge:path-literal-ok (comment/fixture) — heredoc help text below references docs/specs/411-...md
     cat <<'EOF'
 two-list-bypass-detect.sh — Spec 411 coordinated two-list bypass detector
 
@@ -52,6 +53,7 @@ Exit codes:
   1  One or more coordinated bypasses found (FAIL)
   2  Usage / config error (alias map missing or unreadable)
 
+# forge:path-literal-ok (docstring/prose — classic-default spelling in help text; Spec 575)
 See: docs/specs/411-two-list-bypass-detector.md
 EOF
 }

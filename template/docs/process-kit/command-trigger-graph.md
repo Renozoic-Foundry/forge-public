@@ -108,6 +108,7 @@ Edges between commands that fire only when the operator chooses, with no machine
 
 ---
 
+<!-- forge:maintainer-detail:start -->
 ## Cross-reference: where each edge lives
 
 | # | Edge | Source-of-truth file | Line / section |
@@ -128,6 +129,7 @@ Edges between commands that fire only when the operator chooses, with no machine
 | 13 | `/tab` → `/close` | `.claude/commands/tab.md` | Manual session-boundary closure |
 
 The trigger threshold values for edges 3, 4, 6, 7 live in `.forge/templates/context-trigger-map.yaml` and `docs/process-kit/session-synthesize-evolve-guide.md` (canonical comparison table). When a threshold changes, update both the map and this diagram's edge labels.
+<!-- forge:maintainer-detail:end -->
 
 ---
 

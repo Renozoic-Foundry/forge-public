@@ -15,7 +15,9 @@ figure. ``total_tokens`` is the sum of the four movement fields.
 Capture point (Spec 496-specified): end-of-/implement (or a Stop/SessionEnd
 hook). /implement writes the record to the per-spec event stream as the
 working-tree capture point; /session folds the latest record into the durable
+# forge:path-literal-ok (docstring/prose — classic-default spelling in help text; Spec 575)
 ``token_usage`` field of the session sidecar (tracked ``docs/sessions/*.json``).
+# forge:path-literal-ok (comment) — docstring prose; this module does not read that path itself
 
 Usage:
     forge-py .forge/lib/token_usage.py record --spec NNN --transcript PATH

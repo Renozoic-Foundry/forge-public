@@ -428,6 +428,9 @@ When a safety-named declaration lacks enforcement evidence:
 - CI-307 (insights-log) — telemetry-without-action-thresholds is itself build-without-adopt;
   R5g threshold-to-action mappings address this directly.
 
+<!-- forge:maintainer-detail:start -->
+> Audience: framework maintainers.
+
 ## File map
 
 - `.forge/safety-config-paths.yaml` — registry (data, not code); supports whole-file and
@@ -444,3 +447,4 @@ When a safety-named declaration lacks enforcement evidence:
 - `.forge/state/safety-sweep.jsonl` — quarterly metric history (append-only)
 - `.forge/state/safety-config-paths-prior.yaml` — prior-quarter snapshot (registry-curation drift check)
 - `.forge/bin/tests/test-spec-542-safety-gate-precision.sh` + `.ps1` — Spec 542 regression fixtures
+<!-- forge:maintainer-detail:end -->

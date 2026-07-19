@@ -127,4 +127,6 @@ guard family (jq is required either way; the `fail-open-without-jq` posture is u
 
 ## Parity & maintenance
 
+<!-- forge:maintainer-detail:start -->
 Any change to the hook scripts (`.forge/bin/check-*.sh`), the settings files, or this doc must update BOTH the own-copy and the `template/` mirror in the same change. `test-spec-457-settings-parity.{sh,ps1}` guards the `.claude/settings.json` ↔ `template/.claude/settings.json.template` PreToolUse-hook fork; `forge-sync-cross-level.sh --check` guards the `.forge/bin/` + `docs/process-kit/` mirrors.
+<!-- forge:maintainer-detail:end -->

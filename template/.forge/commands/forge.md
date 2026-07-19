@@ -3,6 +3,13 @@ name: forge
 description: "Unified FORGE project lifecycle command"
 workflow_stage: lifecycle
 ---
+
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
 # Framework: FORGE
 Unified FORGE project lifecycle command. Manages bootstrap and upstream sync workflows.
 
@@ -17,6 +24,7 @@ If $ARGUMENTS is empty, `?`, or `help`:
     stoke         Pull upstream FORGE updates and integrate safely
     status        Show FORGE project status overview (validation queue, backlog summary, active work)
     baselines     List available Copier baselines from ~/.forge/baselines/ (Spec 090)
+    retrofit      Guided consumer retrofit: inventory -> de-vendor -> reorganize -> reconcile (Spec 577)
     help          List all available FORGE commands grouped by workflow stage
 
   Examples:
@@ -41,6 +49,7 @@ Dispatch on the first word of $ARGUMENTS:
 - `init`       → Read `.forge/commands/forge-init.md` and execute it. Pass remaining arguments. This is the merged entry point for onboarding + bootstrap — it detects greenfield vs brownfield and runs the appropriate flow including first-session configuration.
 - `stoke`      → Read `.forge/commands/forge-stoke.md` and execute it. Pass remaining arguments.
 - `status`     → Run a condensed version of `/now`: read docs/specs/README.md for validation queue, docs/backlog.md for top-3 ranked specs, and the latest session log for active work summary. Present in a compact format without the full session brief or choice block. This is the "current forge overview" for quick status checks.
+- `retrofit`   → Guided retrofit flow (Spec 577). Phases via `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/retrofit.py <phase> [--apply]` — ALWAYS dry-run first and show the operator the full action list. Order: `inventory` (read-only; present the classification, collect dispositions for vendored-modified / vendored-no-counterpart / ambiguous — NEVER guess); `devendor` (file deletion — requires explicit operator confirmation (yes/no) after displaying the removal list; refuses without an installed plugin/runtime; before applying, re-confirm team composition: if ANY non-Claude developers, require the FORGE runtime (Spec 576) installed or explicit Claude-only acceptance); `reorganize` (git mv to the contained layout + forge.paths + ownership manifest; then run scripts/check-doc-links.py + forge-doctor D-PATHS and show results); `reconcile` (bounded /reconcile offer: last-90-days / last-200-commits / full-history / skip — planting the reconcile-pending marker on "later"). Each phase commits with explicit paths; each is independently skippable; rollback via .forge/lib/migration-snapshot.sh restore. See docs/process-kit/retrofit-runbook.md.
 - `baselines`  → List Copier baselines available for `--data-file` use. Spec 090 baselines convention. Implementation:
    1. Resolve baselines directory: `$HOME/.forge/baselines/` on POSIX; `$env:USERPROFILE\.forge\baselines\` on Windows. Use platform-appropriate variable.
    2. If the directory does not exist: print `No baselines installed. See docs/process-kit/baseline-format.md for the format and docs/process-kit/baselines/python-fastapi.yaml for an example.` and exit 0 (graceful empty-state, AC 5).

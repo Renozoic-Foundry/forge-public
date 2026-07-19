@@ -24,7 +24,8 @@ Usage:
 Options:
   --repo DIR              git work-tree to scan (default: cwd)
   --since REF             scan REF..HEAD (overrides the marker)
-  --specs-dir DIR         spec directory (default: <repo>/docs/specs)
+  --specs-dir DIR         spec directory (default: <repo>/docs/specs — forge:path-literal-ok
+                          comment; actual default resolved via runtime_config)
   --marker PATH           scan marker (default: <repo>/.forge/state/reconcile-marker.json)
   --memory-dir DIR        operator memory dir for notes (required for notes in --apply)
   --memory-index PATH     MEMORY.md index to append pointers to (default: <memory-dir>/MEMORY.md)
@@ -41,9 +42,43 @@ import re
 import subprocess
 import sys
 
+_LIB_DIR = os.path.dirname(os.path.abspath(__file__))
+if _LIB_DIR not in sys.path:
+    sys.path.insert(0, _LIB_DIR)
+try:
+    from runtime_config import resolve_path as _rc_resolve_path  # Spec 564 helper
+except ImportError:
+    _rc_resolve_path = None
+
 SPEC_LINK_RE = re.compile(r"[Ss]pec[ -]?[0-9]+")
+# Classic defaults — docs/digests/ has no forge.paths key (not part of the Spec 564
+# path family), so it stays a literal prefix here regardless of repo config.
+# forge:path-literal-ok (classic-default definitions — resolved via _process_markers(); docs/digests has no forge.paths key)
 PROCESS_PREFIXES = ("docs/sessions/", "docs/specs/", "docs/digests/")
 PROCESS_EXACT = ("docs/backlog.md",)
+
+
+def _resolved_path_key(repo, key, default):
+    """Resolve one forge.paths.<key> value via runtime_config, falling back to default."""
+    if _rc_resolve_path is None:
+        return default
+    from pathlib import Path
+    try:
+        value, error = _rc_resolve_path(Path(repo), key)
+    except Exception:
+        return default
+    return value if (not error and value) else default
+
+
+def _process_markers(repo):
+    """Resolve the process-path prefixes/exact-matches for this repo via runtime_config."""
+    sessions = _resolved_path_key(repo, "sessions", "docs/sessions")
+    specs = _resolved_path_key(repo, "specs", "docs/specs")
+    backlog = _resolved_path_key(repo, "backlog", "docs/backlog.md")
+    # docs/digests/ has no forge.paths key (not part of the Spec 564 family) — literal.
+    prefixes = (f"{sessions}/", f"{specs}/", "docs/digests/")
+    exact = (backlog,)
+    return prefixes, exact
 SPEC_FILE_RE = re.compile(r"^(\d{3,})-")
 CAVEAT = ("Objective and rationale below are INFERRED from commit messages and diffs, "
           "not authored intent — verify before relying on them.")
@@ -94,7 +129,7 @@ def commit_info(repo, sha):
             "subject": subject, "body": body, "files": files, "lines": lines}
 
 
-def classify(info):
+def classify(info, prefixes=PROCESS_PREFIXES, exact=PROCESS_EXACT):
     """Return 'spec-linked' | 'process' | 'un-specced' for one commit."""
     text = f"{info['subject']} {info['body']}"
     if SPEC_LINK_RE.search(text):
@@ -103,7 +138,7 @@ def classify(info):
     if not files:
         return "process"  # merges / empty diffs: skip (out of scope, Verification (b))
     is_process = all(
-        f.startswith(PROCESS_PREFIXES) or f in PROCESS_EXACT for f in files
+        f.startswith(prefixes) or f in exact for f in files
     )
     return "process" if is_process else "un-specced"
 
@@ -288,11 +323,12 @@ def render_note(num, group, files, lines, today):
 def build_plan(repo, args):
     marker_path = args.marker
     label, shas = resolve_shas(repo, args.since, marker_path, args.window)
+    prefixes, exact = _process_markers(repo)
     buckets = {"spec-linked": 0, "process": 0, "un-specced": 0}
     unspecced = []
     for sha in shas:
         info = commit_info(repo, sha)
-        kind = classify(info)
+        kind = classify(info, prefixes, exact)
         buckets[kind] += 1
         if kind == "un-specced":
             unspecced.append(info)
@@ -368,7 +404,7 @@ def main(argv=None):
 
     repo = os.path.abspath(args.repo)
     if not args.specs_dir:
-        args.specs_dir = os.path.join(repo, "docs", "specs")
+        args.specs_dir = os.path.join(repo, _resolved_path_key(repo, "specs", "docs/specs"))
     if not args.marker:
         args.marker = os.path.join(repo, ".forge", "state", "reconcile-marker.json")
     today = args.today or datetime.date.today().isoformat()

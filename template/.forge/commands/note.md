@@ -3,6 +3,13 @@ name: note
 description: "Add a scratchpad note for the next process checkpoint"
 workflow_stage: session
 ---
+
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
 # Framework: FORGE
 Add a scratchpad note to be reviewed at the next appropriate process checkpoint.
 

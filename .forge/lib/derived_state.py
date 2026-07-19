@@ -27,7 +27,8 @@ CLI dispatch (single-shot per invocation):
 Constraints (Spec 399 + Spec 401):
 - stdlib only (no PyYAML or third-party imports).
 - Binary-mode I/O for any file read (Spec 398 lesson — CRLF/BOM safety).
-- Read-source: spec frontmatter (`docs/specs/NNN-*.md`) + per-spec event streams
+- Read-source: spec frontmatter (`docs/specs/NNN-*.md` — forge:path-literal-ok comment;
+  actual specs dir resolved via runtime_config below) + per-spec event streams
   (`.forge/state/events/<spec-id>/*.jsonl`). The helper does NOT parse the
   rendered `.generated/<artifact>.md` files; rendered artifacts are an
   output of the same source. This keeps the helper independent of any
@@ -63,13 +64,29 @@ _LIB_DIR = Path(__file__).resolve().parent
 if str(_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(_LIB_DIR))
 
+try:
+    from runtime_config import resolve_path as _rc_resolve_path  # Spec 564 helper
+except ImportError:
+    _rc_resolve_path = None
 
-# Curated parents that should hold include markers in split-file mode.
-CURATED_PARENTS = (
-    "docs/backlog.md",
-    "docs/specs/README.md",
-    "docs/specs/CHANGELOG.md",
-)
+
+def _paths_key(root: Path, key: str, default: str) -> str:
+    """Resolve a forge.paths.<key> value via runtime_config, falling back to default."""
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(root, key)
+            if not error and value:
+                return value
+        except Exception:
+            pass
+    return default
+
+
+def _curated_parents(root: Path) -> tuple[str, ...]:
+    """Curated parents that should hold include markers in split-file mode."""
+    backlog = _paths_key(root, "backlog", "docs/backlog.md")
+    specs_dir = _paths_key(root, "specs", "docs/specs")
+    return (backlog, f"{specs_dir}/README.md", f"{specs_dir}/CHANGELOG.md")
 
 INCLUDE_MARKER_RE = re.compile(rb"<!--\s*FORGE-INCLUDE:\s*([^\s>]+)\s*-->")
 # `#  DO NOT EDIT — generated` — em-dash (U+2014, UTF-8 \xe2\x80\x94), en-dash (U+2013, \xe2\x80\x93), or ASCII hyphen.
@@ -111,9 +128,10 @@ def detect_mode(project_root: Optional[Path] = None) -> str:
     """
     root = _resolve_root(project_root)
     generated_dir = root / "docs" / ".generated"
+    curated_parents = _curated_parents(root)
 
     has_include_marker = False
-    for rel in CURATED_PARENTS:
+    for rel in curated_parents:
         p = root / rel
         if not p.is_file():
             continue
@@ -141,11 +159,11 @@ def detect_mode(project_root: Optional[Path] = None) -> str:
             ".generated/ artifact. Either complete the migration "
             "(`python scripts/migrate-to-derived-view.py --mode=split-file`) "
             "or remove docs/.generated/ to revert to legacy mode."
-            .format(", ".join(CURATED_PARENTS))
+            .format(", ".join(curated_parents))
         )
 
     # generated_dir absent — check for legacy "generated" mode
-    for rel in CURATED_PARENTS:
+    for rel in curated_parents:
         p = root / rel
         if not p.is_file():
             continue
@@ -187,7 +205,7 @@ def _backlog_row_dict(fm: dict, *, rank: Optional[str] = None) -> dict:
 def get_backlog_rows(project_root: Optional[Path] = None) -> list[dict]:
     """Return the ranked backlog as a list of dicts.
 
-    Source: per-spec frontmatter (docs/specs/NNN-*.md) — same data the
+    Source: per-spec frontmatter (docs/specs/NNN-*.md — forge:path-literal-ok comment) — same data the
     renderer consumes. Mode-independent (read source is the same in all
     three modes; mode classification is for the write side).
 
@@ -204,7 +222,7 @@ def get_backlog_rows(project_root: Optional[Path] = None) -> list[dict]:
     """
     root = _resolve_root(project_root)
     iter_spec_files, parse_spec_file, _ = _import_renderers()
-    files = iter_spec_files(root / "docs" / "specs")
+    files = iter_spec_files(root / _paths_key(root, "specs", "docs/specs"))
 
     rows: list[dict] = [parse_spec_file(f) for f in files]
     rows = [r for r in rows if r is not None]
@@ -251,7 +269,7 @@ def get_spec_index(project_root: Optional[Path] = None) -> list[dict]:
     """
     root = _resolve_root(project_root)
     iter_spec_files, parse_spec_file, _ = _import_renderers()
-    files = iter_spec_files(root / "docs" / "specs")
+    files = iter_spec_files(root / _paths_key(root, "specs", "docs/specs"))
 
     out: list[dict] = []
     for f in files:
@@ -293,7 +311,7 @@ def get_changelog_entries(project_root: Optional[Path] = None) -> list[dict]:
 
     # spec_id → title for joins
     title_by_id: dict[str, str] = {}
-    for f in iter_spec_files(root / "docs" / "specs"):
+    for f in iter_spec_files(root / _paths_key(root, "specs", "docs/specs")):
         fm = parse_spec_file(f)
         if fm is None:
             continue
@@ -369,7 +387,8 @@ def _backlog_table_via_renderer(project_root: Optional[Path] = None) -> str:
     rendered artifact.
     """
     from render_backlog import render  # delegate — no parallel formatter
-    full = render(_resolve_root(project_root) / "docs" / "specs", header=True)
+    root = _resolve_root(project_root)
+    full = render(root / _paths_key(root, "specs", "docs/specs"), header=True)
     lines = full.splitlines()
     try:
         start = next(i for i, ln in enumerate(lines) if ln.startswith("| Rank "))

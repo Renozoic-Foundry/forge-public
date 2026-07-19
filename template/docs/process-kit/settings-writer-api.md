@@ -1,8 +1,11 @@
 # Settings-writer API (planned, deferred)
 
-> **Status**: planned API — **not yet implemented**. The library this document describes is the subject of [Spec 285](../specs/285-onboarding-configure-shared-writer.md), which is **formally deferred** by 6-role consensus (2026-04-30 round 3, re-confirmed 2026-05-09 round 4). This document captures the design knowledge so future operators evaluating re-activation triggers do not have to re-derive the API shape and the staged-vs-direct-apply architectural split from spec rev logs. Carve-out authored under [Spec 418](../specs/418-settings-writer-api-doc-carve-out.md).
+> **Status**: planned API — **not yet implemented**. The library this document describes is the subject of Spec 285, which is **formally deferred** by 6-role consensus (2026-04-30 round 3, re-confirmed 2026-05-09 round 4). This document captures the design knowledge so future operators evaluating re-activation triggers do not have to re-derive the API shape and the staged-vs-direct-apply architectural split from spec rev logs. Carve-out authored under Spec 418.
 >
 > Do **not** implement code from this doc until one of the [Re-activation triggers](#re-activation-triggers) fires.
+
+<!-- forge:maintainer-detail:start -->
+> Audience: framework maintainers.
 
 ## Overview
 
@@ -43,7 +46,7 @@ So `/configure` writes directly: each `set_*` function modifies its target file 
 
 ### Why the split is permanent (not a refactor opportunity)
 
-[Spec 285's revision log dated 2026-04-30](../specs/285-onboarding-configure-shared-writer.md) records the consensus decision that this split is the correct end state, **not** an interim state to be unified later. Two unification paths were considered and rejected:
+Spec 285's revision log dated 2026-04-30 records the consensus decision that this split is the correct end state, **not** an interim state to be unified later. Two unification paths were considered and rejected:
 
 1. **Collapse Spec 315's two-phase flow into the shared library** — rejected because it regresses the `decline-leaves-pristine` safety property on the first-run path.
 2. **Parameterize the shared library with `--mode={stage,apply}`** — rejected because the staging logic (manifest computation, diff presentation, atomic apply, halt-on-failure, stale-staging detection) is too thick for a settings-writer primitive. If a future non-`/onboarding` command needs staged settings-writes, the right move is a separate `staged-writes-library` extraction, not parameterization of this primitive.
@@ -97,7 +100,7 @@ This rules out the alternative of building shell-only YAML editors in pure bash,
 
 ## Schema reference
 
-[Spec 359](../specs/359-onboarding-schema-reconciliation.md) (closed 2026-04-28) reconciled the `.forge/onboarding.yaml` schema. Key points relevant to this library:
+Spec 359 (closed 2026-04-28) reconciled the `.forge/onboarding.yaml` schema. Key points relevant to this library:
 
 - **Top-level keys**: `status`, `phases`, `features`, `mcp_servers`, `setup_tasks`, `project`.
 - **`project` sub-keys**: `name`, `description`, `primary_stack`, `test_command`, `lint_command`, `methodology` (added in Spec 359).
@@ -107,7 +110,7 @@ This schema is the contract the library writes against. Schema changes are out o
 
 ## Re-activation triggers
 
-[Spec 285's 2026-04-30 defer](../specs/285-onboarding-configure-shared-writer.md) declared two re-activation triggers. Either one fires → re-score Spec 285 against then-current state, then `/implement`:
+Spec 285's 2026-04-30 defer declared two re-activation triggers. Either one fires → re-score Spec 285 against then-current state, then `/implement`:
 
 - **Trigger (a)** — A **second concrete direct-apply caller** is specced. Examples cited in the defer entry: `/re-onboard --reset-key`, `/configure-batch`, a CI hook that needs to mutate the same 6 settings files. The trigger fires when such a spec exists in `docs/specs/` (status `draft` or further) — not when it's merely contemplated.
 - **Trigger (b)** — A /configure drift bug recurs that a shared writer would have prevented. "Drift" here means inconsistent behavior across the 4 `/configure` mirrors due to inline-write logic divergence; the trigger fires when such a bug is filed as a signal in `docs/sessions/signals.md` or as a hotfix-lane spec.
@@ -145,6 +148,7 @@ Write-All
 
 ### When NOT to call this library
 
-- **First-run onboarding** — use `/onboarding` Step B's staged-writes flow ([Spec 315](../specs/315-onboarding-staged-writes-and-mature-repo-detection.md)). The staging-then-apply ceremony exists for first-run safety; bypassing it via this library defeats `decline-leaves-pristine` and atomic-application.
+- **First-run onboarding** — use `/onboarding` Step B's staged-writes flow (Spec 315). The staging-then-apply ceremony exists for first-run safety; bypassing it via this library defeats `decline-leaves-pristine` and atomic-application.
 - **Bulk schema migrations** — multi-key edits where consistency across files matters more than atomicity per call. Build a migration script that uses this library's primitives; the library itself is not the orchestrator.
 - **Settings files outside the canonical six** — extend the schema (per [Spec 359](#schema-reference)) and add a typed function rather than calling a generic file-edit helper.
+<!-- forge:maintainer-detail:end -->

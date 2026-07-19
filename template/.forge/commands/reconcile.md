@@ -3,6 +3,13 @@ name: reconcile
 description: "Reconcile git history into the spec corpus — draft stub specs / memory notes for work committed outside FORGE"
 workflow_stage: discovery
 ---
+
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
 # Framework: FORGE
 <!-- multi-block mode: serialized — the Step 3 confirm block and the Step 5 next-action block fire at distinct mechanical steps; each waits for operator response before the next step proceeds. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
 Scan git history for commits with no matching spec, cluster them by related files, and

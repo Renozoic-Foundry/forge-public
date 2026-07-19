@@ -6,7 +6,7 @@
 # /spec-or-/explore hint at the session's highest-attention moment.
 #
 # NEVER blocks: exit 0 in all paths. This is a state-snapshot hook, NOT
-# enforcement — see docs/process-kit/hook-coverage.md (Slice 3).
+# enforcement — see docs/process-kit/hook-coverage.md (Slice 3).  # forge:path-literal-ok (comment)
 #
 # The hint fires SOLELY on the absence of implementing.json. It MUST NOT scan
 # prompt text or any operator-typed content (Spec 460 constraint — the dropped
@@ -28,6 +28,16 @@ if [ -n "${_HOOK_DIR:-}" ] && [ -f "$_HOOK_DIR/../lib/resolve-root.sh" ]; then
   forge_resolve_roots 2>/dev/null || true
 fi
 cd "${FORGE_PROJECT_ROOT:-.}" 2>/dev/null || true
+
+# Spec 575 — resolve process-state paths via forge.paths (classic defaults when unset)
+SESSIONS_DIR="docs/sessions"
+_cfg="$(dirname "${BASH_SOURCE[0]:-$0}")/../lib/config.sh"
+if [ -f "$_cfg" ]; then
+  # shellcheck source=/dev/null
+  . "$_cfg"
+  forge_config_load "AGENTS.md" >/dev/null 2>&1 || true
+  __resolved="$(forge_path sessions 2>/dev/null)" && SESSIONS_DIR="$__resolved"
+fi
 
 # --- active spec (from .forge/state/implementing.json) ---
 SPEC="(none)"
@@ -75,7 +85,7 @@ fi
 
 # --- last evolve (newest session log carrying a "Last evolve" line) ---
 EVOLVE="(unknown)"
-LOGS=(docs/sessions/2[0-9]*.md)
+LOGS=("${SESSIONS_DIR}"/2[0-9]*.md)
 if [ -e "${LOGS[0]:-}" ]; then
   for ((i = ${#LOGS[@]} - 1; i >= 0; i--)); do
     d="$(grep -i "last evolve" "${LOGS[$i]}" 2>/dev/null | grep -o '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | head -1)"

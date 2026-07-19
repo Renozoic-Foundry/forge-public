@@ -4,7 +4,7 @@
 
 This runbook applies only to checkouts that ran `/forge stoke` against `.forge/lib/stoke.py` versions that lack the marker `# Spec 427: .git/** exclusion enforced`.
 
-The accompanying defect report is at [`docs/bug_reports/forge-stoke-defect-report-2026-05-14.md`](../bug_reports/forge-stoke-defect-report-2026-05-14.md).
+The accompanying defect report is at `docs/bug_reports/forge-stoke-defect-report-2026-05-14.md`.
 
 ---
 

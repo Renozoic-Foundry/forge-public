@@ -10,10 +10,10 @@ Spec 401 ships a single primitive that resolves these differences cleanly: the `
 
 ## Wrapper convention
 
-**Always invoke FORGE-shipped Python helpers via the wrapper:**
+Invoke FORGE-shipped Python helpers via the wrapper:
 
 ```bash
-.forge/bin/forge-py <script-path> [args...]
+"${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py" <script-path> [args...]
 ```
 
 This invocation string is byte-identical across platforms and mirrors. The wrapper is provided in two parity copies:
@@ -84,7 +84,7 @@ If either prints a path, you're good. If not, install Git for Windows option 3 o
 
 ## stdlib-only constraint
 
-All FORGE-shipped Python helpers (`assemble_view.py`, `migrate-to-derived-view.py`, `render_backlog.py`, `render_changelog.py`, `render_spec_index.py`, `stoke.py`) MUST use only Python 3.10+ stdlib modules. **One exception**: `strategic-scope.py` imports `yaml` (PyYAML), which is a transitive FORGE dependency via Copier — PyYAML ships in the same install set as Copier, so requiring it adds no new install burden. The stdlib-only audit (`tests/test-spec-401-stdlib-only-audit.py`) whitelists `yaml` for `strategic-scope.py` only.
+All FORGE-shipped Python helpers (`assemble_view.py`, `migrate-to-derived-view.py`, `render_backlog.py`, `render_changelog.py`, `render_spec_index.py`, `stoke.py`) use only Python 3.10+ stdlib modules. **One exception**: `strategic-scope.py` imports `yaml` (PyYAML), which is a transitive FORGE dependency via Copier — PyYAML ships in the same install set as Copier, so requiring it adds no new install burden. The stdlib-only audit (`tests/test-spec-401-stdlib-only-audit.py`) whitelists `yaml` for `strategic-scope.py` only.
 
 The constraint exists so FORGE never grows a Python-package install step beyond Copier itself. Any new helper that needs a third-party library must either (a) replace the dependency with stdlib equivalents, or (b) get an explicit spec-driven exception added to the audit whitelist.
 
@@ -92,7 +92,7 @@ The constraint exists so FORGE never grows a Python-package install step beyond 
 
 ### Microsoft Store stub (Windows)
 
-`%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` is a zero-byte stub that opens the Microsoft Store. Any tool that runs `where python` and uses the first hit can hang or display the Store page. **The wrapper detects and skips this path.** If you see Microsoft Store opening when you run a FORGE command, run `where python` to confirm; the wrapper should already skip it, but verify your `forge-py.cmd` is current (Spec 401+).
+See [Microsoft Store stub skip](#microsoft-store-stub-skip-windows-only) above for the detection mechanism. If you see the Microsoft Store open when running a FORGE command: run `where python` to confirm the stub is the first hit, then verify your `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py.cmd` is current (Spec 401+).
 
 ### pyenv shim setup
 
@@ -120,7 +120,7 @@ When running FORGE commands from a host shell while files live in a devcontainer
 **Symptom: FORGE command opens the Microsoft Store on Windows**
 
 1. Run `where python` — if the first hit is under `WindowsApps\`, that's the stub.
-2. The wrapper should already skip this path. Verify your `.forge/bin/forge-py.cmd` is current (Spec 401+).
+2. The wrapper should already skip this path. Verify your `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py.cmd` is current (Spec 401+).
 3. If the wrapper still routes to the stub, file a bug: include `where python`, `where py`, and the wrapper's stderr.
 
 **Symptom: FORGE command fails with `Windows: 'sh' not found on PATH`**
@@ -129,6 +129,6 @@ See the [Windows prerequisite detail](#windows-prerequisite-detail) section abov
 
 ## See also
 
-- [Spec 401 — Cross-Platform Python Invocation Wrapper](../specs/401-cross-platform-python-wrapper.md)
-- [ADR-401 — Python Invocation Wrapper](../decisions/ADR-401-python-invocation-wrapper.md)
-- [docs/research/explore-cross-platform-python-invocation.md](../research/explore-cross-platform-python-invocation.md)
+- Spec 401 — Cross-Platform Python Invocation Wrapper
+- ADR-401 — Python Invocation Wrapper
+- docs/research/explore-cross-platform-python-invocation.md

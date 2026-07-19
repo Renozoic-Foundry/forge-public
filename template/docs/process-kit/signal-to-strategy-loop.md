@@ -2,7 +2,7 @@
 
 **Tagline: From research signals to shipped strategic advantage.**
 
-Spec: [458](../specs/458-signal-to-strategy-loop-prd.md). Status: MVP (file-first, operator-reviewed).
+Spec: 458. Status: MVP (file-first, operator-reviewed).
 
 The Signal-to-Strategy Loop turns external research signals (clippings, digests, articles,
 release notes) into tested FORGE process assets: loop contracts, skills, tool policies,
@@ -12,7 +12,7 @@ by mining the *outside world* for strategic process/product opportunities.
 
 This document is the **canonical contract** for the loop. The companion command
 [`/signal-to-strategy`](../../.forge/commands/signal-to-strategy.md) executes it; the first
-run artifact lives at [`docs/research/signal-to-strategy-2026-06-09.md`](../research/signal-to-strategy-2026-06-09.md).
+run artifact lives at `docs/research/signal-to-strategy-2026-06-09.md`.
 
 ---
 

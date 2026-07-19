@@ -20,7 +20,7 @@ This is intentional design — not delegated to a separate process — because:
 - The closed vocabulary + bash one-liner reference implementations make computation deterministic and operator-readable. The agent invokes the documented one-liner; the boolean is whatever the one-liner exits with.
 - The `/consensus 347` round 1 surfaced this concern (DA + CTO key risks). The mitigation is: (a) every named precondition has a bash one-liner that is the contract; (b) the renderer-test harness (`test-choice-block-renderer.sh`) exercises the one-liners against fixture session-state contexts to verify two evaluations agree.
 
-**The agent MUST invoke the documented bash one-liner**, not paraphrase the description. If the agent cannot invoke bash (rare but possible in restricted environments), it falls back to applying the rule prose verbatim — but this fallback is a documented degraded mode, not the default path.
+The agent invokes the documented bash one-liner rather than paraphrasing the description. If the agent cannot invoke bash (rare but possible in restricted environments), it falls back to applying the rule prose verbatim — a documented degraded mode, not the default path.
 
 **Future option (deferred to Phase 2 trigger)**: a `forge-render-choice-block.sh` shell helper that owns precondition evaluation entirely. The agent invokes the helper with the YAML block as input; the helper emits the rendered markdown to stdout. This converts the renderer from "agent-followable protocol" to "deterministic non-LLM process." Deferred per Spec 347 Constraints — agent-side rendering with deterministic instructions is sufficient at Phase 1 scale; the shell helper is the natural escalation if the /close pilot demonstrates agent drift.
 
@@ -30,7 +30,7 @@ When the agent encounters a fenced `choice-block` data block in a command body, 
 
 ### Step 1 — Parse the YAML
 
-Read the fenced block content. Parse as YAML. If parsing fails: emit a clear error to the operator (do NOT silently skip the block) and halt the command. Schema malformation is a structural defect that requires authoring fix, not runtime workaround.
+Read the fenced block content and parse as YAML. If parsing fails, emit a clear error and halt the command — schema malformation requires an authoring fix, not a runtime workaround.
 
 ### Step 2 — Schema validate
 
@@ -46,7 +46,7 @@ c. If the bash one-liner cannot be invoked (no shell available): apply the prose
 
 ### Step 4 — Filter rows
 
-Drop rows whose precondition evaluated false. Do **NOT** annotate them as `(N/A)`, do **NOT** preserve their position with a placeholder — they are simply absent from the rendered table. This is the structural fix to the /close 320 chat-surfaced defect.
+Drop rows whose precondition evaluated false — do not annotate as `(N/A)` or preserve a placeholder; the row is simply absent from the rendered table. This is the structural fix to the /close 320 chat-surfaced defect.
 
 ### Step 5 — Apply session-data safety rule (Spec 320 Req 4)
 
@@ -85,7 +85,7 @@ If `title:` is omitted, use the default header:
 > **Choose** — type a number or keyword:
 ```
 
-Then emit the column-header row, separator row, and data rows. Add the trailing `> _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_` line if the host file conventionally includes it (the host command body controls this — the renderer doesn't add or remove footer lines from the surrounding command-body context).
+Then emit the column-header row, separator row, and data rows. Add the trailing `> _(See Command Reference for all commands)_` line if the host file conventionally includes it (the host command body controls this — the renderer doesn't add or remove footer lines from the surrounding command-body context).
 
 ## Worked example — /close Step 9 with empty queue
 
@@ -139,7 +139,7 @@ Renderer steps:
 > | **1** | 1 | `implement` | Top-of-backlog ready; clean transition | Start /implement next (highest-ranked draft) |
 > | **2** | — | `stop` | Downgraded if today's session log has unsynthesized entries | End session |
 >
-> _(See [Command Reference](docs/QUICK-REFERENCE.md) for all commands)_
+> _(See Command Reference for all commands)_
 ```
 
 Critically: **the `close NNN` row is absent**. Not `(N/A)`-annotated, not preserved as a placeholder. The renderer cannot emit a row whose precondition is unmet — there's no place in the protocol to insert one.
@@ -190,9 +190,9 @@ Step 2 schema-validate failure when a `precondition:` value is not in `choice-bl
 
 ### Multi-block coexistence with fenced YAML
 
-A command body that emits >1 choice block per agent message MUST set `multi_block: serialized` or `multi_block: discriminated` consistently across all blocks in the file. Mixing `none` with `serialized` is a schema check 6 violation at the file level.
+A command body emitting >1 choice block per agent message sets `multi_block: serialized` or `multi_block: discriminated` consistently across all blocks in the file. Mixing `none` with `serialized` is a schema check 6 violation at the file level.
 
-A command body MUST NOT mix Spec 320 v2.0 markdown tables with Spec 347 fenced YAML blocks in the same file (per `choice-block-schema.md` § Coexistence with Spec 320 v2.0).
+A command body does not mix Spec 320 v2.0 markdown tables with Spec 347 fenced YAML blocks in the same file (per `choice-block-schema.md` § Coexistence with Spec 320 v2.0).
 
 ## Phase 2 trigger
 
@@ -217,12 +217,12 @@ The renderer is **agent-followable instructions**, not code. The agent's runtime
 
 There is no `forge-render-choice-block` binary in Phase 1. The shell helper is documented as the Phase 2-trigger escalation path (or earlier, if /consensus 347 round-2 elects to add it inline).
 
-The renderer-test harness (`scripts/tests/test-choice-block-renderer.sh`) does NOT exercise the agent's runtime; it exercises the protocol-as-written by simulating the agent's steps deterministically against fixture session-state contexts. The harness is a regression check on the protocol's *correctness*, not on the agent's *adherence*. Agent adherence is a soft signal observed in operator-facing transcripts (the Phase 2 trigger condition #1: "without a renderer-drift defect being filed").
+The renderer-test harness (`scripts/tests/test-choice-block-renderer.sh`) does not exercise the agent's runtime; it exercises the protocol-as-written by simulating the agent's steps deterministically against fixture session-state contexts. The harness is a regression check on the protocol's *correctness*, not on the agent's *adherence*. Agent adherence is a soft signal observed in operator-facing transcripts (the Phase 2 trigger condition #1: "without a renderer-drift defect being filed").
 
 ## See also
 
-- [Spec 347](../specs/347-canonical-choice-block-emitter.md) — this spec
-- [docs/decisions/ADR-347](../decisions/ADR-347-canonical-choice-block-emitter.md) — design rationale
+- Spec 347 — this spec
+- docs/decisions/ADR-347 — design rationale
 - [docs/process-kit/choice-block-schema.md](choice-block-schema.md) — data shape
 - [docs/process-kit/choice-block-preconditions.md](choice-block-preconditions.md) — closed vocabulary
 - [docs/process-kit/implementation-patterns.md § Choice Blocks](implementation-patterns.md) — Spec 320 v2.0 prose convention (legacy form for un-migrated commands)

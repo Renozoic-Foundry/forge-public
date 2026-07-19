@@ -157,8 +157,8 @@ This mirrors ADR-320's deferral-with-trigger pattern.
 
 ## See also
 
-- [Spec 347](../specs/347-canonical-choice-block-emitter.md) — this spec
-- [docs/decisions/ADR-347](../decisions/ADR-347-canonical-choice-block-emitter.md) — design rationale (cross-linked from ADR-320)
+- Spec 347 — this spec
+- docs/decisions/ADR-347 — design rationale (cross-linked from ADR-320)
 - [docs/process-kit/choice-block-preconditions.md](choice-block-preconditions.md) — closed precondition vocabulary
 - [docs/process-kit/choice-block-renderer-protocol.md](choice-block-renderer-protocol.md) — emit-time agent protocol
 - [docs/process-kit/implementation-patterns.md § Choice Blocks](implementation-patterns.md) — Spec 320 v2.0 prose convention (still in force for un-migrated commands)

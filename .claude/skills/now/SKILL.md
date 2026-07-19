@@ -4,6 +4,13 @@ description: "Review current project state and suggest next action"
 disable-model-invocation: false
 ---
 
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
+
 # Framework: FORGE
 # Model-Tier: haiku
 <!-- multi-block mode: serialized — choice blocks fire at distinct mechanical steps (validation queue at Step 1, exit gate at Step 13). They do not co-present in the same agent message. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
@@ -604,3 +611,10 @@ Before emitting any next-action choice block in this command, consult the active
 
 The guide is the single source of truth for which rows filter vs annotate per lane. This directive is intentionally short — the central guide encodes the rules so every emitter stays consistent.
 
+
+
+## [mechanical] Reconcile-pending surfacing (Spec 577)
+
+If `.forge/state/reconcile-pending.json` exists: emit one line in the report —
+`Reconcile pending (planted by <planted>): seed the spec corpus with /reconcile (scopes: last-90-days | last-200-commits | full-history), or dismiss by deleting .forge/state/reconcile-pending.json.`
+Delete nothing automatically; /reconcile completion removes the marker (or the operator dismisses).

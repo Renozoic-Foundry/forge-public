@@ -3,8 +3,6 @@
 
 AI coding assistants lose context between sessions, drift from the original goal, and declare work done before it meets acceptance criteria. FORGE fixes that with specs, evidence gates, and a structured delivery process that remains reliable as agent autonomy increases.
 
-CI: see [.github/workflows/sync-and-lint.yml](.github/workflows/sync-and-lint.yml) — runs cross-level sync + commands sync + shellcheck on every push to `main` and every PR (Spec 337 backstop for the local pre-commit hook).
-
 ## Mission
 
 FORGE's mission is to make each individual developer the CEO of a continuously-optimizing development company. FORGE provides strategic advisors, executive staff, and auditable process at every step — but the developer decides exactly what happens, when, and why.
@@ -57,49 +55,19 @@ Recent changes since the last published refresh — split by audience. Each item
 
 ## Quickstart
 
+FORGE v3 is delivered as a **signed Claude Code plugin**. The plugin is the runtime — it ships
+every slash command, agent role, skill, and hook. Your project keeps only its own data (specs,
+sessions, process docs); the framework updates through the plugin, not through file copies.
+
 ### Prerequisites
 
-FORGE requires Python 3.9+, Git, and [Copier](https://copier.readthedocs.io/) 9.0+. The install script detects and installs missing prerequisites automatically.
+- **Claude Code** (recommended path): [Claude Code](https://claude.ai/code) and Git. That's it —
+  no Python, no template engine.
+- **Other AI IDEs** (Cursor, Windsurf, Copilot, …): the legacy Copier scaffold path applies and
+  requires Python and Copier — see [CONTRIBUTING.md](CONTRIBUTING.md#prerequisites) for the
+  pinned versions.
 
-<details>
-<summary>Manual prerequisite installation</summary>
-
-```bash
-pip install copier
-```
-
-**Windows** (Git Bash required for FORGE runtime scripts):
-```powershell
-# Scoop
-scoop install git python && pip install copier shellcheck-py
-
-# Or winget
-winget install Git.Git && winget install Python.Python.3.12 && pip install copier shellcheck-py
-```
-
-Git for Windows includes Git Bash. The PowerShell wrappers (`.ps1`) auto-detect Git Bash and delegate.
-
-</details>
-
-### Install
-
-One command to install FORGE — the script detects your environment and adapts:
-
-```bash
-# macOS / Linux / Git Bash on Windows
-curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash
-
-# Windows PowerShell
-irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
-```
-
-The install script handles prerequisites (Python, Git, Copier), detects Claude Code, and provides environment-appropriate next steps. Safe to run multiple times.
-
-> **IDE reload required:** If your IDE is already open when you run the install script, reload the window so it picks up the new `/forge-bootstrap` command (VS Code: `Ctrl+Shift+P` → "Developer: Reload Window").
-
-### Install as a Claude Code plugin
-
-Claude Code users can install the FORGE command, agent, skill, and hook payload from the plugin marketplace — the primary install path for the framework surface:
+### Install the plugin
 
 ```bash
 claude plugin marketplace add Renozoic-Foundry/forge-public
@@ -116,60 +84,59 @@ Or directly from a `forge-public` checkout:
 ```bash
 git clone https://github.com/Renozoic-Foundry/forge-public.git
 cd forge-public
-# In Claude Code, from the checkout:
 claude plugin install ./
 ```
 
-The plugin ships the slash commands, agent roles, skills, and hooks. To lay down the per-project spec / session / process-kit structure, use the Copier path below (`/forge-bootstrap` or `copier copy`). The two are complementary: the plugin provides the framework surface, Copier scaffolds an individual project.
-
 ### Bootstrap your project
 
-**New project:**
-```bash
-mkdir my-project && cd my-project
-# In Claude Code: run /forge-bootstrap
-# Other IDEs: copier copy https://github.com/Renozoic-Foundry/forge-public.git .
+In Claude Code, from your project (new or existing):
+
+```
+/forge init
 ```
 
-**Existing project** (add FORGE to an existing repo):
-```bash
-cd my-existing-repo
-# In Claude Code: run /forge-bootstrap
-# Other IDEs: copier copy https://github.com/Renozoic-Foundry/forge-public.git .
-```
-FORGE files are added alongside your existing code. Copier prompts before overwriting any conflicting files.
-
-**One-shot install + bootstrap:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.sh | bash -s -- --init my-project
-```
+`/forge init` detects your situation and adapts: a **new/empty directory** gets the plugin-native
+project scaffold (specs, sessions, backlog, `AGENTS.md`/`CLAUDE.md`, quick reference — no Copier
+involved); an **existing repo** gets FORGE's process files added alongside your code; a
+**pre-plugin FORGE project** is offered the upgrade path. Then run `/onboarding` — the one-time
+guided setup that configures stack, autonomy, and features — and `/now` to get your first
+recommended action.
 
 ### What happens after install
 
-| Your environment | What the script does | Your next step |
-|---|---|---|
-| **Claude Code** | Installs prereqs + plants `/forge-bootstrap` command | Run `/forge-bootstrap` in any project |
-| **Claude Code** + `--init` | Installs prereqs + bootstraps project | Run `/onboarding` in the project |
+| Your environment | Install | Bootstrap | First session |
+|---|---|---|---|
+| **Claude Code** | `/plugin install forge@forge` | `/forge init` | `/onboarding`, then `/now` |
+| **Other AI IDE** | — (plugin is Claude Code-specific) | Copier scaffold (collapsed section below) | Open the project; your assistant reads `AGENTS.md` |
 
 **Want the full walkthrough?** See the [Getting Started tutorial](docs/getting-started.md) — zero to first closed spec in a single session. Or read the [Concept Overview](docs/concept-overview.md) to understand what FORGE is and why it exists.
 
 **Want to see the result?** See [docs/examples/hello-forge/](docs/examples/hello-forge/) for what a bootstrapped project looks like after `/forge init` and a first spec cycle.
 
 <details>
-<summary>Other AI IDEs (Cursor, Windsurf, Copilot, etc.)</summary>
+<summary>Other AI IDEs and the legacy Copier path</summary>
 
-| Your environment | What the script does | Your next step |
-|---|---|---|
-| **Other AI IDE** | Installs prereqs | `copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project`, then open in your IDE — it reads `AGENTS.md` |
-| **Private fork** | `bash install.sh --repo <url>` — same flow with git auth preflight | Same as above, using your fork URL |
+**Cross-IDE runtime (Spec 576 — the primary non-Claude path):** point a user-level, pinned
+checkout of the framework at your projects — the repo stays as clean as a plugin consumer's:
 
-**Manual path (power users):**
 ```bash
-pip install copier
-copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project
-cd my-project
+git clone https://github.com/Renozoic-Foundry/forge-public.git ~/forge-runtime
+git -C ~/forge-runtime checkout <release-tag>
+echo "$HOME/forge-runtime" > ~/.forge/runtime-root
 ```
-Then open the project in your AI-assisted IDE and let your assistant read `AGENTS.md`.
+
+Every scaffolded project ships two thin launchers (`bin/forge`, `bin\forge.ps1`) resolving the
+chain `CLAUDE_PLUGIN_ROOT → FORGE_RUNTIME_ROOT → ~/.forge/runtime-root → project-local` — other
+AI agents read `AGENTS.md` and invoke `bin/forge <command>`; non-AI developers get
+`bin/forge now|status|list`. Optionally record `forge.runtime.pin: <tag>` in the project's
+AGENTS.md; the launcher warns when a teammate's checkout drifts from the pin.
+
+The legacy full-template Copier render remains a last resort (`/forge init --copier`; requires
+Python and Copier — [pinned versions](CONTRIBUTING.md#prerequisites)) but vendors the framework
+into your repo — prefer the runtime checkout above.
+
+The legacy `install.sh` / `install.ps1` scripts and the `/forge-bootstrap` command still work for
+this path — see [forge-bootstrap.md](forge-bootstrap.md) (legacy, scaffolding-only).
 
 **Bootstrapping with security overrides (consent-required):**
 
@@ -183,20 +150,20 @@ copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project \
   --data 'test_command=./mvnw test'
 ```
 
-The `--data accept_security_overrides_confirmed=true` flag MUST be on the CLI command line — answers-file-supplied consent tokens are rejected by design. The same shape applies to `copier update`. See [`docs/process-kit/copier-gotchas.md`](docs/process-kit/copier-gotchas.md#bootstrap-path-consent-surface--spec-437-consent-gate) for the rationale.
+The `--data accept_security_overrides_confirmed=true` flag MUST be on the CLI command line — answers-file-supplied consent tokens are rejected by design. The same shape applies to `copier update`. For the rationale, see the `copier-gotchas.md` guide that ships in your scaffolded project (`docs/process-kit/copier-gotchas.md` after the template render).
 
 </details>
 
-FORGE works with any AI-assisted IDE. Not using Claude Code? See the collapsed section above for Cursor, Windsurf, Copilot, and manual paths.
-
 ### Keeping up to date
 
-| What to update | Claude Code | Other IDEs |
+| What to update | Claude Code (plugin) | Legacy Copier projects |
 |---|---|---|
-| **FORGE framework** (install script, `/forge-bootstrap`) | Re-run the install script | Re-run the install script |
-| **Your project** (commands, templates, process kit) | `/forge stoke` | `copier update` |
+| **FORGE framework** (commands, agents, skills, hooks) | Update the plugin: re-run `/plugin install forge@forge` (marketplace) or `claude plugin install ./` from a refreshed checkout | Re-render via `copier update` |
+| **Your project's scaffold files** (process kit, templates) | `/forge stoke` (pre-plugin projects); plugin-native projects receive doc updates with the plugin | `/forge stoke` or `copier update` |
 
-Framework updates install new versions of the bootstrap command. Project updates pull the latest template changes into your project — new commands, refined gates, better defaults — while preserving your customizations.
+Framework behavior always comes from the installed plugin version. Generated reference docs
+(quick reference, command reference) carry a provenance header naming the source version and a
+revision-history section, so you can always tell what you're running.
 
 ## What is FORGE?
 
@@ -235,15 +202,12 @@ These features are under active development and will be available in future rele
 
 ### Foundations
 
-1. **KCS v6 (Knowledge-Centered Service)** — Double-loop learning: a Solve Loop for every spec, an Evolve Loop to improve the process itself. Signals (errors, insights, retro findings) are captured at lifecycle transitions and feed back into priority scoring.
-
-2. **Stage-Gate (Cooper)** — Evidence gates at each lifecycle transition (`draft → in-progress → implemented → closed`). Gate failures produce structured feedback identifying what is missing. No status transition without demonstrable evidence.
-
-3. **AAIF (Agentic AI Foundation, Linux Foundation 2025)** — `AGENTS.md` defines bounded autonomy, delegation contracts, prohibited actions, and signal capture responsibilities. The AI agent operates within explicit guardrails.
-
-4. **Spec Kit** — Every change has a versioned spec with objective, scope, requirements, acceptance criteria, test plan, and revision log. Specs are rebuild guides — the codebase can be reconstructed from specs alone. Specs also serve as **context anchors**: living documents that persist decision context across AI sessions, team changes, and time. Rahul Garg's writing on [context anchoring](https://martinfowler.com/articles/reduce-friction-ai/context-anchoring.html) (2026, published on martinfowler.com) independently validated this pattern — FORGE has practiced it from the start.
-
-5. **Copier** — Template-based project bootstrapping with upstream sync. Framework improvements propagate to all downstream projects via `copier update`.
+FORGE synthesizes five foundations — **KCS v6** double-loop learning, **Stage-Gate** evidence
+gates, **AAIF** bounded autonomy, **Spec Kit** persistent specs-as-context-anchors, and
+**plugin-primary distribution**. The canonical definition (why these five, what each prevents,
+and how they interlock) lives in
+[Design Philosophy § Five Foundations](docs/design-philosophy.md#five-foundations--why-these-five-and-how-they-interlock)
+— defined once so the lists cannot drift.
 
 ### Autonomy levels
 
@@ -251,11 +215,11 @@ FORGE defines five autonomy levels (L0–L4), all supported. The default is L1 (
 
 | Level | Name | Human role | Status |
 |-------|------|-----------|--------|
-| L0 | Manual | Human drives everything | Supported |
-| L1 | AI-Assisted | AI implements, human gates every transition | Supported (default) |
-| L2 | Supervised Auto-Chain | Commands auto-chain on success, human watches | **Supported (Phase 1 complete)** |
-| L3 | Async Review | Agents run autonomously, human approves via messaging | Available via NanoClaw (opt-in) |
-| L4 | Self-Improving | Agents propose process improvements, human approves weekly | Preview — requires NanoClaw |
+| L0 | Full Manual | Human drives everything; agent advises only | Supported |
+| L1 | Human-Gated | AI implements, human gates every transition | Supported (default) |
+| L2 | Supervised Autonomy | Commands auto-chain on success, human watches at decision points | **Supported** |
+| L3 | Trusted Autonomy | Agent completes full spec cycles; human reviews async via `/close` | Available (NanoClaw messaging opt-in) |
+| L4 | Full Autonomy | Kill switch and budget ceilings are the only hard stops | Preview — requires NanoClaw |
 
 ## MCP Documentation Servers
 
@@ -345,7 +309,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 562 specs across 155 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 571 specs across 156 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-FORGE multi-step skills can produce dense, multi-section chat output (KPI tables, calibration deltas, gate-by-gate PASS confirmations, signal pattern dumps, etc.). When operators are moving quickly, that volume becomes noise — it imposes cognitive load when the only question is "what do I need to do next?"
+FORGE multi-step skills can produce dense, multi-section chat output (KPI tables, calibration deltas, gate-by-gate PASS confirmations, signal pattern dumps, etc.) — noise when the only question is "what do I need to do next?"
 
 The `forge.output.verbosity` setting in `AGENTS.md` controls how much of that detail appears in the **chat surface**. Detail written to **file artifacts** (session logs, `pattern-analysis.md`, etc.) is **never** affected — full evidence is always preserved on disk.
 
@@ -20,7 +20,7 @@ forge.output:
 
 ### Always shown (both modes)
 
-These items are NEVER suppressed regardless of setting:
+These items are not suppressed regardless of setting:
 
 1. **Choice blocks** — every numbered choice block the operator must respond to.
 2. **FAILed gates** — full detail (gate name, what failed, remediation).
@@ -54,7 +54,7 @@ When suppressing a section in lean mode:
 
 ## How commands read the setting
 
-Each multi-step command (those listed in Scope below) MUST consult `forge.output.verbosity` from `AGENTS.md` at the start of its execution. The recommended pattern:
+Each multi-step command (those listed in Scope below) consults `forge.output.verbosity` from `AGENTS.md` at the start of its execution. The recommended pattern:
 
 ```text
 # At step 1 (after $ARGUMENTS handling), read AGENTS.md and set:

@@ -28,9 +28,18 @@ if [[ -z "$RENDERED_DIR" ]]; then
   # Auto-render via copier
   RENDER_PARENT="$(mktemp -d)"
   echo "=== Rendering template via copier ==="
-  python -m copier copy "$REPO_DIR" "$RENDER_PARENT" --defaults
-  # copier creates a subdirectory named after project_slug
-  RENDERED_DIR="$(find "$RENDER_PARENT" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  # --trust required: copier.yml declares _tasks (Spec 572 — the audit found this
+  # invocation failed before testing anything on trust-gated copier versions)
+  python -m copier copy "$REPO_DIR" "$RENDER_PARENT" --defaults --trust
+  # Pre-phase-D templates rendered into a project_slug subdirectory; the phase-D
+  # render-shrink (Spec 489) renders in place. Detect which shape we got (Spec 572):
+  # a render root is identified by its .forge/ (or AGENTS.md) landing directly in
+  # RENDER_PARENT rather than one level down.
+  if [[ -d "$RENDER_PARENT/.forge" || -f "$RENDER_PARENT/AGENTS.md" ]]; then
+    RENDERED_DIR="$RENDER_PARENT"
+  else
+    RENDERED_DIR="$(find "$RENDER_PARENT" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  fi
   echo "  Rendered to: $RENDERED_DIR"
   echo ""
 fi

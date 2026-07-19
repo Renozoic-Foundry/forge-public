@@ -13,6 +13,12 @@ the target already contains AGENTS.md, docs/specs/, or .copier-answers.yml.
 Usage:
     forge-py .forge/lib/scaffold.py TARGET_DIR [--name N] [--slug S]
         [--description D] [--author A] [--owner O]
+        [--layout contained|classic]   (Spec 575 — default: contained)
+
+Layouts (Spec 575): `contained` (default for new scaffolds) places all FORGE
+process data under .forge/project/ and writes the forge.paths block + the
+ownership manifest; `classic` reproduces the pre-575 docs/... layout
+byte-identically (plus the additive .forge/ownership.yaml).
 
 Exit codes: 0 scaffolded; 2 guardrail abort (pre-existing project files);
             3 bad arguments / unwritable target.
@@ -23,7 +29,70 @@ import re
 import sys
 from pathlib import Path
 
-GUARD_PATHS = ("AGENTS.md", "docs/specs", ".copier-answers.yml")
+# Guardrail checks BOTH layouts' spec locations regardless of the requested
+# layout (Spec 575) — scaffolding over either shape is refused.
+GUARD_PATHS = ("AGENTS.md", "docs/specs", ".forge/project/specs", ".copier-answers.yml")
+
+# Spec 575 — layout presets over the Spec 564 forge.paths.* keys.
+LAYOUT_PRESETS = {
+    "classic": {
+        "specs": "docs/specs",
+        "sessions": "docs/sessions",
+        "decisions": "docs/decisions",
+        "research": "docs/research",
+        "process_kit": "docs/process-kit",
+        "backlog": "docs/backlog.md",
+    },
+    "contained": {
+        "specs": ".forge/project/specs",
+        "sessions": ".forge/project/sessions",
+        "decisions": ".forge/project/decisions",
+        "research": ".forge/project/research",
+        "process_kit": ".forge/project/process-kit",
+        "backlog": ".forge/project/backlog.md",
+    },
+}
+
+# Rendered into the scaffolded AGENTS.md for non-classic layouts only — an
+# absent block means classic defaults (behavior-neutral rule, Spec 564/575).
+PATHS_BLOCK = """
+## Runtime Configuration
+
+```yaml
+# forge.paths — process-state locations (Spec 564/575 `contained` preset).
+# Resolve via forge_path (bash) / runtime_config.py path (python); do not hardcode.
+forge:
+  paths:
+    specs: {specs}
+    sessions: {sessions}
+    decisions: {decisions}
+    research: {research}
+    process_kit: {process_kit}
+    backlog: {backlog}
+```
+"""
+
+OWNERSHIP_YAML = """# .forge/ownership.yaml — FORGE-owned path manifest (Spec 575, schema 1).
+# Machine-readable partition of FORGE files vs solution files. Consumed by
+# `forge-py .forge/lib/ownership.py --list` and the Spec 577 retrofit inventory.
+# Classes: process-data | runtime-state | config | framework-doc
+schema: 1
+layout: {layout}
+paths:
+  - {{path: {specs}/, class: process-data}}
+  - {{path: {sessions}/, class: process-data}}
+  - {{path: {decisions}/, class: process-data}}
+  - {{path: {research}/, class: process-data}}
+  - {{path: {process_kit}/, class: process-data}}
+  - {{path: {backlog}, class: process-data}}
+  - {{path: .forge/state/, class: runtime-state}}
+  - {{path: .forge/ownership.yaml, class: config}}
+  - {{path: AGENTS.md, class: config}}
+  - {{path: CLAUDE.md, class: config}}
+  - {{path: bin/forge, class: config}}
+  - {{path: bin/forge.ps1, class: config}}
+  - {{path: {qr_path}, class: framework-doc}}
+"""
 
 AGENTS_MD = """# Framework: FORGE
 # AGENTS.md — primary-source agent operating doctrine
@@ -51,6 +120,13 @@ forge.strategic_scope: |
 This project consumes FORGE as a plugin — executable surfaces (commands, skills,
 agents, hooks) come from the installed FORGE plugin, not from files in this repo.
 Run /onboarding for first-session configuration; /forge:now to see project state.
+
+**Non-Claude agents / CLI (Spec 576)**: command bodies live at the runtime root —
+resolution chain: CLAUDE_PLUGIN_ROOT -> FORGE_RUNTIME_ROOT -> ~/.forge/runtime-root
+(pointer file to a pinned framework checkout) -> project-local. Invoke any command as
+`bin/forge <name>` (Windows: `bin\forge.ps1`). Optional integrity pin: add
+`forge.runtime.pin: <tag-or-sha>` under Runtime Configuration — the launcher warns on
+checkout mismatch.
 
 ## Two hard rules — no exceptions
 
@@ -121,6 +197,8 @@ def main() -> int:
     ap.add_argument("--description", default="")
     ap.add_argument("--author", default="")
     ap.add_argument("--owner", default="")
+    ap.add_argument("--layout", choices=("contained", "classic"), default="contained",
+                    help="process-data layout (Spec 575; default: contained)")
     args = ap.parse_args()
 
     target = Path(args.target)
@@ -150,16 +228,24 @@ def main() -> int:
         owner=args.owner,
     )
 
+    paths = LAYOUT_PRESETS[args.layout]
+    agents_md = AGENTS_MD.format(**fields)
+    if args.layout != "classic":
+        # Absent block == classic defaults; only non-classic layouts write it.
+        agents_md += PATHS_BLOCK.format(**paths)
+    qr_path = ("docs/QUICK-REFERENCE.md" if args.layout == "classic"
+               else f"{paths['process_kit']}/QUICK-REFERENCE.md")
     files = {
-        "AGENTS.md": AGENTS_MD.format(**fields),
+        "AGENTS.md": agents_md,
         "CLAUDE.md": CLAUDE_MD,
-        "docs/specs/README.md": SPECS_README,
-        "docs/specs/CHANGELOG.md": CHANGELOG,
-        "docs/backlog.md": BACKLOG,
-        "docs/sessions/_template.md": SESSION_TEMPLATE,
-        "docs/sessions/signals.md": "# Signals\n",
-        "docs/sessions/scratchpad.md": "# Scratchpad\n",
+        f"{paths['specs']}/README.md": SPECS_README,
+        f"{paths['specs']}/CHANGELOG.md": CHANGELOG,
+        paths["backlog"]: BACKLOG,
+        f"{paths['sessions']}/_template.md": SESSION_TEMPLATE,
+        f"{paths['sessions']}/signals.md": "# Signals\n",
+        f"{paths['sessions']}/scratchpad.md": "# Scratchpad\n",
         ".forge/state/.gitkeep": "",
+        ".forge/ownership.yaml": OWNERSHIP_YAML.format(layout=args.layout, qr_path=qr_path, **paths),
     }
     try:
         for rel, content in files.items():
@@ -170,7 +256,36 @@ def main() -> int:
         print(f"scaffold: write failed: {e}", file=sys.stderr)
         return 3
 
-    print(f"scaffolded FORGE project '{name}' at {target} ({len(files)} files, zero copier)")
+    # Spec 571 — ship the generated quick reference with the scaffold. The plugin
+    # payload root (this script's ../../ — CLAUDE_PLUGIN_ROOT at runtime) carries
+    # docs/QUICK-REFERENCE.md with its provenance/revision-history block; copy it
+    # so consumers start with a current reference. Best-effort: absent source
+    # (trimmed payload) skips silently — never fails the scaffold.
+    copied = 0
+    plugin_root = Path(__file__).resolve().parent.parent.parent
+    # Spec 576 — ship the two thin cross-IDE launchers with every scaffold.
+    for launcher in ("bin/forge", "bin/forge.ps1"):
+        src = plugin_root / launcher
+        if src.is_file():
+            try:
+                dst = target / launcher
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+                copied += 1
+            except OSError:
+                pass
+    qr_src = plugin_root / "docs" / "QUICK-REFERENCE.md"
+    if qr_src.is_file():
+        try:
+            qr_dst = target / qr_path
+            qr_dst.parent.mkdir(parents=True, exist_ok=True)
+            qr_dst.write_text(qr_src.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+            copied = 1
+        except OSError:
+            pass
+
+    print(f"scaffolded FORGE project '{name}' at {target} "
+          f"({len(files) + copied} files, zero copier)")
     return 0
 
 

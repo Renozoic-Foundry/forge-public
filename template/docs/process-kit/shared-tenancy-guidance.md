@@ -67,13 +67,13 @@ This expression prefers `$XDG_RUNTIME_DIR` (which is always per-user on systems 
 
 ## Why not change the code instead?
 
-Prior research ([docs/research/explore-299-tmpdir-hardening.md](../research/explore-299-tmpdir-hardening.md)) evaluated replacing Step 0b's `mkdir -p && chmod 700` with the atomic `install -d -m 700` primitive. The primitive fails on Git Bash (Windows 11 MSYS2/NTFS permission emulation does not honor the mode bits), and the required fallback restores the TOCTOU window the change was meant to close. Operator guidance is a complete mitigation without introducing cross-platform fragility.
+Prior research (docs/research/explore-299-tmpdir-hardening.md) evaluated replacing Step 0b's `mkdir -p && chmod 700` with the atomic `install -d -m 700` primitive. The primitive fails on Git Bash (Windows 11 MSYS2/NTFS permission emulation does not honor the mode bits), and the required fallback restores the TOCTOU window the change was meant to close. Operator guidance is a complete mitigation without introducing cross-platform fragility.
 
 If you encounter a situation where operator guidance is insufficient — a real shared-tenancy incident, or a Lane B compliance profile that declares shared tenancy as in-scope — Spec 299 carries re-activation triggers to revisit code-side atomic-perms work with a proper portability matrix (including macOS BSD `install` testing).
 
 ## References
 
-- [docs/specs/299-forge-stoke-tmpdir-hardening.md](../specs/299-forge-stoke-tmpdir-hardening.md) — the governing spec
-- [docs/specs/296-forge-stoke-honor-answers-in-step-0b.md](../specs/296-forge-stoke-honor-answers-in-step-0b.md) — the hotfix that established the current temp-dir pattern
-- [docs/research/explore-299-tmpdir-hardening.md](../research/explore-299-tmpdir-hardening.md) — pre-spec research including the Git Bash portability test
+- docs/specs/299-forge-stoke-tmpdir-hardening.md — the governing spec
+- docs/specs/296-forge-stoke-honor-answers-in-step-0b.md — the hotfix that established the current temp-dir pattern
+- docs/research/explore-299-tmpdir-hardening.md — pre-spec research including the Git Bash portability test
 - FORGE's baseline threat model: single-operator-per-workstation. Shared tenancy is a narrow edge case addressed by this guidance, not a redefinition of the baseline.

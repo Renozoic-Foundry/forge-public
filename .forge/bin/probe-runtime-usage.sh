@@ -5,7 +5,7 @@
 # Question (Spec 496 AC1/AC2): can a FORGE-side tool durably read the per-session
 # token/cost usage that the Claude Code runtime exposes? This probe attempts to
 # read a real usage signal and prints it, or demonstrates that none is reachable.
-# Its stdout IS the evidence captured into docs/decisions/ADR-496-*.md.
+# Its stdout IS the evidence captured into docs/decisions/ADR-496-*.md.  # forge:path-literal-ok (comment)
 #
 # It reads ONLY (no writes, no network). It reports raw TOKEN counts — the durable
 # signal — and deliberately does NOT compute or emit a cost figure (Spec 496 AC4:

@@ -99,7 +99,7 @@ Rate the overall blast radius and record it in the spec:
 
 ## Handling CONDITIONAL_PASS findings (Spec 324)
 
-When the DA gate returns **CONDITIONAL_PASS**, the spec has warning-class findings (and zero critical findings). Operators have two paths to clear the gate: (a) `/revise` the spec, or (b) disposition the findings inline in the spec body. Both are legitimate. This section documents when to use which, and how to author the inline path correctly. The pattern is rooted in Spec 294 (round-3 DA: 8 findings, 0 critical, 4 warning, 4 info — all warnings resolved inline without forcing a 4th `/revise` cycle; signal SIG-294-03 captured the ergonomics win).
+When the DA gate returns **CONDITIONAL_PASS**, the spec has warning-class findings (and zero critical findings). Operators have two paths to clear the gate: (a) `/revise` the spec, or (b) disposition the findings inline in the spec body. This section documents when to use which, and how to author the inline path correctly (pattern origin: Spec 294 round-3 DA; signal SIG-294-03 captured the ergonomics win of resolving warnings inline instead of forcing another `/revise` cycle).
 
 ### Decision rule by severity
 
@@ -130,7 +130,7 @@ Each disposition must name the specific change (which AC was tightened, which Sc
 
 ### Worked example — Spec 324 (this very spec)
 
-Spec 324's own DA Pass 1 returned CONDITIONAL_PASS with 7 findings (4 warning + 3 info). Per the pattern this section documents, those findings were dispositioned inline rather than triggering /revise. The actual table is in `docs/specs/324-da-conditional-pass-dispositions-documentation.md` § Devil's Advocate Findings — readers can grep for `Spec 324` or `SIG-294-03` to trace the precedent. Excerpt of the format (3 of 7 rows):
+Spec 324's own DA Pass 1 returned CONDITIONAL_PASS with 7 findings (4 warning + 3 info), dispositioned inline per this pattern rather than triggering /revise. Full table: `docs/specs/324-da-conditional-pass-dispositions-documentation.md` § Devil's Advocate Findings. Excerpt of the format (3 of 7 rows):
 
 | # | Severity | Domain | Finding | Disposition |
 |---|----------|--------|---------|-------------|
@@ -142,8 +142,8 @@ Spec 324's own DA Pass 1 returned CONDITIONAL_PASS with 7 findings (4 warning + 
 
 ### Operator checklist for inline disposition
 
-1. **Verify zero critical findings** — re-read DA output. If critical present: STOP and run `/revise`.
-2. **Count warnings** — if >5: STOP and run `/revise` (provisional threshold).
+1. **Verify zero critical findings** — re-read DA output. If critical present, run `/revise`.
+2. **Count warnings** — if >5, run `/revise` (provisional threshold).
 3. **Classify each disposition** — for each warning, determine whether the fix mutates an existing AC's verification target (→ /revise) or tightens its precision (→ inline OK).
 4. **Author the table** in `## Devil's Advocate Findings` of the spec body with all 5 columns.
 5. **Apply the fixes** during implementation (modifying the spec body's Scope/Requirements/AC text where dispositioned).
@@ -153,10 +153,10 @@ Spec 324's own DA Pass 1 returned CONDITIONAL_PASS with 7 findings (4 warning + 
 
 ### Anti-patterns to avoid
 
-- ❌ **Critical findings in the dispositions table.** This indicates the gate decision was wrong, not a disposition opportunity. Re-run /revise.
-- ❌ **"Accepted" or "Acknowledged" without concrete resolution.** Fails the traceability requirement. Each disposition must name what changed (or document why no change is the right call, with a re-evaluation trigger).
-- ❌ **Disposition that rewrites an existing AC's verification target.** That is structural revision. /revise.
-- ❌ **Skipping the SHA recomputation.** The spec body changed; the integrity hash must reflect that or `/close` will fail Step 2 spec-integrity verification.
+- ❌ **Critical findings in the dispositions table** — indicates the gate decision was wrong, not a disposition opportunity; re-run /revise.
+- ❌ **"Accepted"/"Acknowledged" without concrete resolution** — fails the traceability requirement; name what changed (or why no change is the right call, with a re-evaluation trigger).
+- ❌ **Disposition that rewrites an existing AC's verification target** — that's structural revision; /revise.
+- ❌ **Skipping the SHA recomputation** — the spec body changed, so `/close` Step 2 spec-integrity verification will fail without it.
 
 ### Reference
 
@@ -234,10 +234,10 @@ The encoding relies on operator integrity. A malicious or careless operator coul
 
 ### Anti-patterns to avoid
 
-- ❌ Adding `DA-Encoded-Via:` to a spec that did NOT go through `/consensus` rounds 1+2.
+- ❌ Adding `DA-Encoded-Via:` to a spec that did not go through `/consensus` rounds 1+2.
 - ❌ Adding `DA-Encoded-Via: consensus-round-3` (or higher) — round 3+ implies unresolved divergence.
 - ❌ Hand-editing `Consensus-Close-SHA:` to silence a drift-check failure.
-- ❌ Running `/implement` immediately after `/consensus --round N` when the spec's Implementation-Summary files have been touched in the interim. The drift check will catch this, but it wastes a verifier pass — fix the file scope first.
+- ❌ Running `/implement` right after `/consensus --round N` when Implementation-Summary files were touched afterward — the drift check catches it, but wastes a verifier pass; fix the file scope first.
 
 ### Reference (Spec 389)
 

@@ -34,7 +34,7 @@ Appended by `/close` when a spec transitions to `closed`.
 ```
 
 ### `signal`
-Appended when a retro signal is captured during `/close` or `/retro`.
+Appended when a retro signal is captured during `/close` (inline retro — signal capture).
 
 ```json
 {"timestamp":"2026-04-06T15:46:00Z","agent_id":"operator","event_type":"signal","spec_id":"134","message":"SIG-134-P1: Activity log append-only pattern validated","metadata":{"signal_type":"process","signal_id":"SIG-134-P1"}}

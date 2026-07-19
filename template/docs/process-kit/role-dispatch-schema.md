@@ -77,7 +77,7 @@ To answer "did the operator accept role X on spec Y", a reader takes the **lates
 {"schema_version":1,"kind":"role-acceptance","spec_id":"305","git_sha":"73a8549c…","iso_ts":"2026-06-15T18:25:02Z","role":"CTO","accepted":false,"partial_note":"ignored rotation note"}
 ```
 
-`bash .forge/lib/score-audit.sh role-audit` over the above:
+`bash "${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh" role-audit` over the above:
 
 ```
 | Role | Dispatches | Acceptance% | Avg Concerns | Stage Distribution | Most Common Concern |

@@ -8,7 +8,7 @@ The classification is the pivot that lets `/evolve` group signals by *underlying
 
 ## Root-cause taxonomy (5 categories)
 
-The five categories align with the taxonomy in [docs/articles/debugging-in-forge.md § What Actually Triggers a Signal](../articles/debugging-in-forge.md), extended with `process-defect` (anchored by Spec 151) and `other` (a deliberate safety valve, not a default).
+The five categories align with the taxonomy in docs/articles/debugging-in-forge.md § What Actually Triggers a Signal, extended with `process-defect` (anchored by Spec 151) and `other` (a deliberate safety valve, not a default).
 
 ### 1. `spec-expectation-gap`
 
@@ -125,7 +125,7 @@ Spec 267 extends `/evolve` Step 8a with two outputs that depend directly on the 
 - **Root-cause Category Grouping** (Spec 267 Requirement 5) — every signal is bucketed by `Root-cause category`, surfacing whether recent failures cluster in spec quality, model knowledge, attentive execution, or process defects. If the `other` bucket exceeds 40% of recent signals, an advisory fires recommending re-calibration against this guide.
 - **Gate-Coverage Gaps** (Spec 267 Requirement 5) — `missed-by-existing-gate` signals are clustered by the named gate. A cluster qualifies as a gap when ≥3 signals name the same gate OR ≥50% of a pattern cluster is `missed-by-existing-gate`. Each qualifying gap surfaces as a candidate for spec-level gate improvement.
 
-See [`.forge/commands/evolve.md`](../../.forge/commands/evolve.md) Step 8a (h) and (i) for the exact output formats.
+See `.forge/commands/evolve.md` Step 8a (h) and (i) for the exact output formats.
 
 ---
 

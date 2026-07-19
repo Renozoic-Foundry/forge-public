@@ -3,6 +3,13 @@ name: configure
 description: "Adjust any defaulted onboarding setting (stack, agents, autonomy, methodology, features, MCP servers)"
 workflow_stage: lifecycle
 ---
+
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
 # Framework: FORGE
 # Configure — Post-onboarding advanced settings menu (Spec 266)
 
@@ -45,6 +52,7 @@ Present the numbered menu with current values in brackets:
 | 8 | MCP servers           | [<enabled | disabled | N configured>] |
 | 9 | Project name & description | [<name> — <description>] |
 | 10 | Capabilities          | [<N active / M available> from forge-capability.sh list] |
+| 11 | Layout (forge.paths)  | [contained / classic / custom — from forge_path resolution] |
 
 Type a number to change that setting, `all` to walk through every setting, or `done` to exit.
 ```
@@ -62,6 +70,7 @@ Dispatch based on response:
 - `8` → Step 2h (MCP servers)
 - `9` → Step 2i (Name & description)
 - `10` → Step 2j (Capabilities)
+- `11` → Step 2k (Layout preset — Spec 575)
 - `all` → run Steps 2a through 2j in order, returning to the main menu at the end
 - `done` → stop
 
@@ -349,3 +358,16 @@ When the user types `done` at the main menu:
 - File operations that fail (permission, not found): report, skip that sub-step, continue.
 - `.forge/onboarding.yaml` write failure: prominently report — subsequent runs will lose the changes made this session.
 - Ambiguous response at any menu: re-present the menu, do not assume a default.
+
+
+## [decision] Step 2k — Layout preset (Spec 575)
+
+Show the current layout (derived from `forge_path specs`: `.forge/project/...` = contained,
+`docs/...` = classic, anything else = custom). Offer `contained` / `classic` / keep.
+
+On change: write the corresponding `forge.paths` block into AGENTS.md `## Runtime Configuration`
+(or remove it for classic — absent block IS classic). **Config write only — never move files.**
+Then REPORT the physical moves the switch implies (diff of old→new resolved paths per key,
+`git mv` preview list) and point at the Spec 577 migration flow (`/forge retrofit`, Phase 3) to
+perform them. Until migration runs, `forge-doctor` D-PATHS will flag the pre-migration /
+split-brain state — that is by design, not an error in the switch.

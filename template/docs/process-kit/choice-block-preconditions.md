@@ -16,7 +16,7 @@ The names below are operator-extensible via spec. Phase 1 ships these 6 — chos
 - **Evaluation rule**: Read `docs/specs/README.md`. Count occurrences of `status: implemented` (case-sensitive). If count > 0, return true; else false.
 - **Bash one-liner**: `[[ "$(grep -c '^- \[.*status: implemented' docs/specs/README.md 2>/dev/null || echo 0)" -gt 0 ]]`
 - **Example contexts**:
-  - True: README.md contains `- [336-...](./336-...) - status: implemented` for ≥1 spec.
+  - True: README.md contains `- 336-... - status: implemented` for ≥1 spec.
   - False: all spec rows show `closed`, `draft`, or `deferred`.
 - **Used by**: `/close` Step 9 (`close NNN` row), `/parallel` post-merge action (`close all` row).
 
@@ -92,7 +92,7 @@ The renderer protocol (`choice-block-renderer-protocol.md`) documents how the ag
 
 ## See also
 
-- [Spec 347](../specs/347-canonical-choice-block-emitter.md) — this spec
+- Spec 347 — this spec
 - [docs/process-kit/choice-block-schema.md](choice-block-schema.md) — YAML schema referencing these names
 - [docs/process-kit/choice-block-renderer-protocol.md](choice-block-renderer-protocol.md) — how the renderer computes precondition values
 - [docs/process-kit/implementation-patterns.md § Session-data safety rule](implementation-patterns.md) — Spec 320 Req 4 (the rule `today_session_log_unsynthesized` operationalizes)

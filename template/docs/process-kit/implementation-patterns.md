@@ -334,14 +334,14 @@ This deliberately **excludes** mtime, atime, ownership, uid/gid, and inode. It i
 
 ```bash
 # bash
-source .forge/bin/tests/lib/assert-hermetic-dry-run.sh
+source "${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/tests/lib/assert-hermetic-dry-run.sh"
 assert_hermetic_dry_run "<staging-dir>" -- <command> [args...]
 # Returns 0 if hermetic, non-zero if the command mutated the dir.
 ```
 
 ```powershell
 # PowerShell
-. .forge/bin/tests/lib/assert-hermetic-dry-run.ps1
+. "$(if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { '.' })/.forge/bin/tests/lib/assert-hermetic-dry-run.ps1"
 Assert-HermeticDryRun -StagingDir <path> -Command { <scriptblock> }
 ```
 
@@ -352,7 +352,7 @@ Assert-HermeticDryRun -StagingDir <path> -Command { <scriptblock> }
 TMPDIR=$(mktemp -d)
 
 # Source helper, run assertion
-source .forge/bin/tests/lib/assert-hermetic-dry-run.sh
+source "${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/tests/lib/assert-hermetic-dry-run.sh"
 if assert_hermetic_dry_run "$TMPDIR" -- bash scripts/some-script.sh --dry-run --target "$TMPDIR"; then
     echo "PASS: --dry-run is hermetic"
 else
@@ -372,7 +372,7 @@ fi
 
 ### When to apply
 
-Apply this pattern's AC to a spec whenever the spec adds, modifies, or audits a command/script that exposes a `--dry-run` flag. The audit table in [docs/specs/404-dry-run-hermeticity-ac.md](../specs/404-dry-run-hermeticity-ac.md) tracks which FORGE-shipped scripts are compliant.
+Apply this pattern's AC to a spec whenever the spec adds, modifies, or audits a command/script that exposes a `--dry-run` flag. The audit table in docs/specs/404-dry-run-hermeticity-ac.md tracks which FORGE-shipped scripts are compliant.
 
 ---
 

@@ -2,8 +2,10 @@
 """FORGE rolling consensus acceptance-rate reader (Spec 497, read side of Spec 495).
 
 Closes Spec 258 AC#5. Computes the rolling N-day (default 30) consensus
+# forge:path-literal-ok (docstring/prose — classic-default spelling in help text; Spec 575)
 acceptance rate from the session sidecars at ``docs/sessions/*.json``, per the
 read-side contract in ``docs/process-kit/telemetry-capture-guide.md``:
+# forge:path-literal-ok (comment) — module-docstring prose, actual default resolved below
 
     acceptance_rate = accepted / (accepted + modified + rejected)
 
@@ -37,8 +39,29 @@ import glob
 import json
 import os
 import sys
+from pathlib import Path
+
+_LIB_DIR = Path(__file__).resolve().parent
+if str(_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(_LIB_DIR))
+try:
+    from runtime_config import resolve_path as _rc_resolve_path  # Spec 564 helper
+except ImportError:
+    _rc_resolve_path = None
 
 _BUCKETS = ("accepted", "modified", "rejected")
+
+
+def _default_sessions_dir() -> str:
+    """Resolve forge.paths.sessions via runtime_config; fall back to the classic default."""
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(Path("."), "sessions")
+            if not error and value:
+                return value
+        except Exception:
+            pass
+    return "docs/sessions"
 
 
 def _classify(decision: str) -> str | None:
@@ -129,7 +152,7 @@ def format_line(result: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="FORGE consensus acceptance-rate reader (Spec 497)")
     parser.add_argument("--days", type=int, default=30, help="rolling window size in days (default 30)")
-    parser.add_argument("--sessions-dir", default="docs/sessions", help="directory of session sidecars")
+    parser.add_argument("--sessions-dir", default=_default_sessions_dir(), help="directory of session sidecars")
     parser.add_argument("--today", default=None, help="reference date YYYY-MM-DD (default: system date)")
     parser.add_argument("--json", action="store_true", help="emit the full result as JSON")
     args = parser.parse_args(argv)

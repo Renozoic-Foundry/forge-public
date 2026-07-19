@@ -278,6 +278,7 @@ safety_config_validate_section() {
   local section
   section="$(awk '/^## Safety Enforcement$/{p=1; next} /^## /{p=0} p' "$spec_file")"
   if [[ -z "$section" ]]; then
+# forge:path-literal-ok (docstring/prose — classic-default spelling in help text; Spec 575)
     printf 'Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md.\n' >&2
     return 2
   fi
@@ -286,6 +287,7 @@ safety_config_validate_section() {
   np_line="$(echo "$section" | grep -E '^Negative-path test: ' || true)"
   val_line="$(echo "$section" | grep -E '^Validates' || true)"
   if [[ -z "$ep_line" || -z "$np_line" || -z "$val_line" ]]; then
+    # forge:path-literal-ok (prose — guide pointer in operator message; Spec 575)
     printf 'Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md.\n' >&2
     return 2
   fi
@@ -307,7 +309,8 @@ safety_config_validate_section() {
       return 2
     fi
     ref_num="$(echo "$ref" | awk '{print $2}')"
-    ref_file="$(ls "${repo_root}"/docs/specs/${ref_num}-*.md 2>/dev/null | head -1)"
+    local _sc_specs; _sc_specs="$(cd "${repo_root}" && forge_path specs 2>/dev/null || echo docs/specs)"
+    ref_file="$(ls "${repo_root}"/${_sc_specs}/${ref_num}-*.md 2>/dev/null | head -1)"
     if [[ -z "$ref_file" ]]; then
       printf 'Referenced %s does not exist.\n' "$ref" >&2
       return 2

@@ -3,6 +3,7 @@
 # Records security-gate PASS/FAIL verdicts to a TRACKED ledger (survives clean clone).
 # Advisory: failures emit a warning but always exit 0. Telemetry only — not tamper-evident,
 # never a security authority. See docs/process-kit/telemetry-capture-guide.md.
+# forge:path-literal-ok (comment)
 #
 # Usage: telemetry.ps1 record-security-gate <gate_name> <PASS|FAIL> <exit_code> [sha]
 

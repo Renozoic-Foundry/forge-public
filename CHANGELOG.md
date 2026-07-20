@@ -9,6 +9,62 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 
 ---
 
+## v3.2.0 — 2026-07-20
+
+**MINOR bump — new command surface plus consumer-defect fixes; no migration required.** The
+consumer-feedback release: every item traces to field reports from the first production-scale
+consumer runs (SIG-SMILEY1) or to defects the v3.1.0 publish itself surfaced. Seven specs;
+aggregate MINOR per the three-surface audit (S2 additions: `/forge doctor`, `/close` batch
+forms, `/forge onboarding|configure|config-change`; audit: ADR v3.1.0 → v3.2.0).
+
+### Fixes (consumer-blocking)
+
+- **Installed-payload parity false alarms eliminated** — the sanctioned-variant exemption data
+  now ships with the payload, so the plugin-parity check inside your installed cache no longer
+  flags intentional variants as drift; when genuine payload drift IS found, `/close` now
+  classifies it (payload-side → CONDITIONAL_PASS + report upstream; your own files → blocking,
+  unchanged). A publish-preflight assertion prevents twin drift from ever shipping again
+  (Spec 581).
+- **Backlog regeneration survives `proposed` specs** — a valid `/explore` entry status no longer
+  fails the renderer's completeness gate; proposed specs render as `◇` rows (Spec 581).
+
+### Improvements
+
+- **`/forge doctor`** — the health diagnostic joins the slash dispatch, routes findings to the
+  mapped fix (retrofit / stoke / init / plugin update) with a single choice block, detects
+  stale plugin caches (version skew) and stale user-level bootstrap files; the migration
+  decision guide is the single-source routing map (Spec 579).
+- **`/close` batch mode** — close several implemented specs under one authorization: shared
+  gates run once as a strict preflight, one independent validator per spec in parallel, one
+  consolidated Review Brief with per-spec deferral recording and approve-subset; evidence-
+  verified checkpoint resume (Spec 582).
+- **One invocation grammar** — work-loop verbs stay top-level; lifecycle operations advertise
+  through `/forge <sub>` (onboarding, configure, config-change join init/stoke/doctor/retrofit);
+  generated references render the advertised forms; every name keeps working (Spec 580).
+- **Validator evidence visibility** — dispatch injects a bounded evidence listing + excerpts so
+  read-only validators stop false-negating on gitignored evidence dirs; excerpt extraction is
+  pattern-bounded to prevent token/PII leakage (Spec 583).
+- **Browser evidence captured at confirmation time** — `/implement` prompts when you're already
+  looking at the UI, so close-time deferrals become the exception (Spec 583).
+- **Retrofit finds your plugin by itself** — the resolution chain probes the standard plugin
+  cache (newest version) before refusing; explicit settings always win (Spec 583).
+- **Doc-link integrity hardened** — generated skills carry depth-correct links; the checker
+  understands command-body root-relative resolution; staging scans write the full broken list
+  to an evidence file; the false-positive allowlist is empty again (Spec 584).
+- **Layout guard now enforcing** — the process-state path-resolution sweep is strict (Spec 585).
+
+### Installer behavior change (additive, opt-out preserved)
+
+`install.sh` / `install.ps1` no longer plant the user-level `/forge-bootstrap` command by
+default — the plugin supersedes it (`--legacy-bootstrap` / `-LegacyBootstrap` restores the old
+behavior; `--update` prints the migration note; `/forge doctor` flags stale planted copies)
+(Spec 579).
+
+### Signed payload
+
+The plugin payload is minisign-signed at this cut (trusted comment `tier=forge-public
+version=3.2.0`). See the release notes for pubkey verification.
+
 ## v3.1.0 — 2026-07-18
 
 **MINOR bump — additive; no migration required.** Multi-developer readiness release: contained

@@ -1,6 +1,6 @@
 # FORGE Installer — Universal entry point (PowerShell)
 # Usage: irm https://raw.githubusercontent.com/Renozoic-Foundry/forge-public/main/install.ps1 | iex
-#        .\install.ps1 [-Repo <url>] [-Init <path>] [-Update] [-Yes]
+#        .\install.ps1 [-Repo <url>] [-Init <path>] [-Update] [-LegacyBootstrap] [-Yes]
 #
 # Detects environment (Claude Code or generic) and adapts behavior.
 # See: https://github.com/Renozoic-Foundry/forge-public
@@ -10,6 +10,7 @@ param(
     [string]$Repo = "",
     [string]$Init = "",
     [switch]$Update,
+    [switch]$LegacyBootstrap,
     [switch]$Yes,
     [switch]$Help
 )
@@ -53,7 +54,8 @@ Usage:
 Options:
   -Repo <url>    Use a custom template repository (private fork)
   -Init <path>   Also bootstrap a project at <path> via Copier
-  -Update        Refresh forge-bootstrap.md to latest version (Claude Code only)
+  -Update        Print the plugin migration note (legacy forge-bootstrap.md refresh retired, Spec 579)
+  -LegacyBootstrap  Plant the LEGACY user-level /forge-bootstrap command (pre-v3 Copier workflows only)
   -Yes           Non-interactive mode (skip confirmation prompts)
   -Help          Show this help
 
@@ -619,15 +621,24 @@ if ($RepoUrl -ne $DEFAULT_REPO) {
 
 # Claude Code integration
 if ($Mode -eq "claude-code") {
-    Install-Bootstrap -RepoUrl $RepoUrl
+    if ($LegacyBootstrap) {
+        Install-Bootstrap -RepoUrl $RepoUrl
+    } else {
+        # Spec 579: the plugin supersedes the user-level bootstrap command — do not plant.
+        Write-Info "FORGE v3 installs as a Claude Code plugin - no user-level command is planted."
+        Write-Info "  claude plugin marketplace add <your organization's FORGE marketplace>"
+        Write-Info "  claude plugin install forge; then run /forge init in your project"
+        Write-Info "  (Legacy Copier bootstrap: re-run with -LegacyBootstrap to plant /forge-bootstrap.)"
+    }
 }
 
 # Update mode (early exit)
 if ($Update) {
-    if ($Mode -eq "claude-code") {
-        Write-Info "Update complete."
-    } else {
-        Write-Warn "--Update only applies to Claude Code (forge-bootstrap.md). Nothing to update."
+    # Spec 579: -Update no longer refreshes forge-bootstrap.md - print the migration note.
+    Write-Info "FORGE updates ship through the plugin now: claude plugin marketplace update; claude plugin update forge"
+    $planted = Join-Path (Join-Path $env:USERPROFILE ".claude") (Join-Path "commands" "forge-bootstrap.md")
+    if (Test-Path $planted) {
+        Write-Info "A user-level forge-bootstrap.md is still planted at $planted - the plugin supersedes it; consider deleting it (/forge doctor will flag it)."
     }
     exit 0
 }
@@ -698,7 +709,12 @@ if ($Mode -eq "claude-code" -and $Init) {
     Write-Host "        (VS Code: Ctrl+Shift+P > `"Developer: Reload Window`")"
 } elseif ($Mode -eq "claude-code") {
     Write-Host "  FORGE installed successfully." -ForegroundColor Green
-    Write-Host "  Next: Open any project directory in Claude Code and run /forge-bootstrap"
+    if ($LegacyBootstrap) {
+        Write-Host "  Next: Open any project directory in Claude Code and run /forge-bootstrap (compat: prefer /forge <sub>)"
+    } else {
+        Write-Host "  Next: install the FORGE plugin, then run /forge init in your project"
+        Write-Host "        claude plugin marketplace add <marketplace>; claude plugin install forge"
+    }
     Write-Host ""
     Write-Host "  Note: " -ForegroundColor Yellow -NoNewline
     Write-Host "If your IDE is already open, reload the window so it picks"
@@ -714,8 +730,8 @@ if ($Mode -eq "claude-code" -and $Init) {
     Write-Host "    2. Open my-project/ in your AI-assisted IDE (Cursor, Windsurf, Copilot, etc.)"
     Write-Host "    3. Your assistant will read AGENTS.md and guide you through setup"
     Write-Host ""
-    Write-Host "  Tip: If you install Claude Code later, re-run this script to add the"
-    Write-Host "       /forge-bootstrap command for the fastest experience."
+    Write-Host "  Tip: If you install Claude Code later, install the FORGE plugin and use /forge init"
+    Write-Host "       (legacy user-level /forge-bootstrap: re-run with -LegacyBootstrap)."
 }
 
 Write-Host ""

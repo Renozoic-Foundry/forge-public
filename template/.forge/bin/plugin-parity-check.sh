@@ -28,7 +28,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'HELP'
-Usage: plugin-parity-check.sh
+Usage: plugin-parity-check.sh [--root <dir>]
 
 Spec 463 (P1=C) plugin parity gate. Verifies byte-level parity between the two
 payload sources over the common subset:
@@ -37,8 +37,25 @@ payload sources over the common subset:
 
 Common subset checked: commands/, agents/, skills/.
 Exit 0 on parity; exit 1 on any byte-level drift (named per file).
+
+--root <dir>  (Spec 581) Check an arbitrary tree instead of this script's own repo:
+              a sync staging tree (publish preflight) or an installed plugin cache
+              (/close Step 2b6 in a consumer). The expected-cross-level-drift
+              escape hatch is read from <dir>/.forge/state/ — the exemption data
+              ships with the payload (public-manifest.yaml) so consumer-context
+              runs honor the same sanctioned-variant set FORGE-self does.
 HELP
   exit 0
+fi
+
+# Spec 581: --root <dir> retargets the whole check (staging trees, plugin caches).
+if [[ "${1:-}" == "--root" ]]; then
+  if [[ -z "${2:-}" || ! -d "${2}" ]]; then
+    echo "ERROR: --root requires an existing directory (got: '${2:-}')." >&2
+    exit 1
+  fi
+  REPO_ROOT="$(cd "${2}" && pwd)"
+  shift 2
 fi
 
 PLUGIN_SRC="${REPO_ROOT}/.claude"

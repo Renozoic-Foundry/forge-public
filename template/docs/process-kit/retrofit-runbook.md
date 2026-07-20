@@ -43,3 +43,12 @@ Re-run the phase: `devendor` skips already-removed files; `reorganize` skips alr
 arrive via the plugin); scaffold-file updates still apply for Copier-era projects. Run
 `forge-doctor` — D-PATHS should be clean (no split-brain) and `ownership.py --partition` should
 show the exact FORGE/solution split.
+
+## Runtime resolution — plugin-cache probe (Spec 583)
+
+`retrofit.py` resolves its runtime in order: `--plugin-root` arg → `CLAUDE_PLUGIN_ROOT` →
+`FORGE_RUNTIME_ROOT` → **standard plugin cache probe**
+(`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>`, newest version by numeric-tuple
+comparison). Explicit settings always win; the probe fires only when nothing is set — no more
+manual `CLAUDE_PLUGIN_ROOT` exports just to run an inventory (SIG-SMILEY1 item 8). The refusal
+message names every probed location.

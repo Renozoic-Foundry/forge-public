@@ -270,3 +270,15 @@ managed-settings trust root lands (ADR-453 §6.1) — same ceiling as Spec 498's
 - Spec 342 — Approved-SHA whitespace tolerance (deprecated as superseded)
 - Spec 358 — Signature-gates Lane B only (deprecated; scope absorbed here)
 - Spec 367 — CI parity gate for spec-integrity sentinel regions (follows Spec 344)
+
+## Batch dispatch (Spec 582)
+
+Batch mode dispatches ONE read-only validator per spec, concurrently (waves of
+`forge.roles.implementer.max_parallel`, Spec 042 swarm ceiling overall). Independence is the
+point: no shared conversational context between validators (field evidence: independently
+surfaced dead code, an unedited AC, a superseded write path, and a committed gate deletion that
+document review missed). The orchestrator-global role lock (`active-role.json`, batch-shaped
+`spec: "<first>-<last> (batch)"`) blocks orchestrator writes for the whole dispatch window —
+same Spec 100 hook, no schema change. Every report passes the Spec 548 evidence post-check
+individually; the dispatch prompt injects the evidence listing + excerpts + exit-code contract
+up front so first-pass reports satisfy it.

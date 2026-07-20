@@ -287,3 +287,23 @@ entry. Pass `--result pass|fail --notes "<text>"` to record a result non-interac
 - [ ] Manifest entry written under `tmp/evidence/SPEC-NNN-browser-*/manifest.json`
 - [ ] If the check failed, the finding is documented in the spec's Evidence section
       before `/close` proceeds (see `/close` Step 2b2 — visual evidence gate)
+
+## Batch close (Spec 582)
+
+`/close NNN NNN …` (or `--batch <first>-<last>`) closes several implemented specs under ONE
+explicit authorization. What changes for the operator: a single consolidated Review Brief
+(verdict table + per-spec summaries + one "Needs your review" list) and ONE approve decision
+supporting approve-all / approve-subset / hold; deferral reasons are recorded per spec, never
+blanket. What does not change: the authorization rule (the invocation names exactly the specs
+being closed), the push prompt (once, verbatim), and every per-spec gate. Shared mechanical
+gates run once as a strict preflight — a shared-gate failure halts the batch before anything
+transitions. Resume after interruption re-verifies each completed spec's on-disk evidence
+before trusting the checkpoint.
+
+## Capture-at-confirmation (Spec 583)
+
+When you visually confirm UI-facing work at handoff (Tier-1 check), record the browser-evidence
+manifest THEN — `/implement` prompts for it at that moment (`forge-visual-verify.sh NNN
+<artifact-or-url>`; same manifest schema the /close Spec 540 gate reads). Recording at
+confirmation time makes close-time deferrals the exception instead of the rule (consumer field
+data: 10/14 blanket deferrals when capture waited for /close).

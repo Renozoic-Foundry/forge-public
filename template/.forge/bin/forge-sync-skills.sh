@@ -163,7 +163,12 @@ write_skill() {
     printf 'description: "%s"\n' "$description"
     printf 'disable-model-invocation: %s\n' "$dmi"
     printf -- '---\n'
-    strip_frontmatter < "$src"
+    # Spec 584 (SIG-574-03): the skill lives one directory DEEPER than its canonical command
+    # (<root>/.claude/skills/<name>/SKILL.md vs <root>/.forge/commands/<name>.md), so
+    # parent-relative markdown doc links need one more level: ](../../ -> ](../../../
+    # Scoped to markdown link syntax only (idempotent: the ../../../ result no longer
+    # matches the ](../../<non-dot> pattern); root-relative and external links untouched.
+    strip_frontmatter < "$src" | sed -E 's/\]\(\.\.\/\.\.\/([^.])/](..\/..\/..\/\1/g'
   } > "$out"
 }
 
@@ -227,8 +232,29 @@ if [[ "$MODE" == "verify-policy" ]]; then
     fi
   done < <(policy_list skills_model_invokable)
 
+  # 4. Spec 580: every invocable must carry exactly one grammar class (work-loop | lifecycle).
+  #    Skip silently when the class_ keys are absent (pre-580 consumer policies).
+  if grep -qE '^class_(work_loop|lifecycle):' "$POLICY_FILE"; then
+    all_names="$(policy_list commands; policy_list skills_model_invokable; policy_list skills_explicit)"
+    classed="$( { grep -E '^class_work_loop:' "$POLICY_FILE"; grep -E '^class_lifecycle:' "$POLICY_FILE"; } | sed -E 's/^[a-z_]+: *\[//; s/\]//' | tr ',' '\n' | tr -d ' ' )"
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      if ! grep -qxF "$name" <<< "$classed"; then
+        echo "VIOLATION: '${name}' has no grammar class (Spec 580 — add it to class_work_loop or class_lifecycle)" >&2
+        VIOL=$((VIOL + 1))
+      fi
+    done <<< "$all_names"
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      if ! grep -qxF "$name" <<< "$all_names"; then
+        echo "VIOLATION: class entry '${name}' names an unknown invocable (Spec 580 — not in any policy set)" >&2
+        VIOL=$((VIOL + 1))
+      fi
+    done <<< "$classed"
+  fi
+
   if [[ "$VIOL" -eq 0 ]]; then
-    echo "OK: invocation-policy verified — all command-form names skill-free; explicit skills true; model-invokable skills false."
+    echo "OK: invocation-policy verified — all command-form names skill-free; explicit skills true; model-invokable skills false; grammar classes complete."
     exit 0
   else
     echo "" >&2

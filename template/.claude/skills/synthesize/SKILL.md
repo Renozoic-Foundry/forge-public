@@ -14,7 +14,7 @@ disable-model-invocation: true
 # Model-Tier: sonnet
 Synthesize accumulated FORGE artifacts into a refined, actionable document.
 
-> Timing guidance: see [session-synthesize-evolve-guide](../../docs/process-kit/session-synthesize-evolve-guide.md) for the canonical comparison of `/session` vs `/synthesize` vs `/evolve` — triggers, cadence, automation class.
+> Timing guidance: see [session-synthesize-evolve-guide](../../../docs/process-kit/session-synthesize-evolve-guide.md) for the canonical comparison of `/session` vs `/synthesize` vs `/evolve` — triggers, cadence, automation class.
 
 If $ARGUMENTS is `?` or `help`:
   Print a usage block with the following information then stop — do not execute any further steps:

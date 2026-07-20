@@ -52,6 +52,7 @@ confirm() {
 REPO_URL=""
 INIT_PATH=""
 UPDATE=false
+LEGACY_BOOTSTRAP=false
 YES=false
 
 while [ $# -gt 0 ]; do
@@ -73,6 +74,7 @@ while [ $# -gt 0 ]; do
             fi
             ;;
         --update) UPDATE=true ;;
+        --legacy-bootstrap) LEGACY_BOOTSTRAP=true ;;
         --yes|-y) YES=true ;;
         --help|-h)
             cat <<'USAGE'
@@ -86,7 +88,9 @@ Usage:
 Options:
   --repo <url>    Use a custom template repository (private fork)
   --init <path>   Also bootstrap a project at <path> via Copier
-  --update        Refresh forge-bootstrap.md to latest version (Claude Code only)
+  --update        Print the plugin migration note (legacy forge-bootstrap.md refresh retired, Spec 579)
+  --legacy-bootstrap  Plant the LEGACY user-level /forge-bootstrap command (pre-v3 Copier
+                  workflows only; the plugin's /forge init supersedes it)
   --yes, -y       Non-interactive mode (skip confirmation prompts)
   --help, -h      Show this help
 
@@ -743,15 +747,23 @@ fi
 # Step 7: Environment-specific setup
 if [ "$MODE" = "claude-code" ]; then
     step "Setting up Claude Code integration..."
-    plant_bootstrap "$REPO_URL"
+    if [ "$LEGACY_BOOTSTRAP" = "true" ]; then
+        plant_bootstrap "$REPO_URL"
+    else
+        # Spec 579: the plugin supersedes the user-level bootstrap command — do not plant.
+        info "FORGE v3 installs as a Claude Code plugin — no user-level command is planted."
+        info "  claude plugin marketplace add <your organization's FORGE marketplace>"
+        info "  claude plugin install forge && run /forge init in your project"
+        info "  (Legacy Copier bootstrap: re-run with --legacy-bootstrap to plant /forge-bootstrap.)"
+    fi
 fi
 
 # Step 8: Update mode (early exit)
 if [ "$UPDATE" = "true" ]; then
-    if [ "$MODE" = "claude-code" ]; then
-        info "Update complete."
-    else
-        warn "--update only applies to Claude Code (forge-bootstrap.md). Nothing to update."
+    # Spec 579: --update no longer refreshes forge-bootstrap.md — print the migration note.
+    info "FORGE updates ship through the plugin now: claude plugin marketplace update && claude plugin update forge"
+    if [ -f "$CLAUDE_CMD_DIR/$BOOTSTRAP_FILE" ]; then
+        info "A user-level $BOOTSTRAP_FILE is still planted at $CLAUDE_CMD_DIR — the plugin supersedes it; consider deleting it (/forge doctor will flag it)."
     fi
     exit 0
 fi
@@ -840,7 +852,12 @@ if [ "$MODE" = "claude-code" ] && [ -n "$INIT_PATH" ]; then
     printf "        (VS Code: Ctrl+Shift+P → \"Developer: Reload Window\")\n"
 elif [ "$MODE" = "claude-code" ]; then
     printf "  ${GREEN}FORGE installed successfully.${NC}\n"
-    printf "  Next: Open any project directory in Claude Code and run ${BOLD}/forge-bootstrap${NC}\n"
+    if [ "$LEGACY_BOOTSTRAP" = "true" ]; then
+        printf "  Next: Open any project directory in Claude Code and run ${BOLD}/forge-bootstrap${NC} (compat: prefer /forge <sub>)\n"
+    else
+        printf "  Next: install the FORGE plugin, then run ${BOLD}/forge init${NC} in your project\n"
+        printf "        claude plugin marketplace add <marketplace> && claude plugin install forge\n"
+    fi
     echo ""
     printf "  ${YELLOW}Note:${NC} If your IDE is already open, reload the window so it picks\n"
     printf "        up the new command (VS Code: Ctrl+Shift+P → \"Developer: Reload Window\")\n"
@@ -855,8 +872,8 @@ else
     printf "    2. Open my-project/ in your AI-assisted IDE (Cursor, Windsurf, Copilot, etc.)\n"
     printf "    3. Your assistant will read AGENTS.md and guide you through setup\n"
     echo ""
-    printf "  Tip: If you install Claude Code later, re-run this script to add the\n"
-    printf "       /forge-bootstrap command for the fastest experience.\n"
+    printf "  Tip: If you install Claude Code later, install the FORGE plugin and use /forge init\n"
+    printf "       (legacy user-level /forge-bootstrap: re-run with --legacy-bootstrap).\n"
 fi
 
 echo ""

@@ -96,7 +96,7 @@ If the gate halts (fail-closed): operator must set `Change-Lane:` explicitly bef
 
       If none of BV/E/R/SR/TC changed in this revision, do NOT call `record-predicted` — the audit log only records score-change events. The helper is advisory; failures emit a WARN to stderr but never block `/revise`.
 
-      See: [docs/process-kit/score-calibration-loop.md](../../docs/process-kit/score-calibration-loop.md).
+      See: [docs/process-kit/score-calibration-loop.md](../../../docs/process-kit/score-calibration-loop.md).
 6. **Lane B impact analysis** — if `docs/compliance/profile.yaml` exists (Lane B project):
    a. Read the compliance profile to identify active risk categories (e.g. safety, security, privacy, reliability).
    b. Assess each risk category against the revised spec content:
@@ -138,3 +138,18 @@ If the gate halts (fail-closed): operator must set `Change-Lane:` explicitly bef
      e. Add a revision entry: `YYYY-MM-DD: Status reset to approved — new scope requires /implement.`
    - If **clarification only** (typos, wording, no new ACs): do not change status.
 8. Report what was changed. If status was reset, remind: "Run `/implement NNN` to deliver the new scope." Otherwise, remind to run `/close NNN`. If a Lane B impact report was generated, include the impact classification and any re-verification requirements in the report.
+
+## [mechanical] AC-drift nudge (Spec 583)
+
+After writing the revision entry, check the SAME edit set: if the new Revision Log entry
+matches any trigger phrase — `target`, `AC`, `acceptance criteri`, `changed the goal`,
+`now verifies`, `instead of` (case-insensitive; the named set, Spec 583 AC3) — AND the
+`## Acceptance Criteria` section was NOT modified in this revision, prompt:
+```
+Your revision note mentions a target/AC change but the Acceptance Criteria text is untouched.
+Validators verify AC-as-written (Spec 546 pitfall rule #4) — a note-only change WILL fail at
+/close. Edit the AC now? (yes/no)
+```
+`yes` → collect the AC edit before finishing. `no` → append to the Revision Log:
+`AC-drift nudge declined — AC text intentionally unchanged.` Silent when the AC section was
+edited in the same revision, or no trigger phrase matches.

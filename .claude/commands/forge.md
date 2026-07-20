@@ -25,6 +25,10 @@ If $ARGUMENTS is empty, `?`, or `help`:
     status        Show FORGE project status overview (validation queue, backlog summary, active work)
     baselines     List available Copier baselines from ~/.forge/baselines/ (Spec 090)
     retrofit      Guided consumer retrofit: inventory -> de-vendor -> reorganize -> reconcile (Spec 577)
+    doctor        Run the FORGE health diagnostic and route findings to the right fix (Spec 579)
+    onboarding    First-session interactive project configuration (Spec 580)
+    configure     Adjust any defaulted onboarding setting (Spec 580)
+    config-change Propose an audited change to agent configuration files (Spec 580)
     help          List all available FORGE commands grouped by workflow stage
 
   Examples:
@@ -33,6 +37,7 @@ If $ARGUMENTS is empty, `?`, or `help`:
     /forge stoke              — Check for and apply upstream FORGE updates
     /forge status             — Show current project status
     /forge baselines          — List baseline YAMLs in ~/.forge/baselines/ (or %USERPROFILE%\.forge\baselines\ on Windows)
+    /forge doctor             — Health check: environment, config, layout, plugin freshness
     /forge help               — List all commands
 
   To contribute improvements: open a GitHub issue or PR at the FORGE repo.
@@ -60,7 +65,22 @@ Dispatch on the first word of $ARGUMENTS:
       d. Otherwise: print `<forge_baseline_name> (v<forge_baseline_version>) — <forge_baseline_description>`.
    4. After listing, print the invocation pattern reminder: `Apply with: copier copy <forge-template> <target> --data-file ~/.forge/baselines/<name>.yaml`
    5. Implementation MUST work in both bash (`$HOME`) and PowerShell (`$env:USERPROFILE`) — when running this subcommand, detect platform via `$IsWindows` (PowerShell) or `[ "$OSTYPE" =~ msys|cygwin ]` (bash), and use the platform-appropriate path. See `docs/process-kit/baseline-format.md` for full format + invocation + security model.
-- `help`       → Print the full command listing from `docs/QUICK-REFERENCE.md` (Command Reference section): all FORGE commands grouped by workflow stage with descriptions. Include the typical workflow paths and quick start guidance.
+- `doctor`     → FORGE health diagnostic + journey router (Spec 579). READ-ONLY end to end — this subcommand never mutates state; fixes run only through their own commands after an explicit operator choice.
+   1. **Resolve + run the engine**: `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-doctor.sh` (pass remaining arguments through). If the script is absent at the resolved runtime root (pre-Spec-520 consumer): print `forge-doctor.sh not found at <resolved root> — your installed FORGE runtime predates the doctor (Spec 520). Update the plugin: claude plugin marketplace update && claude plugin update forge.` and stop (AC10 degrade path — no stack trace, no silent no-op).
+   2. **Present findings faithfully**: severity-ordered, the D-PATHS section included, and the doctor's exit code stated verbatim in the output (Grounded-progress rule — never summarize a FAIL away).
+   3. **Version-skew finding (runs even when the engine is absent)**: when BOTH a plugin payload version (`${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` `version`) and a resolved runtime/checkout version (runtime root's `.claude-plugin/plugin.json`, or `git -C <runtime root> describe --tags` for checkout runtimes) are discoverable and DIFFER: report it as the FIRST finding, naming both versions, and recommend `claude plugin marketplace update && claude plugin update forge` as the FIRST action — stale caches mask newer capability (observed 2026-07-19: a 3.0.0 cache hid `retrofit` from `/forge help`). Silent when only one side is discoverable or versions match.
+   4. **Stale user-surface finding (Spec 579 bootstrap wind-down)**: if `${HOME:-$USERPROFILE}/.claude/commands/forge-bootstrap.md` exists AND the FORGE plugin is installed (CLAUDE_PLUGIN_ROOT resolves): report `stale user-level forge-bootstrap.md — the plugin supersedes it; delete ${HOME:-$USERPROFILE}/.claude/commands/forge-bootstrap.md (re-plant later with install.sh --legacy-bootstrap if genuinely needed)`. Skip silently when neither HOME nor USERPROFILE is set (CI/sandbox).
+   5. **Journey routing — ONE choice block, only when a migration-relevant finding is present** (healthy projects get findings + no choice block; zero added friction). Map (short form of `docs/process-kit/migration-decision-guide.md` — the single source):
+      - D-PATHS pre-migration WARN or SPLIT-BRAIN HIGH → offer `/forge retrofit` (phase 3 layout-only, or full four-phase for vendored pre-v3 trees).
+      - Vendored framework files present (pre-v3 tree) → offer `/forge retrofit` (full).
+      - Copier-scaffold consumer behind upstream → offer `/forge stoke`.
+      - No FORGE at all → offer `/forge init`.
+      - Version skew (step 3) → the plugin update is the FIRST recommended action, ahead of any other fix.
+      Choice block (Spec 320 format, Rationale column, safety-rule token where the offered fix is destructive — retrofit de-vendor): rows = the ONE mapped fix, `details` (open the migration-decision-guide), `not now` (end — no state change). NEVER auto-run a fix; never chain without the explicit choice.
+- `onboarding` → Read `.forge/commands/onboarding.md` and execute it. Pass remaining arguments. (Spec 580 lifecycle fold — same canonical body as the top-level form.)
+- `configure`  → Read `.forge/commands/configure.md` and execute it. Pass remaining arguments. (Spec 580 lifecycle fold.)
+- `config-change` → Read `.forge/commands/config-change.md` and execute it. Pass remaining arguments. (Spec 580 lifecycle fold — the audited self-modification path; distinct from `configure` by design: rule-file edits carry the ADR-046 cool-down + audit ledger.)
+- `help`       → Print the full command listing from `docs/QUICK-REFERENCE.md` (Command Reference section): all FORGE commands grouped by workflow stage with descriptions. Include the typical workflow paths and quick start guidance. Open with the three-line invocation grammar (work-loop verbs top-level; lifecycle via `/forge <sub>`; `/forge:<name>` = plugin-qualified spellings, used only on name collision) and link `docs/process-kit/migration-decision-guide.md` for migrate/upgrade routing.
 - anything else → print the help block above and stop
 
 

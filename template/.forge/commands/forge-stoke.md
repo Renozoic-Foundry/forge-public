@@ -6,7 +6,8 @@ workflow_stage: lifecycle
 # Framework: FORGE
 ## Subcommand: stoke
 
-> **Note (Spec 131):** Also accessible as `/forge stoke` (subcommand of `/forge`).
+> **(compat: prefer /forge <sub>)** — `/forge stoke` is the advertised form (Spec 579 single
+> advertised path); this top-level alias remains for compatibility.
 
 > Pull upstream FORGE updates into this project using Copier. Handles migration from Cruft if needed.
 >

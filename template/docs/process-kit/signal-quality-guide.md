@@ -8,7 +8,7 @@ The classification is the pivot that lets `/evolve` group signals by *underlying
 
 ## Root-cause taxonomy (5 categories)
 
-The five categories align with the taxonomy in [docs/articles/debugging-in-forge.md § What Actually Triggers a Signal](../articles/debugging-in-forge.md), extended with `process-defect` (anchored by Spec 151) and `other` (a deliberate safety valve, not a default).
+The five categories align with the taxonomy in the published article `docs/articles/debugging-in-forge.md` (§ What Actually Triggers a Signal — at the forge-public repository root; not part of the project scaffold), extended with `process-defect` (anchored by Spec 151) and `other` (a deliberate safety valve, not a default).
 
 ### 1. `spec-expectation-gap`
 

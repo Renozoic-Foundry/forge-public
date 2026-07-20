@@ -2,6 +2,10 @@
 # Install: copy this file to ~/.claude/commands/forge-bootstrap.md
 # Usage: run /forge-bootstrap in any project directory
 
+> **(compat: prefer /forge <sub>)** — retirement rides the Spec 558 Copier cutover; `install.sh`
+> no longer plants this file by default (Spec 579; `--legacy-bootstrap` opt-in). `/forge doctor`
+> flags stale planted copies when the plugin is installed.
+>
 > **LEGACY — scaffolding-only (v3, Spec 572).** FORGE v3 delivers the framework as a Claude Code
 > plugin, and `/forge init` (plugin-native, zero Copier) is the primary bootstrap path. This
 > command remains supported for the legacy Copier full-template render — cross-IDE consumers and

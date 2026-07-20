@@ -32,7 +32,7 @@ CLAUDE.md tells the AI how to behave. FORGE gives it a structured delivery proce
 
 ## Can I use FORGE on an existing project (brownfield)?
 
-Yes. Run `/forge init` in the existing repo — it detects brownfield projects and adds FORGE's process files (`docs/specs/`, `docs/sessions/`, `AGENTS.md`, `CLAUDE.md`) alongside your code without modifying existing source files. Then `/onboarding` adapts the configuration to your stack. Work already committed outside FORGE can be reconciled into the spec corpus later with `/reconcile`.
+Yes. Run `/forge init` in the existing repo — it detects brownfield projects and adds FORGE's process files (`docs/specs/`, `docs/sessions/`, `AGENTS.md`, `CLAUDE.md`) alongside your code without modifying existing source files. Then `/forge onboarding` adapts the configuration to your stack. Work already committed outside FORGE can be reconciled into the spec corpus later with `/reconcile`.
 
 ## Does FORGE work without an AI assistant at all?
 
@@ -80,3 +80,12 @@ Usually no. The typical workflow is: `/interview` (to explore and define the pro
 ---
 
 Last verified against Spec 507 on 2026-06-29.
+
+**How do I check my project's FORGE health / figure out which upgrade path I need?**
+
+Run `/forge doctor`. It runs the full diagnostic (environment, config, layout, plugin freshness),
+reports findings faithfully, and — when a migration-relevant state is detected — offers exactly one
+mapped fix as a choice (retrofit, stoke, init, or a plugin update), never running anything without
+your explicit choice. The full routing map is
+[docs/process-kit/migration-decision-guide.md](process-kit/migration-decision-guide.md).
+Non-AI teammates get the same diagnostic via `bin/forge doctor`.

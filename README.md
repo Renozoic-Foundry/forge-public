@@ -98,7 +98,7 @@ In Claude Code, from your project (new or existing):
 `/forge init` detects your situation and adapts: a **new/empty directory** gets the plugin-native
 project scaffold (specs, sessions, backlog, `AGENTS.md`/`CLAUDE.md`, quick reference — no Copier
 involved); an **existing repo** gets FORGE's process files added alongside your code; a
-**pre-plugin FORGE project** is offered the upgrade path. Then run `/onboarding` — the one-time
+**pre-plugin FORGE project** is offered the upgrade path. Then run `/forge onboarding` — the one-time
 guided setup that configures stack, autonomy, and features — and `/now` to get your first
 recommended action.
 
@@ -106,7 +106,7 @@ recommended action.
 
 | Your environment | Install | Bootstrap | First session |
 |---|---|---|---|
-| **Claude Code** | `/plugin install forge@forge` | `/forge init` | `/onboarding`, then `/now` |
+| **Claude Code** | `/plugin install forge@forge` | `/forge init` | `/forge onboarding`, then `/now` |
 | **Other AI IDE** | — (plugin is Claude Code-specific) | Copier scaffold (collapsed section below) | Open the project; your assistant reads `AGENTS.md` |
 
 **Want the full walkthrough?** See the [Getting Started tutorial](docs/getting-started.md) — zero to first closed spec in a single session. Or read the [Concept Overview](docs/concept-overview.md) to understand what FORGE is and why it exists.
@@ -135,8 +135,12 @@ The legacy full-template Copier render remains a last resort (`/forge init --cop
 Python and Copier — [pinned versions](CONTRIBUTING.md#prerequisites)) but vendors the framework
 into your repo — prefer the runtime checkout above.
 
-The legacy `install.sh` / `install.ps1` scripts and the `/forge-bootstrap` command still work for
-this path — see [forge-bootstrap.md](forge-bootstrap.md) (legacy, scaffolding-only).
+The legacy `install.sh` / `install.ps1` scripts still work for this path; as of Spec 579 they no
+longer plant the user-level `/forge-bootstrap` command by default (compat: prefer `/forge init` —
+opt back in with `--legacy-bootstrap` / `-LegacyBootstrap`; see
+[forge-bootstrap.md](forge-bootstrap.md), legacy, scaffolding-only). Not sure which path your
+project needs? Run `/forge doctor` — it detects the state and offers the mapped fix
+([migration decision guide](docs/process-kit/migration-decision-guide.md)).
 
 **Bootstrapping with security overrides (consent-required):**
 
@@ -309,7 +313,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 571 specs across 156 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 578 specs across 157 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

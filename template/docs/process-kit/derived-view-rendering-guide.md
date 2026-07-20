@@ -11,6 +11,12 @@ Before Spec 254, `docs/backlog.md`, `docs/specs/CHANGELOG.md`, and `docs/specs/R
 Approach D eliminates the conflict surface entirely: there is no single shared file to conflict on. The "canonical" views are computed on demand from:
 
 - **Spec frontmatter** under `docs/specs/NNN-*.md` (status, priority score, dependencies, etc.) — already authoritative per ADR-028.
+
+> **Status vocabulary (Spec 581)**: the backlog renderer emits every declared lifecycle status —
+> `proposed` (◇, /explore entry), `draft`/`approved` (ranked), `in-progress`/`implemented` (→),
+> `deferred` (⏸), `closed` (✅), `deprecated` (⊘). An UNKNOWN status still fails the
+> render-completeness gate closed, naming the spec (SIG-SMILEY1 item 1: one `proposed` spec must
+> never disable backlog regeneration; one typo'd status must never pass silently).
 - **Append-only per-spec event streams** under `.forge/state/events/<spec-id>/<event-type>.jsonl` — conflict-free by construction (each spec writes only to its own subdirectory).
 
 ## Renderer trio

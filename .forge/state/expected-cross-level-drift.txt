@@ -1,0 +1,72 @@
+# Expected cross-level drift — canonical repo-root files vs template/ mirrors
+# Files listed here have known, intentional differences between canonical source
+# (repo-root: .forge/commands/, .claude/agents/, docs/process-kit/) and the
+# template/ mirror (template/.forge/commands/, template/.claude/agents/,
+# template/docs/process-kit/).
+#
+# Format: relative/path/to/file.md | rationale
+#   - Path is relative to repo root.
+#   - Both canonical path (e.g. .forge/commands/close.md) and mirror path
+#     (e.g. template/.forge/commands/close.md) will match entries in this file.
+# Lines starting with # are comments. Blank lines are ignored.
+#
+# IMPORTANT (Spec 481): an entry here PERMITS drift; it does NOT ASSERT that
+# drift currently exists. The sync uses three-state handling:
+#   - currently-identical (canonical == mirror at HEAD): permitted drift has
+#     not been applied, so additive edits ARE propagated to the mirror.
+#   - currently-divergent (canonical != mirror at HEAD): genuine intentional
+#     drift — the sync skips it and never clobbers the mirror.
+#   - newly-divergent (identical at HEAD, canonical changed, mirror now stale):
+#     forge-parity.sh --check emits an advisory WARN naming the file.
+# So listing a file here does not by itself block additive propagation while
+# the two copies still match. See docs/process-kit/sync-runbook.md.
+#
+# Spec 270 — Generalized Cross-Level Sync. See docs/process-kit/sync-runbook.md.
+# ---
+
+# ============================================================
+# Command files — FORGE-specific content (Copier-gating checks,
+# methodology mapping, compliance gates) stripped from template copies.
+# Originally tracked by .forge/state/expected-command-drift.txt (Spec 195) — that file was deprecated and removed by Spec 335 (2026-04-29) after audit confirmed zero active script consumers; this comment is retained as historical context.
+# ============================================================
+.forge/commands/brainstorm.md    | FORGE own-copy includes role registry and interview-choice recommendations
+.forge/commands/close.md         | FORGE own-copy includes Lane B compliance gates and sealing logic
+.forge/commands/forge-stoke.md   | FORGE own-copy gates (applies to dogfood tree only)
+.forge/commands/forge.md         | FORGE own-copy gates
+.forge/commands/implement.md     | FORGE own-copy gates (template/consumer path simpler)
+.forge/commands/interview.md     | FORGE-specific interview flow variants
+.forge/commands/note.md          | FORGE-specific reference to repo-root backlog
+.forge/commands/now.md           | FORGE-specific session-state shape
+
+# ============================================================
+# docs/process-kit — FORGE-only documents (no template mirror
+# expected; these track FORGE framework development itself).
+# ============================================================
+docs/process-kit/article-artifacts.md             | FORGE article pipeline — internal only
+docs/process-kit/bootstrap-conflict-resolution.md | Internal bootstrap guidance (Spec 076)
+docs/process-kit/branch-workflow.md               | FORGE branch workflow — internal only
+docs/process-kit/choice-block.md                  | Internal choice-block authoring reference
+docs/process-kit/delegated-write-protocol.md      | FORGE-internal write delegation
+docs/process-kit/parallelism-guide.md             | Internal parallelism notes (FORGE-only)
+docs/process-kit/passive-checklist-audit.md       | Internal audit procedure
+docs/process-kit/release-policy.md                | FORGE release policy — internal only
+docs/process-kit/sync-runbook.md                  | FORGE sync-to-public runbook — internal only
+docs/process-kit/v1.0.0-to-next-audit.md          | FORGE release audit artifact — internal only
+
+# ============================================================
+# docs/process-kit — files where the template version has a
+# .jinja suffix (template authors added Copier substitution).
+# The sync script auto-detects .jinja mirror targets, but list
+# here for traceability when canonical and .jinja mirror diverge.
+# ============================================================
+docs/process-kit/spec-template.md | template mirror is spec-template.md.jinja with Copier vars
+
+# ============================================================
+# docs/process-kit — files where the template mirror is
+# intentionally DE-PERSONALIZED: the canonical repo-root copy
+# retains operator-specific data (owner name, etc.) while the
+# shipped template mirror uses generic phrasing so consumer
+# projects do not inherit FORGE-operator identifiers.
+# ============================================================
+docs/process-kit/advisory-to-strict-flip-plan.md | template mirror de-personalized per Spec 412 (§ Owner uses generic "the project owner"); canonical retains operator-specific owner name
+docs/process-kit/skill-token-baseline-2026-07.md | FORGE-internal measurement baseline (Spec 522) — operator/session-specific token data; never shipped to consumers (same class as sync-runbook.md)

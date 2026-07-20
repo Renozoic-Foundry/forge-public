@@ -23,8 +23,12 @@ If $ARGUMENTS is `?` or `help`:
   Print:
   ```
   /close — Close a spec. FORGE lifecycle terminal state.
-  Usage: /close [spec-number]
+  Usage: /close [spec-number ...] | /close --batch <first>-<last>
   Arguments: spec-number (optional) — inferred from session context if omitted.
+    Multiple spec numbers (or a --batch range) enter BATCH MODE (Spec 582): shared gates run
+    once as a strict preflight, one independent validator per spec in parallel, one
+    consolidated Review Brief with per-spec deferral recording, per-spec commits, one push
+    prompt. Every named spec must be at `implemented` or the whole batch refuses.
   Behavior:
     - Confirms the spec is at `implemented` status
     - Transitions to `closed` (spec file, README, backlog, CHANGELOG)
@@ -56,6 +60,71 @@ If the marker exists but is malformed JSON: REFUSE with the generic pointer `/cl
 
 ## [mechanical] Step 0a — Evolve Loop Boundary Check (Spec 191)
 Read `docs/sessions/context-snapshot.md`. If `## Active evolve loop` exists with `status: in-progress`: stop and report "Evolve loop in progress (started <started>). Solve-loop commands (/implement, /spec, /close) are blocked until the evolve loop completes. Return to the /evolve session and use the exit gate to choose your next action." Do NOT proceed. If absent or `status: complete`: proceed normally.
+
+## [mechanical] Step 0-batch — Batch-mode admission (Spec 582)
+
+> Naming note: batch-CLOSE (this step — multiple specs in one authorized `/close` invocation) is
+> UNRELATED to Spec 475's batch-LANE marker (`.forge/state/batch-lane.json`, a /parallel worktree
+> construct). Step 0-bl runs unchanged; a batch close with no lane marker proceeds normally.
+
+If $ARGUMENTS names MORE THAN ONE spec (space-separated list, or `--batch <first>-<last>` range),
+enter batch mode. Single-spec invocations skip this step entirely — their behavior is
+byte-identical to pre-582 (AC2 regression gate).
+
+1. **Construct + validate the set (R5b — REFUSE, never expand/skip)**: enumerate the named specs
+   (a range expands to every spec file whose ID falls inside it). For EVERY member verify
+   `Status: implemented` in frontmatter. Any member that is non-implemented, already closed,
+   duplicated, or has no spec file → REFUSE the ENTIRE batch before any gate runs:
+   `BATCH REFUSED — spec <NNN> is <state> (batch closes exactly the operator-named implemented
+   specs; fix the list and re-invoke).` The authorization rule is unchanged: one explicit
+   operator invocation authorizes exactly the named specs (EA-025/026/027 doctrine).
+
+2. **Shared-gate PREFLIGHT (R3 — strict ordering)**: run the gates whose checks read NO
+   spec-specific file/state ONCE, before ANY per-spec transition or commit. The shared set and
+   their named inputs (the R3 decision rule — a gate qualifies ONLY if its inputs are
+   batch-invariant):
+   - status verification sweep (input: each spec's frontmatter — per-spec attribution recorded)
+   - plugin-parity gate Step 2b6 (inputs: `.claude/` + `template/.claude/` trees + exemption file)
+   - suite runs: validate-public-docs, forge-parity --check, validate-bash, paths-sweep, link
+     checks (inputs: whole tree)
+   - orchestrator evidence capture to `tmp/evidence/CLOSE-BATCH-<date>/orchestrator-run.txt`
+     with per-spec AC attribution lines
+   ANY shared-gate FAIL halts the batch with ZERO partial-batch state (nothing has transitioned
+   or committed yet — AC5c). Per-spec gates (spec integrity 2a, browser evidence 2b2, live-smoke
+   2b5, Docs-Impact 2d+++c, validator 2d) still run per spec after the preflight.
+
+3. **Batch checkpoint (R5)**: write `.forge/checkpoint/close-batch-<first>-<last>.json`
+   (schema: `{"batch": [ids], "per_spec": {"<id>": {"stage": "<last completed>", "artifacts":
+   {"gate_log": path, "validator_report": path}, "commit": "<sha|pending>"}}}`) after each
+   spec's major stage. **Resume trust rule**: on resume, a spec marked complete is trusted ONLY
+   after re-verifying its referenced artifacts exist AND match (validator report parses; commit
+   hash exists in git log and touches that spec's file) — presence AND content. Any mismatch →
+   refuse to skip that spec, name the missing/mismatched artifact, re-run its pipeline
+   (untampered specs resume normally). The checkpoint is a claim, not a trust root.
+
+4. **Parallel independent validators (R2 + R5a + R5c)**: write ONE orchestrator-global role lock
+   `.forge/state/active-role.json` with `{"role":"validator","spec":"<first>-<last> (batch)",
+   "read_only":true}` covering the whole dispatch window (the Spec 100 hook blocks orchestrator
+   writes identically for N=1 and N=14; no schema change); remove it only after ALL validators
+   report. Dispatch ONE read-only validator per spec against its redacted spec + the shared
+   evidence bundle, using **the validator dispatch template defined at Step 2d.5.a5/b —
+   by reference, never re-inlined** (Spec 583 single source; the template carries the
+   evidence listing + bounded excerpts + gitignore note + Spec 548 exit-code contract). Concurrency: waves of
+   `forge.roles.implementer.max_parallel`; the Spec 042 swarm ceiling bounds the batch —
+   over-ceiling degrades to sequential waves, never unbounded. Spec 548 post-check per report;
+   a FAIL isolates THAT spec (remediate + re-validate inside the batch); others proceed.
+
+5. **Consolidated Review Brief — ONE operator gate**: verdict table (spec / validator verdict /
+   post-check), per-spec four-part summaries, a single "Needs your review" list, and per-spec
+   deferral recording (every `--accept-deferred-acs` reason lands in THAT spec's Evidence under
+   `## Operator-accepted deferral` — blanket entries are forbidden, R4). Approve block supports
+   approve-all / approve-subset (named IDs) / hold. Held specs stay `implemented` with intact
+   checkpoint state; only approved specs proceed to transitions and commits (AC6b).
+
+6. **Per-spec completion**: for each approved spec run the normal Step 3+ pipeline (transition,
+   signals, derived views once at the end, per-spec explicit-path commit per Spec 494). ONE
+   session-artifact commit; ONE verbatim push prompt at the very end (authorization identical
+   to single-spec close). Delete the batch checkpoint after Step 9.
 
 ## [mechanical] Step 0c — Checkpoint resume detection (Spec 123)
 
@@ -298,9 +367,22 @@ contract: the plugin payload source (`.claude/`) and the Copier source
 1. **Detect applicability**: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/plugin-parity-check.sh` absent
    (pre-Spec-463 projects) → skip silently. Mark `[x] Plugin parity gate (Spec 463) — not present in this project`. Proceed.
 
-2. **Run the gate**: `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/plugin-parity-check.sh`.
+2. **Resolve the checked-tree root and its class (Spec 581 — posture split)**: the check runs
+   against the tree that OWNS the twin copies:
+   - Project working tree contains `template/.claude/` (FORGE-self, forks, checkout runtimes the
+     operator owns) → root = project tree → class = **consumer-side** (operator can remediate).
+   - Otherwise, `CLAUDE_PLUGIN_ROOT` (or the resolved runtime root) contains `template/.claude/`
+     → root = that payload tree → class = **payload-side** (read-only installed cache — the
+     consumer CANNOT remediate it; the defect is upstream).
+   - Neither resolvable, or resolution fails mid-check → class = **ambiguous** → treated as
+     consumer-side/blocking (conservative default; a resolution failure must never silently
+     downgrade — Spec 581 AC3/DA).
+
+3. **Run the gate**: `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/plugin-parity-check.sh --root <resolved root>`
+   (omit `--root` when the root is the project tree — identical behavior).
    - Exit 0 → `GATE [plugin-parity]: PASS — plugin payload source and Copier source are byte-identical across the common subset.` Proceed.
-   - Exit non-zero → `GATE [plugin-parity]: FAIL — byte-level drift between .claude/ (plugin payload) and template/.claude/ (Copier source). Remediation: re-sync the two sources so they are byte-identical across commands/, agents/, skills/, then re-run /close.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
+   - Exit non-zero, class **consumer-side or ambiguous** → `GATE [plugin-parity]: FAIL — byte-level drift between .claude/ (plugin payload) and template/.claude/ (Copier source). Remediation: re-sync the two sources so they are byte-identical across commands/, agents/, skills/, then re-run /close.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
+   - Exit non-zero, class **payload-side** → `GATE [plugin-parity]: CONDITIONAL_PASS — drift is inside the installed plugin payload (read-only cache), not in this project's files. This is an upstream packaging defect: report it to the FORGE maintainers (name the drifted files from the check output) and update the plugin when the fix ships. The close proceeds — a consumer cannot remediate its own cache.` Record the drifted-file list in the spec's Evidence section under `### Upstream payload drift (reported)`. Proceed — non-blocking.
 
 <!-- module:compliance -->
 ## [mechanical] Step 2c — Lane B spec sealing (Spec 052, conditional)
@@ -439,6 +521,27 @@ Before transitioning to closed, spawn an independent validator to verify accepta
        mismatch) is a close-blocker — surface it and halt, never fall through to "no evidence".
        `runnable-acs.json` empty → skip a4 entirely.
 
+   a5. **Evidence visibility injection (Spec 583 — THE validator dispatch template, single
+       source)**: validator subagents' Read/Glob respect `.gitignore`, and evidence dirs are
+       gitignored by convention — without injection, validators false-negative with "evidence
+       dir does not exist" (SIG-SMILEY1 item 3). Before spawning, build the injection block:
+       - `ls -R tmp/evidence/SPEC-NNN-YYYYMMDD/` (the listing proves the dir exists and names
+         every artifact).
+       - **Bounded excerpts (R1b)**: extract ONLY lines matching the named pattern set —
+         `^=== ` (section headers), `exit code: [0-9-]+`, `^GATE \[`, `^(PASS|FAIL)[:  ]` —
+         hard-capped at 40 lines / 4KB total:
+         ```bash
+         grep -hE '^=== |exit code: [0-9-]+|^GATE \[|^(PASS|FAIL)[: ]' \
+           tmp/evidence/SPEC-NNN-YYYYMMDD/*.log tmp/evidence/SPEC-NNN-YYYYMMDD/*.txt 2>/dev/null \
+           | head -40 | cut -c1-200
+         ```
+         Never widen the pattern set or inject surrounding context — evidence artifacts can
+         contain tokens/PII/stack traces (the CISO 581 constraint; the bounding IS the control).
+       - The template TEXT below tells the validator the paths are gitignored and that targeted
+         `Bash cat/ls` of orchestrator-NAMED files works where Read/Glob do not.
+       The Spec 582 batch dispatch (Step 0-batch item 4) uses THIS template by reference —
+       never re-inline it.
+
    b. Spawn a validator sub-agent with the following prompt structure:
       ```
       [Role preamble from validator.md]
@@ -446,6 +549,18 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       You are validating: tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
       (a redacted copy of docs/specs/NNN-<slug>.md — implementer proof sections
       are withheld by design; form your own evidence)
+
+      Evidence availability (Spec 583): the evidence directory is GITIGNORED — your Read/Glob
+      tools will not see it. Rely on (a) the injected listing + excerpts below, and (b) targeted
+      Bash `cat`/`ls` of the exact paths named there (Bash does not honor .gitignore). Never
+      report "evidence dir does not exist" without attempting the named paths via Bash.
+      Evidence-report contract (Spec 548): notes for runnable-command ACs MUST include a literal
+      exit-code phrase (e.g. "exit code: 0") plus a short output excerpt; label each criterion
+      with its AC number exactly ("AC1: ..."), one entry per AC; never cite the spec's own
+      Evidence section as proof.
+
+      Injected evidence listing + bounded excerpts (Spec 583):
+      <ls -R output + the bounded excerpt block from step a5>
 
       Stage 1 — Behavioral/browser-verb AC check (Spec 540, pre-computed):
       <flagged-ac-list from step a2, or "none — scanner found no flagged ACs">

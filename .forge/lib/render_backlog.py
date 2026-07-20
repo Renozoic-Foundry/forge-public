@@ -69,6 +69,10 @@ STATUS_MARKER = {
     "implemented": "→",
     "draft": None,  # numeric rank assigned by score
     "approved": None,
+    # Spec 581 (SIG-SMILEY1 item 1): `proposed` is the /explore entry status. One
+    # proposed spec must never fail the completeness gate and disable backlog
+    # regeneration. Decided design (581 consensus R2): render as a normal row.
+    "proposed": "◇",
 }
 
 
@@ -159,6 +163,10 @@ def render(specs_dir: Path, *, header: bool = True) -> str:
     for idx, r in enumerate(drafts, 1):
         lines.append(emit(str(idx), r))
 
+    # Proposed (pre-draft /explore entries) after the ranked pool (Spec 581)
+    for r in sorted(by_status.get("proposed", []), key=lambda x: x.get("spec_id", "")):
+        lines.append(emit(STATUS_MARKER["proposed"], r))
+
     # Deferred drafts (status: deferred — not standard but used for hold patterns)
     for r in sorted(by_status.get("deferred", []), key=lambda x: x.get("spec_id", "")):
         lines.append(emit(STATUS_MARKER["deferred"], r))
@@ -177,7 +185,7 @@ def render(specs_dir: Path, *, header: bool = True) -> str:
     # name the dropped IDs rather than emit a short table.
     _EMITTED_BUCKETS = {
         "in-progress", "implemented", "draft", "approved",
-        "deferred", "closed", "deprecated",
+        "deferred", "closed", "deprecated", "proposed",
     }
     unemitted = [
         r.get("spec_id", "?")

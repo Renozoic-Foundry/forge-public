@@ -50,4 +50,4 @@ Command bodies carry a `forge:paths-note` header declaring that `docs/...` liter
 classic-default *spellings* to be resolved via the helpers. Runtime scripts resolve through
 `forge_path`/`runtime_config.py` or carry a `forge:path-literal-ok (<reason>)` marker
 (framework-structure / comment / fixture). `scripts/validate-paths-sweep.sh` guards both —
-advisory until its graduation trigger (Spec 577 close or +30 days), then strict.
+STRICT since 2026-07-20 (Spec 585 — the Spec 577-close trigger fired; `--advisory` for local triage).

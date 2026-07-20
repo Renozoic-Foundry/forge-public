@@ -106,7 +106,7 @@ HEADER
     echo "| Command | Form | Model tier (advisory) | Description |"
     echo "|---------|------|-----------------------|-------------|"
     for cmd in "${sorted[@]}"; do
-      echo "| \`/$cmd\` | ${CMD_FORM[$cmd]} | ${CMD_TIER[$cmd]} | ${CMD_DESC[$cmd]} |"
+      echo "| \`$(advertised_invocation "$cmd")\` | ${CMD_FORM[$cmd]} | ${CMD_TIER[$cmd]} | ${CMD_DESC[$cmd]} |"
     done
   done
 

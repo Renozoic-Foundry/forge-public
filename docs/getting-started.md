@@ -79,6 +79,10 @@ Open Claude Code in (or create) your project directory and run:
 /forge init
 ```
 
+Not sure what your existing project needs (classic layout? pre-v3 vendored tree? stale
+plugin?) — run **`/forge doctor`** first: it diagnoses the state and offers the mapped fix
+(see the [migration decision guide](process-kit/migration-decision-guide.md)).
+
 `/forge init` detects your situation:
 
 - **New/empty directory** — writes the plugin-native project scaffold: spec and session
@@ -102,7 +106,7 @@ Open Claude Code in (or create) your project directory and run:
 
 Both layouts write `.forge/ownership.yaml`, a machine-readable manifest of FORGE-owned paths,
 so you can always partition framework files from your project's files. Existing projects are
-unaffected until they opt in — switching later is a `/configure` → Layout change plus the
+unaffected until they opt in — switching later is a `/forge configure` → Layout change plus the
 `/forge retrofit` migration. See `docs/process-kit/layout-guide.md` for the full comparison.
 
 The scaffold is your project's *data*; the framework itself stays in the plugin and updates with
@@ -114,7 +118,7 @@ it. (The classic full-template Copier render remains available as an explicit fa
 ## Step 3 — Run onboarding
 
 ```
-/onboarding
+/forge onboarding
 ```
 
 Onboarding is the one-time guided setup — it asks a short series of questions (project identity,

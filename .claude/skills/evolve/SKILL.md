@@ -18,7 +18,7 @@ disable-model-invocation: true
 
 Run the KCS Evolve Loop review. Use this after a spec reaches `implemented` or monthly.
 
-> Timing guidance: see [session-synthesize-evolve-guide](../../docs/process-kit/session-synthesize-evolve-guide.md) for the canonical comparison of `/session` vs `/synthesize` vs `/evolve` — triggers, cadence, automation class.
+> Timing guidance: see [session-synthesize-evolve-guide](../../../docs/process-kit/session-synthesize-evolve-guide.md) for the canonical comparison of `/session` vs `/synthesize` vs `/evolve` — triggers, cadence, automation class.
 
 If $ARGUMENTS is `?` or `help`:
   Print:

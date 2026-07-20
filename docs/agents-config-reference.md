@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: .forge/bin/forge-py scripts/gen-agents-config-reference.py
      Sources: AGENTS.md (live defaults) + scripts/lib/agents-config-reference-content.yaml (descriptions)
-     Source content hash: f9436cbae80c | FORGE plugin version: 3.1.0
+     Source content hash: 70fe220f00e9 | FORGE plugin version: 3.2.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 
 # AGENTS.md configuration reference
@@ -235,15 +235,15 @@ Three enforcement modes determine how gate approval happens:
 
 This document is **generated** by `scripts/gen-agents-config-reference.py` — defaults are read live from `AGENTS.md`
 (descriptions from `scripts/lib/agents-config-reference-content.yaml`; source content hash
-`f9436cbae80c`, FORGE plugin v3.1.0). Do not edit it by hand — changes belong in the
+`70fe220f00e9`, FORGE plugin v3.2.0). Do not edit it by hand — changes belong in the
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to AGENTS.md:
 
 <!-- forge:gen:volatile:start -->
+- 2026-07-20 `308a850` (commit message withheld from public copy — contains private-tier reference)
 - 2026-07-08 `141138b` Spec 546 — spec-authoring pitfall-rule ports (verify-before-build, redirect reachability, wireframe)
 - 2026-07-08 `6b610d0` Spec 544 — presentation/visualization artifact spec-gate exemption (AGENTS.md + template surfaces)
-- 2026-07-07 `dca7580` Spec 531 — minimal autopilot envelope (option-1 reframe): forge.autopilot block, python-core validator, blocking /close gate, consent runbook + honesty doctrine, ADR-531 addendum
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `git log -- AGENTS.md` and `docs/specs/CHANGELOG.md`.

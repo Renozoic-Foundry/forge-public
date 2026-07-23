@@ -43,7 +43,7 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 - Spec 600 — classified in a batched audit expansion (see the audit doc's bucket tables)
 
 ### Audit reference
-[ADR-NNN — v3.2.0 → v3.3.0 audit](docs/decisions/ADR-NNN-v3.2.0-to-v3.3.0-audit.md) (will be created by post-cut audit relocation; see release-policy.md § Post-cut disposition)
+ADR-591 (internal FORGE release-audit record; not part of the public payload).
 
 ## v3.2.0 — 2026-07-20
 

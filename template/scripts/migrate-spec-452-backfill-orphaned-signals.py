@@ -157,7 +157,18 @@ def parse_session_log(path: Path) -> list[dict]:
             block = [line]
             i += 1
             while i < len(lines) and not lines[i].startswith(("## ", "### ")):
-                block.append(lines[i])
+                nxt = lines[i]
+                # Spec 600: stop (without consuming) at a fence toggle or a multi-line
+                # comment open — the SAME conditions the outer loop's state machine
+                # reacts to. Otherwise a comment immediately following this entry's
+                # fields gets swallowed into `block`, the comment-open line never sets
+                # in_comment in the outer loop, and the next real heading inside the
+                # comment (e.g. a template placeholder) gets misparsed as malformed.
+                if nxt.lstrip().startswith("```"):
+                    break
+                if nxt.lstrip().startswith("<!--") and "-->" not in nxt:
+                    break
+                block.append(nxt)
                 i += 1
             if not any(FIELD_RE.match(b) for b in block[1:]):
                 raise MalformedBlockError(

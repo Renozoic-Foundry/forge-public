@@ -81,7 +81,11 @@ Open Claude Code in (or create) your project directory and run:
 
 Not sure what your existing project needs (classic layout? pre-v3 vendored tree? stale
 plugin?) — run **`/forge doctor`** first: it diagnoses the state and offers the mapped fix
-(see the [migration decision guide](process-kit/migration-decision-guide.md)).
+(see the [migration decision guide](process-kit/migration-decision-guide.md)). If `/forge
+help` is missing `doctor`/`retrofit`, or `/forge doctor` behaves like an old version, a
+project-local `forge.md` from an old vendored tree is likely shadowing the plugin — run
+**`/forge:doctor`** (plugin-qualified) to bypass the shadow and reach the plugin's real
+diagnostic.
 
 `/forge init` detects your situation:
 

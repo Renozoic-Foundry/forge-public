@@ -32,8 +32,10 @@ import hashlib
 import io
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 # Framework-vendored surfaces (superseded by the plugin/runtime payload).
 # forge:path-literal-ok (file: framework-structure — vendored-payload classification table; Spec 577)
@@ -113,6 +115,14 @@ def classify(root, plugin_root):
     return inv
 
 
+def _commit_count(root, path):
+    """Spec 595 R4/CI-012: total commits that have ever touched `path` — a low count
+    (1-4) is stock-with-version-drift, not a hand-edit worth preserving. Diffstat alone
+    false-positives version-skew as a local modification; commit history disambiguates."""
+    r = run(["git", "log", "--oneline", "--", path], root, check=False)
+    return len(r.stdout.splitlines()) if r.returncode == 0 else 0
+
+
 def phase_inventory(root, plugin_root, _apply):
     inv = classify(root, plugin_root)
     print("## retrofit inventory (read-only)")
@@ -121,7 +131,10 @@ def phase_inventory(root, plugin_root, _apply):
         print(f"  {k}: {len(inv[k])}")
         show = inv[k] if k != "project" else inv[k][:5]
         for f in show:
-            print(f"    {f}")
+            if k == "vendored-modified":
+                print(f"    {f} (commits: {_commit_count(root, f)})")
+            else:
+                print(f"    {f}")
         if k == "project" and len(inv[k]) > 5:
             print(f"    ... (+{len(inv[k])-5} project files, untouched by every phase)")
     if inv["vendored-modified"] or inv["vendored-no-counterpart"] or inv["ambiguous"]:
@@ -130,6 +143,95 @@ def phase_inventory(root, plugin_root, _apply):
         print("  - vendored-no-counterpart: not in the installed payload — verify plugin/runtime version, or keep")
         print("  - ambiguous: docs/ content outside process-data locations — classify as project or FORGE-extra")
     return inv
+
+
+def _find_bash():
+    """Spec 595 — prefer a real POSIX bash over Windows' `bash.exe` WSL shim (which
+    fails immediately when no WSL distro is installed). PATH order varies by shell
+    (PowerShell often resolves the WSL shim before Git's bash.exe); the smoke check
+    must work regardless of which shell invoked retrofit.py."""
+    candidates = [os.environ.get("FORGE_BASH"), r"C:\Program Files\Git\bin\bash.exe"]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+    which = shutil.which("bash")
+    if which and "WindowsApps" not in which:
+        return which
+    return which or "bash"
+
+
+def _smoke_check(copy_root):
+    """Spec 595 — bounded smoke check inside a shadow copy: Python compileall/import
+    resolution over retrofit's own test files (.forge/bin/tests/*.py) and any repo-root
+    *.py importing .forge.lib.*, plus bin/forge --version / bin/forge.ps1 --version if
+    those entry points exist. Returns {check-name: ok(bool)}. Bounded and side-effect
+    free — never runs the consumer project's own arbitrary test suite."""
+    results = {}
+    test_dir = os.path.join(copy_root, ".forge", "bin", "tests")
+    candidates = []
+    if os.path.isdir(test_dir):
+        candidates += [os.path.join(test_dir, f) for f in os.listdir(test_dir) if f.endswith(".py")]
+    if os.path.isdir(copy_root):
+        for f in os.listdir(copy_root):
+            fp = os.path.join(copy_root, f)
+            if f.endswith(".py") and os.path.isfile(fp):
+                try:
+                    text = io.open(fp, encoding="utf-8").read()
+                except OSError:
+                    continue
+                if ".forge.lib" in text or "forge.lib" in text:
+                    candidates.append(fp)
+    for fp in candidates:
+        rel = os.path.relpath(fp, copy_root)
+        r = run([sys.executable, "-m", "py_compile", fp], copy_root, check=False)
+        results[f"compile:{rel}"] = (r.returncode == 0)
+    forge_sh = os.path.join(copy_root, "bin", "forge")
+    if os.path.isfile(forge_sh):
+        r = run([_find_bash(), forge_sh, "--version"], copy_root, check=False)
+        results["invoke:bin/forge --version"] = (r.returncode == 0)
+    forge_ps1 = os.path.join(copy_root, "bin", "forge.ps1")
+    if os.path.isfile(forge_ps1):
+        r = run(["pwsh", "-File", forge_ps1, "--version"], copy_root, check=False)
+        results["invoke:bin/forge.ps1 --version"] = (r.returncode == 0)
+    return results
+
+
+def _reverse_reference_scan(root, removable):
+    """Spec 595 — shadow-delete + smoke-test reverse-reference scan. Creates a
+    disposable `git worktree` checked out at HEAD (never the live working tree),
+    simulates removal of `removable` inside that copy only, runs the bounded smoke
+    check before and after, and returns the sorted list of check names that PASSED
+    before the simulated deletion but FAILED after (the orphaned-consumer list) —
+    empirically catching indirect consumption that static reference scanning misses.
+    Always tears down the disposable worktree, on success, failure, or error."""
+    if not removable:
+        return []
+    tmp = tempfile.mkdtemp(prefix="forge-retrofit-shadow-")
+    added = False
+    try:
+        r = run(["git", "worktree", "add", "--detach", "--", tmp, "HEAD"], root, check=False)
+        if r.returncode != 0:
+            # Can't build the shadow copy (e.g. no commits yet) — fail safe, no
+            # false positives rather than a spurious refusal.
+            return []
+        added = True
+        validate_paths(removable)
+        before = _smoke_check(tmp)
+        rm = run(["git", "rm", "-q", "--"] + removable, tmp, check=False)
+        if rm.returncode != 0:
+            for p in removable:
+                fp = os.path.join(tmp, p)
+                if os.path.isfile(fp):
+                    os.remove(fp)
+        after = _smoke_check(tmp)
+        orphaned = [name for name, ok in before.items() if ok and not after.get(name, False)]
+        return sorted(orphaned)
+    finally:
+        if added:
+            run(["git", "worktree", "remove", "--force", "--", tmp], root, check=False)
+        if os.path.isdir(tmp):
+            shutil.rmtree(tmp, ignore_errors=True)
+        run(["git", "worktree", "prune"], root, check=False)
 
 
 def _plugin_version(plugin_root):
@@ -168,6 +270,12 @@ def phase_devendor(root, plugin_root, apply_):
         print(f"  HELD for operator disposition (never auto-removed): {len(held)}")
         for f in held:
             print(f"    HOLD {f}")
+    orphaned = _reverse_reference_scan(root, removable)
+    if orphaned:
+        print(f"  orphaned-consumers (broken by simulated deletion, shadow-delete + "
+              f"smoke-test — never auto-removed): {len(orphaned)}")
+        for o in orphaned:
+            print(f"    ORPHANED {o}")
     if not removable:
         print("  nothing to remove (idempotent re-run or already de-vendored).")
         return
@@ -177,7 +285,9 @@ def phase_devendor(root, plugin_root, apply_):
     validate_paths(removable)
     snap = os.path.join(root, ".forge", "lib", "migration-snapshot.sh")
     if os.path.isfile(snap):
-        run(["bash", snap, "snapshot"], root, check=False)
+        # Spec 597: pass the project root explicitly — never rely on migration-snapshot.sh's
+        # own script-location inference (wrong when invoked from a different physical copy).
+        run(["bash", snap, "snapshot", "--root", root], root, check=False)
         print("  snapshot taken (migration-snapshot.sh)")
     run(["git", "rm", "-q", "--"] + removable, root)
     print(f"  removed {len(removable)} files (staged). Commit with explicit paths; "
@@ -211,11 +321,19 @@ def phase_reorganize(root, _plugin_root, apply_):
         os.makedirs(os.path.dirname(os.path.join(root, d)) or os.path.join(root, d), exist_ok=True)
         run(["git", "mv", "--", s, d], root)
     # forge.paths block (idempotent append under ## Runtime Configuration)
+    paths_entries = dict(CONTAINED)
+    if os.path.isdir(os.path.join(root, "docs", ".generated")):
+        # Spec 596 — docs/.generated/ is never physically moved by reorganize (only the
+        # curated split-file parents move); pin its repo-relative location explicitly via
+        # forge.paths.generated so renderers resolve it directly instead of relying on the
+        # now-broken parent-relative FORGE-INCLUDE marker path.
+        paths_entries["generated"] = "docs/.generated"
+        print("  split-file rendering detected (docs/.generated/) — pinning forge.paths.generated")
     agents = os.path.join(root, "AGENTS.md")
     text = io.open(agents, encoding="utf-8").read() if os.path.isfile(agents) else ""
     if "forge:" not in text or "paths:" not in text:
         block = ("\n## Runtime Configuration\n\n```yaml\nforge:\n  paths:\n"
-                 + "".join(f"    {k}: {v}\n" for k, v in CONTAINED.items()) + "```\n")
+                 + "".join(f"    {k}: {v}\n" for k, v in paths_entries.items()) + "```\n")
         if "## Runtime Configuration" in text:
             block = block.replace("\n## Runtime Configuration\n", "")
             text = text.replace("## Runtime Configuration\n", "## Runtime Configuration\n" + block, 1)

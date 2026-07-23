@@ -57,6 +57,21 @@ conservative — no isolation default required).
 for a specific dispatch. The fixture treats this as a valid operator override and
 PASSes (logging the override).
 
+**Reconciliation after an inline (non-`/parallel`) `/implement` dispatch (Spec 591)**:
+`/parallel` already merges its worktree lanes back automatically — this note is only for
+an operator running `/implement` directly and manually delegating the implementation
+work to a `forge:implementer` Agent call mid-session. At L3+ that call still isolates to
+a worktree per the default above; the agent's file edits do NOT land in the tree the
+operator is running the rest of `/implement`'s mechanical steps against. Before continuing:
+1. `git -C .claude/worktrees/agent-<id> status --short` to list changed/new files.
+2. Copy each one into the main tree (`cp` preserving relative paths) — do not `git merge`
+   the worktree branch unless it holds actual commits (an agent that only edited files
+   without committing has nothing to merge).
+3. `git worktree remove .claude/worktrees/agent-<id> --force` and, if no unique commits
+   exist on it, `git branch -D worktree-agent-<id>` to clean up.
+Skipping this leaves the implementation invisible to the rest of `/implement`'s gates
+(tests, parity checks, the close-time validator) — they all run against the main tree.
+
 ## 3. `forge.agents.model_tier_override` — the single knob
 
 Editing 17 files to change tiers is friction. AGENTS.md exposes one optional config

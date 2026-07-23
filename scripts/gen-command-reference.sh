@@ -31,6 +31,7 @@ for filepath in "$CMD_DIR"/*.md; do
 done
 
 load_invocation_forms
+load_deprecated_stubs
 
 # --- STAGE_MAP completeness guard (Spec 510) ---
 unmapped=()
@@ -91,6 +92,7 @@ HEADER
   for stage in "${STAGES[@]}"; do
     stage_cmds=()
     for cmd in "${!CMD_DESC[@]}"; do
+      is_stub "$cmd" && continue
       if [[ "${STAGE_MAP[$cmd]:-}" == "$stage" ]]; then
         stage_cmds+=("$cmd")
       fi
@@ -109,6 +111,25 @@ HEADER
       echo "| \`$(advertised_invocation "$cmd")\` | ${CMD_FORM[$cmd]} | ${CMD_TIER[$cmd]} | ${CMD_DESC[$cmd]} |"
     done
   done
+
+  stub_cmds=()
+  for cmd in "${!CMD_DESC[@]}"; do
+    is_stub "$cmd" && stub_cmds+=("$cmd")
+  done
+  if [[ ${#stub_cmds[@]} -gt 0 ]]; then
+    mapfile -t stub_sorted < <(printf '%s\n' "${stub_cmds[@]}" | sort)
+    echo ""
+    echo "## Deprecated (invocation preserved, not advertised)"
+    echo ""
+    echo "Retired names still resolve (S2 MINOR — no physical removal) but only print a"
+    echo "one-line redirect to their replacement. Not part of the active command surface."
+    echo ""
+    echo "| Former name | Redirects to |"
+    echo "|-------------|--------------|"
+    for cmd in "${stub_sorted[@]}"; do
+      echo "| \`/$cmd\` | $(stub_redirect "$cmd") |"
+    done
+  fi
 
   # /forge subcommands (parsed from forge.md's help block)
   echo ""

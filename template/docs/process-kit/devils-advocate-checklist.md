@@ -16,6 +16,10 @@ This checklist is used by the Devil's Advocate role (or the agent in DA mode) to
 - [ ] **Missing ACs**: Are there obvious behaviors or edge cases the ACs do not cover?
 - [ ] **Contradictions**: Do any ACs contradict each other or conflict with existing specs?
 - [ ] **Assumptions**: Are all assumptions stated? Are any unstated assumptions risky?
+- [ ] **New invocable naming (Spec 587)**: If this spec adds a NEW invocable name (command or
+      skill), has it been checked against the Claude Code harness's native built-in command
+      list (e.g. native `/doctor`, native `/insights`)? A collision must be rejected outright,
+      or accepted namespaced-by-design (never advertised bare — only as `/forge:<name>`).
 
 **Challenge prompt:** "What is the simplest scenario that would satisfy all ACs but still produce a wrong or incomplete result?"
 

@@ -40,7 +40,20 @@ The spec format, evidence gates, and session logs work as a manual development p
 
 ## How do I keep FORGE updated?
 
-Update the plugin — framework behavior (commands, agents, skills, hooks) always comes from the installed plugin version, so re-running the marketplace install (or `claude plugin install ./` from a refreshed checkout) updates everything at once. Projects scaffolded by the legacy Copier path additionally use `/forge stoke` (or `copier update`) to merge scaffold-file changes, with conflicts presented for manual resolution.
+Run **`/forge update`** (Spec 587) — the single verb for the plugin-update journey. It reports
+whether your cache is stale first (the skew probe), then prints the five-step chain
+(marketplace update → plugin update → reload → re-verify → reinstall-if-needed) and only runs
+a mutating step behind an explicit yes/no. Framework behavior (commands, agents, skills, hooks)
+always comes from the installed plugin version. Projects scaffolded by the legacy Copier path
+additionally use `/forge stoke` to merge scaffold-file changes, with conflicts presented for
+manual resolution. As of Spec 591, `/forge stoke`'s default apply backend is a 3-way
+content-merge (no `copier update` shell-out); the classic Copier-update path is still reachable
+with `--classic` but is deprecated and scheduled for removal in **v4.0.0** — see the
+[migration decision guide](process-kit/migration-decision-guide.md#forge-stoke-deprecation-window-classic--removal-in-v400-spec-591).
+
+If `/forge help` is missing `doctor`/`retrofit`, a project-local vendored `forge.md` is likely
+shadowing the plugin — run **`/forge:doctor`** to bypass the shadow (see the
+[migration decision guide](process-kit/migration-decision-guide.md)).
 
 ## Is the compliance engine (Lane B) production-ready?
 

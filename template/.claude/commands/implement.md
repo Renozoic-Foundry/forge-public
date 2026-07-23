@@ -742,7 +742,8 @@ When spawning sub-agents for implementation work:
    YYYY-MM-DD HH:MM | implementer | spec-NNN | files: <count> | tests: pass|fail | mode: <subagent|inline>
    ```
 
-6. Implement the spec. Before each file edit, state the spec ID and file path (spec-gate enforcement).
+6. Implement the spec. Before each file edit, state the spec ID and file path (spec-gate enforcement). If the implementation target CHANGES mid-flight, edit the Acceptance Criteria text in the same
+   sitting (Spec 546 pitfall rule #4 — validators verify AC-as-written; a Revision-Log note alone fails at /close).
 
 ### [mechanical] Step 6a0 — Dependency change detection (Spec 126)
 
@@ -821,6 +822,19 @@ After implementation, if the spec's Acceptance Criteria reference UI behavior (k
    - Video recording path (if captured)
    - Pass/fail summary from the manifest
    - Evidence directory path
+
+4b. **Capture-at-confirmation prompt (Spec 583 — SIG-SMILEY1 item 4)**: when UI-facing ACs
+   were detected but NO automated browser run produced a manifest, prompt the operator AT the
+   moment they visually confirm the work (the Tier-1 handoff check — they are already looking
+   at the UI):
+   ```
+   You are visually confirming this change now. Record it as browser evidence? (yes/no)
+   yes -> run ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-visual-verify.sh NNN <artifact-or-url>
+          (writes the SAME manifest schema the /close Spec 540 gate reads - no second format)
+   no  -> the gate re-fires at /close; a deferral reason will be required there.
+   ```
+   One prompt, never repeated in the same run; recorded manifests make close-time deferrals the
+   exception (consumer field data: 10/14 blanket deferrals when capture waited for /close).
 
 5. **Skip conditions**: Skip browser test generation entirely if:
    - No UI-facing ACs detected

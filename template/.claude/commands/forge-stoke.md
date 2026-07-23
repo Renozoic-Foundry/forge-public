@@ -27,6 +27,101 @@ Step 0pre is the ENTIRE apply pipeline. The legacy shadow-tree steps were excise
 
 Spec 427 replaces the legacy shadow-tree apply mechanism with `copier update` running directly against the consumer's working tree. The apply pipeline is now a single helper invocation, gated by an operator `--trust` consent prompt:
 
+### Step 0pre.-2 — `--to-plugin` opt-in converter dispatch (Spec 560)
+
+**Check FIRST, before Step 0pre.-1 and every other Step 0pre sub-step.** If `$ARGUMENTS` contains `--to-plugin`: this invocation is a one-shot **un-embed migration** off Copier-managed classic mode onto plugin consumption (the field-validated F9 playbook) — NOT the ongoing `--merge-native` content-merge mechanism (Spec 559, a different job). Skip every other Step 0pre sub-step and run only this branch, then STOP.
+
+**Never auto-triggered (Req 5)**: absent an explicit `--to-plugin` flag on THIS invocation, this step is a silent no-op. No default `/forge stoke` path, env var, `.copier-answers.yml` key, or persisted config routes here — every migration requires the operator to type `--to-plugin` again, every time (mirrors the `--trust` consent-gate pattern).
+
+**Lane B / regulated / pinned-kit consumers stay opt-in-never-forced (Req 8)**: if `docs/compliance/profile.yaml` (or an equivalent pinned-kit marker) is present, the converter refuses by default. Passing `--override-lane-b` in addition to `--to-plugin` proceeds anyway — an explicit second signal, not a silent bypass.
+
+```bash
+# Dry run — report only, zero filesystem writes:
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py to-plugin \
+    --dry-run --project-root .
+
+# Live run — reuses Spec 297's pristine-vs-forked byte-diff and Spec 427's
+# backup/consent pattern; never invented fresh:
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py to-plugin \
+    --project-root .
+
+# Lane B / pinned-kit override (only after the operator has confirmed the
+# consumer intends to leave the pinned-kit posture):
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py to-plugin \
+    --project-root . --override-lane-b
+```
+
+The helper orchestrates (in order), all in-scope for the current invocation only:
+
+1. **Preflight** — confirms a canonical plugin framework tree is reachable (`--plugin-root`, or `$CLAUDE_PLUGIN_ROOT` when the FORGE plugin is installed) and reads `.copier-answers.yml`'s `_commit` for the embedded framework version. Aborts with a clear message if neither is set — nothing to migrate to.
+2. **Manifest walk** — reads `.forge/update-manifest.yaml`'s `framework` bucket, diffs each tracked framework-code file's embedded copy against the plugin's canonical version at the same relative path. **Byte-identical (pristine)** → removal candidate. **Locally modified (forked)** → always kept as a project override and always named in the report — a fork is never silently deleted (Req 6). `project`/`merge`-bucket files (specs, sessions, CLAUDE.md/AGENTS.md, etc.) are untouched by this step.
+3. **Hook rewire** — removes `.claude/settings.json` hook entries that invoke `.forge/bin/*` scripts (the plugin registers its own hooks via its manifest); a hook group that doesn't match the expected embedded shape is left alone and flagged for manual review rather than silently overwritten.
+4. **Apply** — with `--dry-run`, only the report above is printed (no writes). Without it, `git rm` removes exactly the pristine files, the settings.json rewrite (if any) is staged, and the whole change lands as **exactly one commit** (via explicit-path `git add`, never `git add -A`).
+
+**Rollback**: the migration is always a single commit — `git revert <migration-sha>` restores every removed pristine file and the pre-migration hook entries. The converter itself never invokes `git reset --hard`, `git push --force`, or any other destructive/history-rewriting operation.
+
+**No regression to the default path**: `/forge stoke`'s existing no-flag behavior (`direct-apply` below) is completely unchanged by this step's existence — `to-plugin` is purely additive, and Copier machinery itself is untouched (the destructive cutover is Spec 558's separate, later scope).
+
+### Step 0pre.-1 — `--merge-native` opt-in dispatch (Spec 559)
+
+**Check FIRST, before any other Step 0pre sub-step runs.** If `$ARGUMENTS` contains
+`--merge-native`: this invocation uses the new content-merge upgrade mechanism
+(`.forge/lib/upgrade_merge.py`) INSTEAD of `copier update` for this run. Skip Steps
+0pre.0a through 0pre.2c entirely (they are the classic `copier update` pipeline) and
+run this branch, then go straight to Step 0pre.3 STOP.
+
+**Default unaffected (Req 4 / AC2)**: absent `--merge-native`, this step is a silent
+no-op — every existing consumer sees zero behavior change. The classic `copier
+update`-based `direct-apply` path (Step 0pre.2) remains the default while
+`copier.yml` still exists (Spec 558 flips the default later, after Copier's actual
+removal — not this spec).
+
+1. **One-shot migration (idempotent, safe to run every invocation)**:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/upgrade_migrate_once.py migrate --project-root .
+   ```
+   Reports `migrated` (first run against a copier-era project — bridges
+   `.copier-answers.yml`'s `_commit` / `_acknowledged_legacy_artifacts` into the
+   merge-native state format) or `already migrated` (no-op thereafter).
+
+2. **Resolve upstream source**: fetch/checkout the template source referenced by
+   `.copier-answers.yml::_src_path` at `_commit` (or the latest commit if
+   `--vcs-ref` is given) into a scratch directory — this is the "theirs" tree.
+   FORGE-owned project-data files (the same surface `copier.yml::_exclude`
+   governs for the classic path) are the merge candidates.
+
+3. **Run the 3-way merge**:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/upgrade_merge.py merge \
+     --project-root . \
+     --upstream <scratch-upstream-dir> \
+     --state-dir .forge/state/upgrade-base \
+     --files <FORGE-owned project-data files>
+   ```
+   Base-snapshot state lives at `.forge/state/upgrade-base/` — OUTSIDE `.git/`; the
+   engine never writes git objects/refs/index directly (closes the git-corruption
+   defect class in `docs/process-kit/stoke-recovery-runbook.md` Sec 1a). On a file with
+   no recorded base yet (first-ever `--merge-native` run for that file), the engine
+   bootstraps from the current working-tree content — no synthetic-base guessing.
+
+4. **Report**: exit 0 (all files merged clean) — confirm success. Exit nonzero (one
+   or more conflicts) — surface the helper's own recovery output verbatim; it names
+   the conflicted file(s) and `docs/process-kit/stoke-recovery-runbook.md` (same
+   runbook the classic path uses — no parallel recovery reference).
+
+**PowerShell parity**:
+```powershell
+& ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/upgrade_migrate_once.py migrate --project-root .
+& ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/upgrade_merge.py merge --project-root . --upstream <scratch-upstream-dir> --state-dir .forge/state/upgrade-base --files <files>
+```
+
+**Not wired here (Spec 558's job)**: the six consent-gated keys
+(`test_command`, `lint_command`, `harness_command`, `include_nanoclaw`,
+`include_advanced_autonomy`, `include_two_stage_review`) stay on the active
+`forge_consent_gate.py` / copier `secret: true` render path — `runtime_consent_gate.py`
+is built and proven (`.forge/bin/tests/test-spec-559-consent-gate.sh`) but dormant.
+Do not invoke it from this step.
+
 ### Step 0pre.0a — Legacy artifact detection (Spec 431, report-only)
 
 Run **before** the `.gitignore` audit so legacy findings surface in the same

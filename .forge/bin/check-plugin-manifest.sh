@@ -155,7 +155,7 @@ if [ -d "$HOOKS_TPL" ] && [ -d "$HOOKS_ROOT" ]; then
   # Hashes are LF-normalized (CR stripped) so Windows autocrlf checkouts and Linux CI
   # compute the same digest (Spec 549 — the original hooks.json pin was minted from a
   # CRLF working copy and failed every LF checkout on CI).
-  PINNED="hooks.json 087ce50127b9fe2746f01eb297fbdf15844a67ae80e8519297940c99ea5b119d a615eeafbc72297f3a8287610ff076a19879ad8535dfd7c70bad6026520d5898
+  PINNED="hooks.json 9027f6fa7218044fbc56ed3fe47010e54438a829e98c6714a96c54c237ec7c6b a615eeafbc72297f3a8287610ff076a19879ad8535dfd7c70bad6026520d5898
 session-start-integrity.sh 4e3cd42bbc617022f6c778c2d4366cab6d6adce39579cddddf3866f0bbfc75d5 164d6a778eaf5373641e99b54782f5f998434ce66464db0f803b2b3c379a18e4"
   for f in "$HOOKS_ROOT"/* "$HOOKS_TPL"/*; do
     [ -e "$f" ] || continue

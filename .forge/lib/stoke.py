@@ -37,6 +37,15 @@ Subcommands:
       Remove backup dirs older than N days (default 30). Best-effort:
       cleanup failure emits warning to stderr and exits 0 (Req 7 / COO).
 
+  to-plugin [--project-root DIR] [--plugin-root DIR] [--dry-run]
+             [--manifest PATH] [--override-lane-b]
+      Spec 560 — opt-in one-shot migration off Copier-embedded classic mode
+      onto plugin consumption (F9 playbook). NEVER invoked by default
+      `direct-apply` or any other subcommand — reached only via this explicit
+      `to-plugin` subcommand every time. Refuses on a Lane B / pinned-kit
+      compliance profile (`docs/compliance/profile.yaml`) unless
+      `--override-lane-b` is also passed.
+
 # CROSS-SPEC CONTRACT — DO NOT EDIT, RENAME, OR DELETE.
 # The literal byte-string below is a contract token grepped by Spec 426's
 # preflight as the "Spec 427 fix-in-place" signal. The description in the
@@ -65,11 +74,33 @@ if sys.version_info < (3, 10):
     sys.stderr.write(f"error: Python 3.10+ required (found {sys.version_info.major}.{sys.version_info.minor})\n")
     sys.exit(1)
 
+# Spec 591 — sibling-module imports (same .forge/lib/ directory; forge-py execs
+# this file directly so its own directory is sys.path[0]). Direct in-process
+# import (not a subprocess shell-out) is the chosen call convention for the
+# live consent gate and the content-merge engine -- documented in the Spec
+# 591 Evidence call-site audit table.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import runtime_consent_gate as _rcg  # noqa: E402
+import upgrade_merge as _upgrade_merge  # noqa: E402
+
 TIER3_FILES = ("AGENTS.md", "CLAUDE.md", ".mcp.json")
 DEFAULT_HARD_PCT = 30
 DEFAULT_MIN_LINES = 15
 BACKUP_PREFIX = "forge-stoke-backup-"
 DEFAULT_MAX_BACKUP_AGE_DAYS = 30
+
+# Spec 591 Req 3 / AC3 / AC8 — classic-path deprecation signal. Printed to
+# STDERR ONLY (Req 6 DA finding) so `/forge stoke` stdout stays byte-identical
+# to pre-591 automation-parsed output. Exactly one line per classic-path run.
+DEPRECATION_WARNING = (
+    "DEPRECATION: --classic (the `copier update` stoke apply path) is scheduled "
+    "for removal in v4.0.0. The default content-merge path is now the supported "
+    "mechanism -- see docs/process-kit/migration-decision-guide.md."
+)
+
+# Spec 591 Req 4 — canonical soak-instrumentation activity-log path (matches
+# the Spec 134 canonical path every other JSONL-emitting spec uses).
+ACTIVITY_LOG_PATH = Path("docs/sessions/activity-log.jsonl")
 
 # Spec 432: scoped-staging catalog location (relative to script's package).
 # Resolved at runtime via _project_type_exclusions_path() to allow testing
@@ -764,6 +795,99 @@ def _detect_fresh_clone_consent_state(live_root: Path, answers: dict | None) -> 
     return non_default
 
 
+# ---- Spec 591: soak instrumentation (Req 4, Req 7) --------------------------
+
+def _append_activity_log(event: dict, live_root: Path) -> None:
+    """Best-effort JSONL append to `<live_root>/docs/sessions/activity-log.jsonl`.
+
+    Always resolved relative to the TARGET project root being stoked, never
+    the invoking process's CWD -- a stoke invocation against a consumer
+    project must never write into the FORGE-self repo's own activity log (or
+    vice versa when tested against a scratch fixture).
+
+    DA info finding: a missing/unwritable activity-log.jsonl MUST degrade
+    gracefully rather than abort the stoke apply -- soak instrumentation is
+    evidence, not a gate. Never raises.
+    """
+    try:
+        log_path = live_root / ACTIVITY_LOG_PATH
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(event, sort_keys=True) + "\n")
+    except OSError:
+        pass  # best-effort; soak evidence loss is non-fatal
+
+
+# ---- Spec 591 Req 1: live wiring of the Spec 559 runtime consent gate ------
+
+def _live_consent_check(key: str, state_file: Path, cli_value: bool, live_root: Path) -> bool:
+    """Live call site for the six named consent-gated keys.
+
+    Direct in-process call into runtime_consent_gate.check_consent (not a
+    subprocess shell-out -- see the sys.path import note at the top of this
+    file). Logs exactly `{key, event_type, outcome, timestamp}` to
+    activity-log.jsonl -- Req 7: NEVER the resolved value/command text, since
+    test_command/harness_command carry arbitrary shell-command strings that
+    may contain local paths, tokens, or secrets.
+    """
+    accepted, _reason = _rcg.check_consent(key, state_file, cli_value)
+    _append_activity_log(
+        {
+            "key": key,
+            "event_type": "consent-gate-live",
+            "outcome": "accepted" if accepted else "refused",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        },
+        live_root,
+    )
+    return accepted
+
+
+def _live_gate_six_keys(live_root: Path, answers: dict | None, consent_kv: list[str]) -> list[str]:
+    """Spec 591 Req 1 / AC1 — the single shared live-gate call site invoked by
+    `cmd_apply` ahead of BOTH the classic and merge-native backends (exhaustive
+    call-site audit: this is the only place in stoke.py that resolves the six
+    named keys' consent state at apply time; see Spec 591 Evidence for the
+    full audit table including copier.yml/forge_consent_gate.py, which remain
+    the untouched render-time backstop).
+
+    `consent_kv` is a list of "key=true|false" strings from the repeatable
+    `--consent-key` CLI flag -- the CLI-supplied consent value for each named
+    key, honored ONLY from this invocation's CLI args (never a file, never an
+    env var -- mirrors runtime_consent_gate.py's own threat model).
+
+    Returns the list of keys the live gate REFUSED (present in the answers
+    file with no matching CLI consent this invocation).
+    """
+    consent_map: dict[str, bool] = {}
+    for kv in consent_kv:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            consent_map[k.strip()] = _rcg._parse_bool(v)
+
+    refused: list[str] = []
+    if not answers:
+        return refused
+    # Spec 591: NOT .copier-answers.yml. That file legitimately persists the
+    # six keys' VALUES (test_command etc. are ordinary, persisted copier
+    # answers) -- the poisoned-token property runtime_consent_gate.py guards
+    # against is about a persisted CONSENT TOKEN, not the value itself
+    # (mirrors forge_consent_gate.py: the secret:true token is
+    # accept_security_overrides_confirmed, never test_command). This
+    # dedicated state file is a location stoke.py NEVER writes to -- if it
+    # exists and carries a key, that is the poisoned-token signal; in normal
+    # operation it is absent, so consent must come from the CLI every run.
+    state_file = live_root / ".forge" / "state" / "runtime-consent-state.yml"
+    for key in _rcg.NAMED_KEYS:
+        if key not in answers:
+            continue
+        cli_value = consent_map.get(key, False)
+        accepted = _live_consent_check(key, state_file, cli_value, live_root)
+        if not accepted:
+            refused.append(key)
+    return refused
+
+
 def cmd_direct_apply(args: argparse.Namespace) -> int:
     """Full orchestration of the new copier-direct apply mechanism.
 
@@ -906,6 +1030,131 @@ def cmd_direct_apply(args: argparse.Namespace) -> int:
         )
     )
     return 0
+
+
+# ---- Spec 591 Req 2: content-merge default apply path -----------------------
+
+def _resolve_merge_files(
+    upstream_root: Path, copier_yml: Path, explicit_files: list[str] | None
+) -> list[str]:
+    """Determine which repo-relative files the merge-native backend merges.
+
+    `--files` (explicit_files) wins when given. Otherwise walk `upstream_root`
+    (the new template content -- "theirs") and merge every file NOT matching
+    `copier.yml::_exclude` (the same project-data exclusion set the classic
+    backup/apply path already uses) -- i.e. every FORGE-owned template file.
+    """
+    if explicit_files:
+        return [f.replace("\\", "/") for f in explicit_files]
+    try:
+        patterns = _read_copier_exclude(copier_yml)
+    except (FileNotFoundError, ValueError):
+        patterns = []
+    files: list[str] = []
+    for root, dirs, fnames in os.walk(upstream_root):
+        root_path = Path(root)
+        try:
+            rel_root = root_path.relative_to(upstream_root)
+        except ValueError:
+            continue
+        rel_root_str = str(rel_root).replace("\\", "/")
+        if rel_root_str == ".git" or rel_root_str.startswith(".git/"):
+            dirs[:] = []
+            continue
+        for fname in fnames:
+            rel = (root_path / fname).relative_to(upstream_root)
+            rel_str = str(rel).replace("\\", "/")
+            if _path_matches_patterns(rel_str, patterns):
+                continue
+            files.append(rel_str)
+    return files
+
+
+def cmd_merge_native_apply(args: argparse.Namespace) -> int:
+    """Spec 591 Req 2 / AC2 — default `/forge stoke` apply path: 3-way
+    content-merge (Spec 559 `upgrade_merge.py`) instead of shelling out to
+    `copier update`. No invocation may raise an unhandled exception/stack
+    trace (Req 2) -- every path below returns a clean int exit code.
+    """
+    live_root = Path(args.live_root) if args.live_root else Path.cwd()
+    copier_yml = Path(args.copier_yml) if args.copier_yml else (live_root / "copier.yml")
+    upstream_root = Path(args.upstream) if args.upstream else Path(os.environ.get("CLAUDE_PLUGIN_ROOT", "."))
+
+    if not upstream_root.is_dir():
+        print(
+            f"GATE [merge-native/upstream]: FAIL — upstream tree not found at {upstream_root}. "
+            "Pass --upstream <template-dir> or set CLAUDE_PLUGIN_ROOT.",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        files = _resolve_merge_files(upstream_root, copier_yml, args.files)
+    except OSError as e:
+        print(f"GATE [merge-native/resolve-files]: FAIL — {e}", file=sys.stderr)
+        return 2
+
+    state_dir = Path(args.state_dir) if args.state_dir else (live_root / _upgrade_merge.DEFAULT_STATE_DIR)
+
+    if not files:
+        print(json.dumps({"status": "ok", "merged": 0, "conflicts": 0}))
+        _append_activity_log(
+            {
+                "event_type": "stoke-merge-apply",
+                "outcome": "no-op",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "spec_id": "591",
+            },
+            live_root,
+        )
+        return 0
+
+    merge_args = argparse.Namespace(
+        project_root=str(live_root), upstream=str(upstream_root), state_dir=str(state_dir), files=files
+    )
+    try:
+        rc = _upgrade_merge.cmd_merge(merge_args)
+    except OSError as e:
+        print(f"merge-native: IO error: {e}", file=sys.stderr)
+        rc = 2
+
+    outcome = "clean" if rc == 0 else ("conflict" if rc == 1 else "error")
+    _append_activity_log(
+        {
+            "event_type": "stoke-merge-apply",
+            "outcome": outcome,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "spec_id": "591",
+        },
+        live_root,
+    )
+    return rc
+
+
+def cmd_apply(args: argparse.Namespace) -> int:
+    """Spec 591 Req 1/2/3 — the new `apply` subcommand: content-merge is the
+    DEFAULT backend; `--classic` reaches the EXISTING `cmd_direct_apply` body
+    UNCHANGED (Req 2); `--merge-native` is an accepted no-op alias (it is
+    already the default). Live consent-gate wiring (Req 1) runs ONCE here,
+    ahead of BOTH backends -- the single shared call site the Evidence audit
+    table documents. No invocation may raise an unhandled exception (Req 2).
+    """
+    try:
+        live_root = Path(args.live_root) if args.live_root else Path.cwd()
+        answers = _read_copier_answers(live_root)
+        try:
+            _live_gate_six_keys(live_root, answers, getattr(args, "consent_key", None) or [])
+        except Exception as e:  # defensive: gate plumbing must never abort the apply
+            print(f"WARNING: live consent-gate check failed non-fatally: {e}", file=sys.stderr)
+
+        if args.classic:
+            # Req 3/6/8: exactly one warning line, stderr only, stdout untouched.
+            print(DEPRECATION_WARNING, file=sys.stderr)
+            return cmd_direct_apply(args)
+        return cmd_merge_native_apply(args)
+    except Exception as e:  # Req 2: no invocation may raise an unhandled exception
+        print(f"stoke apply: unexpected error: {e}", file=sys.stderr)
+        return 3
 
 
 # ---- audit (reframed against backup snapshot, with path-classification) ----
@@ -1804,6 +2053,375 @@ def cmd_audit_gitignore(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---- Spec 560: to-plugin converter ------------------------------------------
+#
+# Opt-in embedded-project -> plugin-consumption migration (F9 playbook). Reuses
+# Spec 297's pristine-vs-forked byte-diff idea and Spec 427's backup/consent
+# pattern; never runs without an explicit `to-plugin` subcommand invocation
+# (Req 5 never-auto-trigger).
+
+def _parse_update_manifest(text: str) -> dict[str, list[str]]:
+    """Minimal parser for `.forge/update-manifest.yaml`'s bucket -> paths lists.
+
+    Schema (see .forge/update-manifest.yaml):
+      <bucket>:
+        description: "..."
+        paths:
+          - "<pattern>"
+    Only `paths:` lists are collected (the `obsolete`/`removed` buckets use a
+    different `mappings:` shape and are not read here — out of scope for the
+    converter, which only needs framework/project/merge).
+    """
+    buckets: dict[str, list[str]] = {}
+    current_bucket: str | None = None
+    in_paths = False
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not line.startswith(" ") and not line.startswith("\t"):
+            if stripped.endswith(":"):
+                current_bucket = stripped[:-1].strip()
+                buckets.setdefault(current_bucket, [])
+                in_paths = False
+                continue
+            current_bucket = None
+            in_paths = False
+            continue
+        if current_bucket is None:
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 2 and stripped.rstrip(":") == "paths":
+            in_paths = True
+            continue
+        if indent == 2 and stripped.endswith(":"):
+            in_paths = False
+            continue
+        if in_paths and stripped.startswith("- "):
+            item = stripped[2:].strip().strip('"').strip("'")
+            if item:
+                buckets[current_bucket].append(item)
+    return buckets
+
+
+def _load_update_manifest(manifest_path: Path) -> dict[str, list[str]]:
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"update-manifest.yaml not found at {manifest_path}")
+    return _parse_update_manifest(manifest_path.read_text(encoding="utf-8"))
+
+
+def _is_lane_b(project_root: Path) -> bool:
+    """Req 8 — Lane B / pinned-kit marker: `docs/compliance/profile.yaml`
+    (the same convention `implement.md`/`close.md`/`revise` already use)."""
+    return (project_root / "docs" / "compliance" / "profile.yaml").is_file()
+
+
+def _expand_dir_patterns(patterns: list[str]) -> list[str]:
+    """update-manifest.yaml writes bare directory prefixes (e.g. `.forge/`)
+    that `_path_matches_patterns` (an fnmatch-based, `**`-aware matcher) does
+    NOT treat as a recursive prefix on its own — real `copier.yml::_exclude`
+    entries spell that out explicitly (`.forge/bin/**`). Expand any pattern
+    ending in `/` into both the bare directory match and its recursive form
+    so update-manifest.yaml's existing bucket shape is usable as-is."""
+    expanded: list[str] = []
+    for p in patterns:
+        expanded.append(p)
+        if p.endswith("/"):
+            expanded.append(p + "**")
+    return expanded
+
+
+def _classify_framework_files(
+    project_root: Path,
+    plugin_root: Path,
+    framework_patterns: list[str],
+    non_framework_patterns: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Return (pristine, forked, no_canonical) relative-path lists.
+
+    Walks git-tracked files under `project_root`, keeps those matching
+    `framework_patterns` and NOT matching `non_framework_patterns` (project /
+    merge buckets are handled separately — Req 4b), then diffs each against
+    its counterpart at the same relative path under `plugin_root`.
+    """
+    framework_patterns = _expand_dir_patterns(framework_patterns)
+    non_framework_patterns = _expand_dir_patterns(non_framework_patterns)
+    tracked = _list_tracked_files(project_root)
+    pristine: list[str] = []
+    forked: list[str] = []
+    no_canonical: list[str] = []
+    for rel in tracked:
+        if not _path_matches_patterns(rel, framework_patterns):
+            continue
+        if _path_matches_patterns(rel, non_framework_patterns):
+            continue
+        canonical = plugin_root / rel
+        project_file = project_root / rel
+        if not canonical.is_file():
+            no_canonical.append(rel)
+            continue
+        try:
+            same = project_file.read_bytes() == canonical.read_bytes()
+        except OSError:
+            no_canonical.append(rel)
+            continue
+        if same:
+            pristine.append(rel)
+        else:
+            forked.append(rel)
+    return pristine, forked, no_canonical
+
+
+GUARD_CRITICAL_HOOK_SCRIPTS = (
+    # Security-boundary hooks (Spec 560 retroactive-consensus CISO finding):
+    # stripping one of these without a verified plugin-manifest replacement
+    # silently removes an authorization backstop (check-push-guard.sh is the
+    # EA-025/026/027 push-authorization primitive — Spec 498).
+    "check-push-guard.sh",
+    "check-commit-guard.sh",
+    "check-authority-guard.sh",
+    "check-validator-git-guard.sh",
+)
+
+
+def _plugin_registers_hook(script_name: str, project_root: Path) -> bool:
+    """Best-effort proof that the FORGE plugin's own hook manifest registers
+    `script_name`. Checked sources: $CLAUDE_PLUGIN_ROOT, the project's own
+    `.claude-plugin/` (FORGE-self-shaped trees), then the default Claude Code
+    plugin cache. No proof → False (fail-safe: the embedded hook is kept)."""
+    override = os.environ.get("FORGE_PLUGIN_HOOKS_MANIFEST")
+    if override:
+        # Test/ops override: when set, it is the ONLY source consulted
+        # (deterministic regardless of local plugin-cache state).
+        try:
+            p = Path(override)
+            return p.is_file() and script_name in p.read_text(encoding="utf-8")
+        except OSError:
+            return False
+    candidates: list[Path] = []
+    env_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if env_root:
+        candidates.append(Path(env_root) / "hooks" / "hooks.json")
+        candidates.append(Path(env_root) / ".claude-plugin" / "hooks" / "hooks.json")
+    candidates.append(project_root / ".claude-plugin" / "hooks" / "hooks.json")
+    cache = Path.home() / ".claude" / "plugins" / "cache"
+    if cache.is_dir():
+        candidates.extend(sorted(cache.glob("*/forge/*/.claude-plugin/hooks/hooks.json")))
+    for path in candidates:
+        try:
+            if path.is_file() and script_name in path.read_text(encoding="utf-8"):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _rewire_hooks(project_root: Path, dry_run: bool) -> dict:
+    """Req 4c — remove embedded `.claude/settings.json` hook entries that
+    invoke `.forge/bin/*` scripts (the plugin registers its own hooks via its
+    manifest). Any hook group that does not match the expected embedded shape
+    is left untouched and flagged for manual review rather than overwritten.
+
+    Guard-critical entries (GUARD_CRITICAL_HOOK_SCRIPTS) are removed only when
+    the plugin manifest verifiably registers the same script; otherwise they
+    are KEPT and flagged — a redundant guard hook is harmless, a silently
+    missing one is a security-boundary regression (retroactive-consensus CISO
+    finding, 2026-07-20).
+
+    Returns {"removed": [...], "flagged": [...], "changed": bool}.
+    """
+    settings_path = project_root / ".claude" / "settings.json"
+    result = {"removed": [], "flagged": [], "changed": False}
+    if not settings_path.is_file():
+        return result
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        result["flagged"].append(str(settings_path))
+        return result
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return result
+    changed = False
+    for event, groups in hooks.items():
+        if not isinstance(groups, list):
+            result["flagged"].append(f"hooks.{event}")
+            continue
+        new_groups = []
+        for group in groups:
+            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+                result["flagged"].append(f"hooks.{event} (unrecognized group shape)")
+                new_groups.append(group)
+                continue
+            kept = []
+            for h in group["hooks"]:
+                cmd = h.get("command", "") if isinstance(h, dict) else ""
+                if isinstance(cmd, str) and ".forge/bin/" in cmd.replace("\\", "/"):
+                    guard = next(
+                        (g for g in GUARD_CRITICAL_HOOK_SCRIPTS if g in cmd), None
+                    )
+                    if guard and not _plugin_registers_hook(guard, project_root):
+                        kept.append(h)
+                        result["flagged"].append(
+                            "guard-critical hook kept (plugin equivalence "
+                            f"unverified — remove manually once confirmed): {cmd}"
+                        )
+                        continue
+                    result["removed"].append(cmd)
+                    changed = True
+                else:
+                    kept.append(h)
+            if kept:
+                new_group = dict(group)
+                new_group["hooks"] = kept
+                new_groups.append(new_group)
+            # else: entire group removed (all its hooks were embedded ones)
+        hooks[event] = new_groups
+    if changed:
+        result["changed"] = True
+        if not dry_run:
+            settings_path.write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
+    return result
+
+
+def cmd_to_plugin(args: argparse.Namespace) -> int:
+    """Spec 560 Req 4 — opt-in `stoke.py to-plugin` converter.
+
+    Never auto-triggered (Req 5): reached only via this explicit subcommand.
+    """
+    project_root = Path(args.project_root) if args.project_root else Path.cwd()
+
+    # Req 8 — Lane B / pinned-kit refusal (checked FIRST, before any preflight).
+    if _is_lane_b(project_root) and not args.override_lane_b:
+        print(
+            "GATE [to-plugin/lane-b]: REFUSED — "
+            "docs/compliance/profile.yaml present (Lane B / regulated / pinned-kit "
+            "consumer). --to-plugin is opt-in-never-forced for this population "
+            "(explore F7). Re-run with --override-lane-b to proceed anyway.",
+            file=sys.stderr,
+        )
+        return 9
+
+    # Preflight (Req 4a): FORGE plugin must be installed. No Claude Code
+    # registry API is available to a standalone script, so the operator- or
+    # test-supplied plugin root is the detection signal: --plugin-root, else
+    # CLAUDE_PLUGIN_ROOT (the same env var the plugin's own commands read).
+    plugin_root_str = args.plugin_root or os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if not plugin_root_str:
+        print(
+            "GATE [to-plugin/preflight]: FAIL — FORGE plugin not installed "
+            "(no --plugin-root and CLAUDE_PLUGIN_ROOT is unset). Nothing to "
+            "migrate to. Install the FORGE plugin first.",
+            file=sys.stderr,
+        )
+        return 10
+    plugin_root = Path(plugin_root_str)
+    if not plugin_root.is_dir():
+        print(
+            f"GATE [to-plugin/preflight]: FAIL — plugin root {plugin_root} "
+            "does not exist.",
+            file=sys.stderr,
+        )
+        return 10
+
+    answers = _read_copier_answers(project_root)
+    embedded_commit = (answers or {}).get("_commit", "unknown")
+
+    manifest_path = (
+        Path(args.manifest) if args.manifest else project_root / ".forge" / "update-manifest.yaml"
+    )
+    try:
+        manifest = _load_update_manifest(manifest_path)
+    except FileNotFoundError as e:
+        print(f"GATE [to-plugin/preflight]: FAIL — {e}", file=sys.stderr)
+        return 10
+
+    framework_patterns = manifest.get("framework", [])
+    non_framework_patterns = manifest.get("project", []) + manifest.get("merge", [])
+
+    pristine, forked, no_canonical = _classify_framework_files(
+        project_root, plugin_root, framework_patterns, non_framework_patterns
+    )
+
+    hook_result = _rewire_hooks(project_root, dry_run=True)
+
+    report = {
+        "status": "dry-run" if args.dry_run else "applied",
+        "embedded_commit": embedded_commit,
+        "removed_pristine": sorted(pristine),
+        "kept_forks": sorted(forked),
+        "no_canonical_counterpart": sorted(no_canonical),
+        "hooks_removed": hook_result["removed"],
+        "hooks_flagged_for_manual_review": hook_result["flagged"],
+    }
+
+    if args.dry_run:
+        print(json.dumps(report, indent=2))
+        return 0
+
+    # Live run: git rm pristine files only; forks are NEVER removed (Req 6).
+    if pristine:
+        try:
+            subprocess.run(
+                ["git", "rm", "--quiet", "--"] + sorted(pristine),
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(
+                f"GATE [to-plugin/apply]: FAIL — git rm failed: {e.stderr.strip() or e}",
+                file=sys.stderr,
+            )
+            return 11
+
+    hook_result = _rewire_hooks(project_root, dry_run=False)
+    report["hooks_removed"] = hook_result["removed"]
+    report["hooks_flagged_for_manual_review"] = hook_result["flagged"]
+    if hook_result["changed"]:
+        try:
+            subprocess.run(
+                ["git", "add", "--", ".claude/settings.json"],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            pass  # non-fatal; the file write already landed on disk
+
+    if not pristine and not hook_result["changed"]:
+        print(json.dumps({**report, "status": "no-op", "note": "nothing to migrate"}, indent=2))
+        return 0
+
+    try:
+        subprocess.run(
+            [
+                "git",
+                "commit",
+                "-m",
+                f"stoke to-plugin: un-embed framework files (embedded _commit={embedded_commit})",
+            ],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(
+            f"GATE [to-plugin/apply]: FAIL — git commit failed: {e.stderr.strip() or e}",
+            file=sys.stderr,
+        )
+        return 11
+
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 # ---- main -------------------------------------------------------------------
 
 # Spec 431 — new subcommands shipped by the stoke/ package.
@@ -1846,6 +2464,33 @@ def main() -> int:
     p.add_argument("--confirm-security-overrides", action="store_true", help="Spec 434 Req 4: confirm honoring accept_security_overrides when .copier-answers.yml shows no in-session operator edit (fresh-clone state). Required to proceed when the security-override-consent gate WARNs.")
     p.add_argument("--data", action="append", default=[], help="Spec 444: pass KEY=VALUE through to `copier update --data`. Used by the /forge stoke chat-mediation flow to supply `accept_security_overrides=true` and `accept_security_overrides_confirmed=true` after explicit operator yes-answers via Step 0pre.05. Repeatable. MUST originate from operator yes-answers in the current chat turn — never from env vars, config files, or implicit context (Spec 444 Constraint).")
     p.set_defaults(func=cmd_direct_apply)
+
+    # Spec 591 — the live, documented apply entry point. Content-merge (Spec
+    # 559 upgrade_merge.py) is the DEFAULT backend; --classic reaches the
+    # unchanged `direct-apply` (cmd_direct_apply) body; --merge-native is an
+    # accepted no-op alias (already the default). Carries the same
+    # direct-apply flags (for --classic pass-through) plus merge-native-only
+    # flags (--upstream/--files/--state-dir) and the live consent-gate
+    # --consent-key flag (Req 1), shared by both backends.
+    p = sub.add_parser(
+        "apply",
+        help="Spec 591 default apply path: content-merge (default) or --classic (copier update, deprecated, removal in v4.0.0).",
+    )
+    p.add_argument("--live-root", default=None)
+    p.add_argument("--copier-yml", default=None)
+    p.add_argument("--allow-dirty", action="store_true", help="Override dirty-tree guard (--classic only; operator-explicit per Req 4)")
+    p.add_argument("--no-cleanup-old-backups", action="store_true", help="--classic only")
+    p.add_argument("--vcs-ref", default=None, help="--classic only: pin the update target ref (default: HEAD)")
+    p.add_argument("--trust", action="store_true", help="--classic only: pass --trust to copier update (operator-explicit consent)")
+    p.add_argument("--confirm-security-overrides", action="store_true", help="--classic only: Spec 434 Req 4 fresh-clone confirmation")
+    p.add_argument("--data", action="append", default=[], help="--classic only: KEY=VALUE pass-through to `copier update --data` (Spec 444)")
+    p.add_argument("--classic", action="store_true", help="Spec 591 Req 2: opt into the deprecated copier-update apply path (removal targeted v4.0.0). Prints one deprecation warning to stderr per run.")
+    p.add_argument("--merge-native", action="store_true", help="Spec 591: accepted no-op alias -- content-merge is already the default. Exists for consumers' explicit scripts/muscle memory.")
+    p.add_argument("--upstream", default=None, help="Merge-native only: new template content tree ('theirs'). Default: $CLAUDE_PLUGIN_ROOT.")
+    p.add_argument("--files", nargs="*", default=None, help="Merge-native only: explicit repo-relative file list to merge. Default: every file under --upstream not matching copier.yml::_exclude.")
+    p.add_argument("--state-dir", default=None, help="Merge-native only: recorded base-snapshot dir (outside .git/). Default: .forge/state/upgrade-base under --live-root.")
+    p.add_argument("--consent-key", action="append", default=[], help="Spec 591 Req 1: repeatable KEY=true|false -- CLI-supplied consent for one of the six named consent-gated keys, honored ONLY from this invocation (never persisted, never env/config).")
+    p.set_defaults(func=cmd_apply)
 
     p = sub.add_parser("backup-create")
     p.add_argument("--live-root", default=None)
@@ -1938,6 +2583,28 @@ def main() -> int:
     p.add_argument("--src-path", default=None, help="Override source path (default: read _src_path from .copier-answers.yml).")
     p.add_argument("--live-root", default=None, help="Project root for resolving .copier-answers.yml (default: cwd).")
     p.set_defaults(func=cmd_list_tasks)
+
+    # Spec 560 — opt-in embedded-project -> plugin-consumption converter.
+    p = sub.add_parser(
+        "to-plugin",
+        help="Opt-in migration off embedded framework files onto plugin consumption "
+             "(Spec 560 F9 playbook). NEVER invoked by default /forge stoke — requires "
+             "this explicit subcommand every time.",
+    )
+    p.add_argument("--project-root", default=None, help="Consumer project root (default: cwd).")
+    p.add_argument(
+        "--plugin-root",
+        default=None,
+        help="Canonical plugin framework tree to diff against (default: $CLAUDE_PLUGIN_ROOT).",
+    )
+    p.add_argument("--manifest", default=None, help="Override update-manifest.yaml path (testing).")
+    p.add_argument("--dry-run", action="store_true", help="Report only; zero filesystem writes.")
+    p.add_argument(
+        "--override-lane-b",
+        action="store_true",
+        help="Proceed despite a Lane B / pinned-kit compliance profile (operator-explicit override).",
+    )
+    p.set_defaults(func=cmd_to_plugin)
 
     args = parser.parse_args()
     return args.func(args)

@@ -9,6 +9,42 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 
 ---
 
+## v3.3.0 — 2026-07-23
+
+**Bump rationale**: MINOR bump driven by audit-classified surface impacts.
+
+### Surface impacts
+- Surface 1 (copier.yml): none
+- Surface 2 (slash commands): MINOR
+- Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
+
+### Specs in window
+- Spec 559 — S2=MINOR — `/forge stoke`'s no-flag default backend changes from Copier `direct-apply` to content-merge (`forge
+- Spec 591 — S2=MINOR — companion half of 559's cutover; renames operator-facing entry point `direct-apply` → `apply --class
+- Spec 560 — S2=MINOR — adds `--to-plugin` one-shot migration flag, explicitly additive (`forge-stoke.md:63`, "No regression
+- Spec 587 — S2=MINOR — new `/forge:doctor` alias + `/forge update` verb (additive); `dependency-audit`/`insights`/`signal-t
+- Spec 595 — S2=PATCH — only the internal `retrofit devendor` phase description gained a safety-scan clause; `retrofit <phas
+- Spec 582 — S2=PATCH — `template/.claude/commands/close.md` diff is a documented stale-mirror sync only; canonical `close.m
+- Spec 583 — S2=PATCH — stale-mirror sync on `implement.md`; new prose is internal step/prompting detail, not a Usage/argume
+- Spec 586 — S2=PATCH — generator volatile-block sanitization, internal only (pre-classified 2026-07-20)
+
+### Batched-audit specs in window
+- Spec 547 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 579 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 580 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 581 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 584 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 585 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 594 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 596 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 597 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 598 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 599 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 600 — classified in a batched audit expansion (see the audit doc's bucket tables)
+
+### Audit reference
+[ADR-NNN — v3.2.0 → v3.3.0 audit](docs/decisions/ADR-NNN-v3.2.0-to-v3.3.0-audit.md) (will be created by post-cut audit relocation; see release-policy.md § Post-cut disposition)
+
 ## v3.2.0 — 2026-07-20
 
 **MINOR bump — new command surface plus consumer-defect fixes; no migration required.** The

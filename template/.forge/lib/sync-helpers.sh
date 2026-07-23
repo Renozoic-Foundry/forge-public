@@ -87,7 +87,6 @@ is_forge_command() {
   local in_frontmatter=false
   local past_frontmatter=false
   local first_line=true
-  local body_count=0
   local line line_stripped
   while IFS= read -r line; do
     line_stripped="${line%$'\r'}"
@@ -109,10 +108,6 @@ is_forge_command() {
     if $past_frontmatter; then
       if [[ "$line_stripped" == "# Framework: FORGE"* ]] || [[ "$line_stripped" == "## Subcommand:"* ]]; then
         return 0
-      fi
-      body_count=$((body_count + 1))
-      if [[ $body_count -ge 10 ]]; then
-        return 1
       fi
     fi
   done < "$file"

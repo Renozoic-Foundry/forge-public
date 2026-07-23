@@ -1,12 +1,12 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: scripts/gen-command-reference.sh
      Canonical sources: .forge/commands/*.md + invocation-policy.yaml
-     Source content hash: ee18320393cc | FORGE plugin version: 3.2.0
+     Source content hash: 50db7d2841f8 | FORGE plugin version: 3.3.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 # Command Reference
 
 Auto-generated reference for all FORGE slash commands, derived from source files in `.forge/commands/`.
 
-**Total commands: 33**
+**Total commands: 34**
 
 **Invocation forms** (Spec 491 policy manifest): `command` — a `.claude/commands` slash command,
 never model-invoked; `skill (auto)` — a skill Claude may invoke opportunistically (read-only /
@@ -18,7 +18,6 @@ Model tier is operator-advisory only (ADR-316) — Claude Code's model picker is
 
 | Command | Form | Model tier (advisory) | Description |
 |---------|------|-----------------------|-------------|
-| `/insights` | skill (auto) | sonnet | Mine FORGE process data for cross-session insights |
 | `/note` | skill (auto) | sonnet | Add a scratchpad note for the next process checkpoint |
 | `/now` | skill (auto) | sonnet | Review current project state and suggest next action |
 | `/session` | command | sonnet | Create or update the session log |
@@ -56,6 +55,7 @@ Model tier is operator-advisory only (ADR-316) — Claude Code's model picker is
 |---------|------|-----------------------|-------------|
 | `/forge config-change` | command | sonnet | Propose and apply changes to agent configuration files |
 | `/forge configure` | command | sonnet | Adjust any defaulted onboarding setting (stack, agents, autonomy, methodology, features, MCP servers) |
+| `/forge:doctor` | command | sonnet | Plugin-qualified escape hatch for the FORGE health diagnostic (dispatches to /forge doctor) |
 | `/forge` | command | sonnet | Unified FORGE project lifecycle command |
 | `/forge init` | command | sonnet | Bootstrap FORGE into a new or existing project, upgrade legacy pre-Copier projects, or create new projects from scratch |
 | `/forge stoke` | command | sonnet | Pull upstream FORGE updates into this project using Copier |
@@ -66,11 +66,20 @@ Model tier is operator-advisory only (ADR-316) — Claude Code's model picker is
 | Command | Form | Model tier (advisory) | Description |
 |---------|------|-----------------------|-------------|
 | `/configure-nanoclaw` | command | sonnet | Configure NanoClaw hardware key enrollment and messaging |
-| `/dependency-audit` | skill (auto) | sonnet | Scan for dependency changes and produce a structured risk report |
 | `/evolve` | skill (explicit) | sonnet | Run the KCS Evolve Loop review |
 | `/nanoclaw` | command | sonnet | Manage the NanoClaw container — start, stop, status, logs |
-| `/signal-to-strategy` | skill (auto) | sonnet | Turn external research signals into scored FORGE advantage hypotheses |
 | `/synthesize` | skill (explicit) | sonnet | Synthesize accumulated project artifacts into refined documents |
+
+## Deprecated (invocation preserved, not advertised)
+
+Retired names still resolve (S2 MINOR — no physical removal) but only print a
+one-line redirect to their replacement. Not part of the active command surface.
+
+| Former name | Redirects to |
+|-------------|--------------|
+| `/dependency-audit` | /implement dependency-confirmation gate + dependency-vetting-checklist.md |
+| `/insights` | /evolve --insights |
+| `/signal-to-strategy` | /brainstorm --strategy |
 
 ## /forge subcommands
 
@@ -82,6 +91,7 @@ Model tier is operator-advisory only (ADR-316) — Claude Code's model picker is
 | `/forge baselines` | List available Copier baselines from ~/.forge/baselines/ (Spec 090) |
 | `/forge retrofit` | Guided consumer retrofit: inventory -> de-vendor -> reorganize -> reconcile (Spec 577) |
 | `/forge doctor` | Run the FORGE health diagnostic and route findings to the right fix (Spec 579) |
+| `/forge update` | Single consumer update verb — skew probe + the plugin-update journey (Spec 587) |
 | `/forge onboarding` | First-session interactive project configuration (Spec 580) |
 | `/forge configure` | Adjust any defaulted onboarding setting (Spec 580) |
 | `/forge config-change` | Propose an audited change to agent configuration files (Spec 580) |
@@ -96,18 +106,18 @@ See [QUICK-REFERENCE.md](QUICK-REFERENCE.md) for detailed usage patterns and wor
 ## Provenance and revision history
 
 This document is **generated** by `scripts/gen-command-reference.sh` from the canonical command surface
-(`.forge/commands/` + `invocation-policy.yaml`; source content hash `ee18320393cc`,
-FORGE plugin v3.2.0). Do not edit it by hand — changes belong in the canonical
+(`.forge/commands/` + `invocation-policy.yaml`; source content hash `50db7d2841f8`,
+FORGE plugin v3.3.0). Do not edit it by hand — changes belong in the canonical
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to the canonical command surface:
 
 <!-- forge:gen:volatile:start -->
-- 2026-07-20 `308a850` (commit message withheld from public copy — contains private-tier reference)
-- 2026-07-19 `ea0e589` Spec 580 implemented — invocation taxonomy (operator-ratified): class fields + verify-policy grammar gate, /forge onboarding|configure|config-change dispatch, advertised_invocation in generators (lifecycle rows render /forge <sub>), doc sweeps; NanoClaw leave-as-is; configure-unification follow-up recorded
-- 2026-07-19 `0cac2e4` Spec 582 implemented — /close batch mode: Step 0-batch (range REFUSE, shared-gate strict preflight w/ named inputs, evidence-verified batch checkpoint, batch-shaped role lock, wave-capped parallel validators, consolidated brief w/ per-spec deferrals + approve-subset), runbook + coverage docs. Consensus 3 rounds -> 5/5; DA critical dispositioned. AC8 live smoke = operator's next real batch close by design
-- 2026-07-19 `7575b3a` Spec 579 implemented — /forge doctor dispatch + unified migration journey: routing choice block, version-skew + stale-bootstrap findings, migration-decision-guide (single source), installer wind-down (default no-plant, --legacy-bootstrap opt-in, --update migration note; bash+ps1 live-smoked), invocation-grammar box, naming rule, single advertised path (AC6 sweep 0). DA CONDITIONAL_PASS dispositioned; doctor smoke caught 3 taxonomy gaps (fixed)
-- 2026-07-19 `7822add` Spec 581 implemented — Smiley1 blockers: renderer proposed bucket (◇); payload-parity root cause fixed (exemption data ships via public-manifest; template skills regenerated; plugin-parity --root; e2e assertion E 23/23); close Step 2b6 posture split (payload-side CONDITIONAL_PASS, ambiguous blocking). Consensus R1→R3 5/5 aligned-approve (split: 583 created); DA CONDITIONAL_PASS dispositioned. Also: specs 579/580/582/583 drafts, SIG-SMILEY1 signals, twin-copy watchlist item
+- 2026-07-21 `21f2222` WIP: merge specs 594-596 implementations, awaiting 597
+- 2026-07-21 `f24b957` Close Spec 591 — Plugin-primary functional cutover: live six-key consent gate + stoke content-merge backend + classic deprecation signal
+- 2026-07-20 `be7b00f` Spec 560 implemented — classic-mode consumer enumeration + opt-in stoke --to-plugin converter
+- 2026-07-20 `79d1cc8` Merge Spec 587 — plugin surface quick-wins (parallel batch 20260720-1505)
+- 2026-07-20 `677ce78` Spec 587 implemented — plugin-surface quick-wins: doctor alias, /forge update, near-dead skill folds, native-collision naming policy
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `docs/specs/CHANGELOG.md` and `git log -- .forge/commands/`.

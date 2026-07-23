@@ -1,6 +1,6 @@
 {
   "name": "forge",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "FORGE \u2014 spec-driven, evidence-gated development workflow. Ships the FORGE command, agent, skill, and hook payload as a Claude Code plugin installable from a local checkout (claude plugin install ./), alongside the existing Copier distribution.",
   "author": {
     "name": "Renozoic Foundry"

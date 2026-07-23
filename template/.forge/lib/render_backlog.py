@@ -61,6 +61,19 @@ def _default_specs_dir() -> str:
             pass
     return "docs/specs"
 
+
+def _default_split_file_target(filename: str) -> str:
+    """Resolve forge.paths.generated via runtime_config (Spec 596); fall back to docs/.generated."""
+    base = "docs/.generated"
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(Path("."), "generated")
+            if not error and value:
+                base = value
+        except Exception:
+            pass
+    return f"{base}/{filename}"
+
 STATUS_MARKER = {
     "closed": "✅",
     "deprecated": "⊘",
@@ -225,8 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--split-file-target",
-        default="docs/.generated/backlog-table.md",
-        help="Target artifact path for --mode=split-file (Spec 398).",
+        default=_default_split_file_target("backlog-table.md"),
+        help="Target artifact path for --mode=split-file (Spec 398); resolves "
+             "forge.paths.generated (Spec 596), falling back to docs/.generated.",
     )
     args = p.parse_args(argv)
 

@@ -71,13 +71,27 @@ def _resolved_path_key(repo, key, default):
 
 
 def _process_markers(repo):
-    """Resolve the process-path prefixes/exact-matches for this repo via runtime_config."""
+    """Resolve the process-path prefixes/exact-matches for this repo via runtime_config.
+
+    Spec 594: returns the UNION of the current forge.paths-resolved values and the
+    classic-default values (docs/sessions/, docs/specs/, docs/backlog.md) whenever they
+    differ, so a historical commit made under either scheme (pre- or post-layout-migration)
+    still classifies as `process`. This mirrors the union-of-schemes posture already
+    hardcoded for docs/digests/ below (docs/digests/ has no forge.paths key so it is always
+    the same literal — no union needed there). The union is a no-op for projects that never
+    migrated (current == classic) or that were always on a fully custom scheme.
+    """
     sessions = _resolved_path_key(repo, "sessions", "docs/sessions")
     specs = _resolved_path_key(repo, "specs", "docs/specs")
     backlog = _resolved_path_key(repo, "backlog", "docs/backlog.md")
+    sessions_set = dict.fromkeys((sessions, "docs/sessions"))
+    specs_set = dict.fromkeys((specs, "docs/specs"))
+    backlog_set = dict.fromkeys((backlog, "docs/backlog.md"))
     # docs/digests/ has no forge.paths key (not part of the Spec 564 family) — literal.
-    prefixes = (f"{sessions}/", f"{specs}/", "docs/digests/")
-    exact = (backlog,)
+    prefixes = (tuple(f"{s}/" for s in sessions_set)
+                + tuple(f"{s}/" for s in specs_set)
+                + ("docs/digests/",))
+    exact = tuple(backlog_set)
     return prefixes, exact
 SPEC_FILE_RE = re.compile(r"^(\d{3,})-")
 CAVEAT = ("Objective and rationale below are INFERRED from commit messages and diffs, "

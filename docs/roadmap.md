@@ -9,7 +9,7 @@ or deferred; this version reconciles the classification with README, FAQ, and VE
 
 Day-to-day prioritization lives in the project backlog and is surfaced by `/now` and `/matrix` —
 this document tracks capability-level status only.
-The framework currently ships 33 active slash commands — see the generated
+The framework currently ships 34 active slash commands — see the generated
 [command reference](command-reference.md) for the authoritative, provenance-stamped list.
 
 ## Released

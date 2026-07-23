@@ -60,6 +60,19 @@ def _default_specs_dir() -> str:
             pass
     return "docs/specs"
 
+
+def _default_split_file_target(filename: str) -> str:
+    """Resolve forge.paths.generated via runtime_config (Spec 596); fall back to docs/.generated."""
+    base = "docs/.generated"
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(Path("."), "generated")
+            if not error and value:
+                base = value
+        except Exception:
+            pass
+    return f"{base}/{filename}"
+
 import re as _re
 
 _BODY_DATE_RE = _re.compile(r"^-\s+(\d{4}-\d{2}-\d{2})[:\s]", _re.MULTILINE)
@@ -235,7 +248,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--split-file-target",
-        default="docs/.generated/changelog-entries.md",
+        default=_default_split_file_target("changelog-entries.md"),
+        help="Resolves forge.paths.generated (Spec 596), falling back to docs/.generated.",
     )
     args = p.parse_args(argv)
 

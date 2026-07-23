@@ -56,6 +56,19 @@ def _default_specs_dir() -> str:
     return "docs/specs"
 
 
+def _default_split_file_target(filename: str) -> str:
+    """Resolve forge.paths.generated via runtime_config (Spec 596); fall back to docs/.generated."""
+    base = "docs/.generated"
+    if _rc_resolve_path is not None:
+        try:
+            value, error = _rc_resolve_path(Path("."), "generated")
+            if not error and value:
+                base = value
+        except Exception:
+            pass
+    return f"{base}/{filename}"
+
+
 def render(specs_dir: Path, *, header: bool = True) -> str:
     files = list(iter_spec_files(specs_dir))
     rows: list[tuple[str, str, str]] = []
@@ -112,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--split-file-target",
-        default="docs/.generated/spec-index-table.md",
+        default=_default_split_file_target("spec-index-table.md"),
+        help="Resolves forge.paths.generated (Spec 596), falling back to docs/.generated.",
     )
     args = p.parse_args(argv)
 

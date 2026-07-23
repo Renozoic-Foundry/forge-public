@@ -38,6 +38,11 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/.forge/bin/check-authority-guard.sh\"",
             "timeout": 3000
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/.forge/bin/check-validator-git-guard.sh\"",
+            "timeout": 3000
           }
         ]
       }

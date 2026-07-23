@@ -50,6 +50,21 @@ Two gates run the same `forge-parity.sh --check`:
 2. **`/close` Step 2d^2**: the single-source parity gate runs `forge-parity.sh --check` before a spec closes, offering a `regen` action that runs `forge-parity.sh` to restore parity.
 <!-- forge:maintainer-detail:end -->
 
+<!-- forge:maintainer-detail:start -->
+> Audience: framework maintainers.
+
+## Deprecated-stub rendering (Spec 587)
+
+`scripts/lib/command-stages.sh` reads `invocation-policy.yaml`'s `deprecated_stubs:` list
+(names folded/retired to a one-line redirect body — invocation preserved, S2 MINOR, never a
+physical deletion) via `load_deprecated_stubs` / `is_stub` / `stub_redirect`. Both
+`gen-quick-reference.sh` and `gen-command-reference.sh` exclude stub names from the main
+grouped command tables and instead list them once in a "Deprecated (invocation preserved, not
+advertised)" footnote section naming each stub's replacement. This keeps the generated
+references from advertising a name whose only behavior is a redirect, without ever deleting the
+underlying command file (three-surface contract: physical removal is a MAJOR-window decision).
+<!-- forge:maintainer-detail:end -->
+
 ## Plugin-root-relative helper resolution in commands/skills (Spec 538)
 
 Command and skill **bodies** invoke FORGE's helper binaries/libraries

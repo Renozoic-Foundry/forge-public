@@ -82,6 +82,25 @@ def _paths_key(root: Path, key: str, default: str) -> str:
     return default
 
 
+def _resolve_include_target(parent_path: Path, target_rel: str, generated_dir: Path) -> Path:
+    """Resolve a FORGE-INCLUDE marker's target path (Spec 596).
+
+    Tries the marker's own parent-relative path first (legacy/non-reorganized
+    projects — marker text is never rewritten). If that doesn't resolve to an
+    existing file (e.g. the curated parent moved under `reorganize` but
+    `docs/.generated/` did not), falls back to the artifact's basename resolved
+    against `forge.paths.generated` — the indirection this spec introduces so
+    reorganize doesn't need to rewrite marker text.
+    """
+    direct = (parent_path.parent / target_rel).resolve()
+    if direct.is_file():
+        return direct
+    fallback = generated_dir / Path(target_rel).name
+    if fallback.is_file():
+        return fallback
+    return direct
+
+
 def _curated_parents(root: Path) -> tuple[str, ...]:
     """Curated parents that should hold include markers in split-file mode."""
     backlog = _paths_key(root, "backlog", "docs/backlog.md")
@@ -127,7 +146,7 @@ def detect_mode(project_root: Optional[Path] = None) -> str:
     docs/.generated/ exists but no curated parent has an include marker.
     """
     root = _resolve_root(project_root)
-    generated_dir = root / "docs" / ".generated"
+    generated_dir = root / _paths_key(root, "generated", "docs/.generated")
     curated_parents = _curated_parents(root)
 
     has_include_marker = False
@@ -143,7 +162,7 @@ def detect_mode(project_root: Optional[Path] = None) -> str:
         if not m:
             continue
         target_rel = m.group(1).decode("utf-8", errors="replace")
-        target = (p.parent / target_rel).resolve()
+        target = _resolve_include_target(p, target_rel, generated_dir)
         if target.is_file():
             has_include_marker = True
             break

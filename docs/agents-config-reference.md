@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: .forge/bin/forge-py scripts/gen-agents-config-reference.py
      Sources: AGENTS.md (live defaults) + scripts/lib/agents-config-reference-content.yaml (descriptions)
-     Source content hash: 70fe220f00e9 | FORGE plugin version: 3.2.0
+     Source content hash: 70fe220f00e9 | FORGE plugin version: 3.3.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 
 # AGENTS.md configuration reference
@@ -235,7 +235,7 @@ Three enforcement modes determine how gate approval happens:
 
 This document is **generated** by `scripts/gen-agents-config-reference.py` — defaults are read live from `AGENTS.md`
 (descriptions from `scripts/lib/agents-config-reference-content.yaml`; source content hash
-`70fe220f00e9`, FORGE plugin v3.2.0). Do not edit it by hand — changes belong in the
+`70fe220f00e9`, FORGE plugin v3.3.0). Do not edit it by hand — changes belong in the
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to AGENTS.md:

@@ -27,6 +27,117 @@ Step 0pre is the ENTIRE apply pipeline. The legacy shadow-tree steps were excise
 
 Spec 427 replaces the legacy shadow-tree apply mechanism with `copier update` running directly against the consumer's working tree. The apply pipeline is now a single helper invocation, gated by an operator `--trust` consent prompt:
 
+### Step 0pre.-2 — `--to-plugin` opt-in converter dispatch (Spec 560)
+
+**Check FIRST, before Step 0pre.-1 and every other Step 0pre sub-step.** If `$ARGUMENTS` contains `--to-plugin`: this invocation is a one-shot **un-embed migration** off Copier-managed classic mode onto plugin consumption (the field-validated F9 playbook) — NOT the ongoing `--merge-native` content-merge mechanism (Spec 559, a different job). Skip every other Step 0pre sub-step and run only this branch, then STOP.
+
+**Never auto-triggered (Req 5)**: absent an explicit `--to-plugin` flag on THIS invocation, this step is a silent no-op. No default `/forge stoke` path, env var, `.copier-answers.yml` key, or persisted config routes here — every migration requires the operator to type `--to-plugin` again, every time (mirrors the `--trust` consent-gate pattern).
+
+**Lane B / regulated / pinned-kit consumers stay opt-in-never-forced (Req 8)**: if `docs/compliance/profile.yaml` (or an equivalent pinned-kit marker) is present, the converter refuses by default. Passing `--override-lane-b` in addition to `--to-plugin` proceeds anyway — an explicit second signal, not a silent bypass.
+
+```bash
+# Dry run — report only, zero filesystem writes:
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py to-plugin \
+    --dry-run --project-root .
+
+# Live run — reuses Spec 297's pristine-vs-forked byte-diff and Spec 427's
+# backup/consent pattern; never invented fresh:
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py to-plugin \
+    --project-root .
+
+# Lane B / pinned-kit override (only after the operator has confirmed the
+# consumer intends to leave the pinned-kit posture):
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py to-plugin \
+    --project-root . --override-lane-b
+```
+
+The helper orchestrates (in order), all in-scope for the current invocation only:
+
+1. **Preflight** — confirms a canonical plugin framework tree is reachable (`--plugin-root`, or `$CLAUDE_PLUGIN_ROOT` when the FORGE plugin is installed) and reads `.copier-answers.yml`'s `_commit` for the embedded framework version. Aborts with a clear message if neither is set — nothing to migrate to.
+2. **Manifest walk** — reads `.forge/update-manifest.yaml`'s `framework` bucket, diffs each tracked framework-code file's embedded copy against the plugin's canonical version at the same relative path. **Byte-identical (pristine)** → removal candidate. **Locally modified (forked)** → always kept as a project override and always named in the report — a fork is never silently deleted (Req 6). `project`/`merge`-bucket files (specs, sessions, CLAUDE.md/AGENTS.md, etc.) are untouched by this step.
+3. **Hook rewire** — removes `.claude/settings.json` hook entries that invoke `.forge/bin/*` scripts (the plugin registers its own hooks via its manifest); a hook group that doesn't match the expected embedded shape is left alone and flagged for manual review rather than silently overwritten.
+4. **Apply** — with `--dry-run`, only the report above is printed (no writes). Without it, `git rm` removes exactly the pristine files, the settings.json rewrite (if any) is staged, and the whole change lands as **exactly one commit** (via explicit-path `git add`, never `git add -A`).
+
+**Rollback**: the migration is always a single commit — `git revert <migration-sha>` restores every removed pristine file and the pre-migration hook entries. The converter itself never invokes `git reset --hard`, `git push --force`, or any other destructive/history-rewriting operation.
+
+**No regression to the default path**: `/forge stoke`'s existing no-flag behavior (`direct-apply` below) is completely unchanged by this step's existence — `to-plugin` is purely additive, and Copier machinery itself is untouched (the destructive cutover is Spec 558's separate, later scope).
+
+### Step 0pre.-1 — default backend is content-merge; `--classic` opts into the deprecated copier path (Spec 559 / 591)
+
+**Check FIRST, before any other Step 0pre sub-step runs.** Per Spec 591, the
+content-merge upgrade mechanism (`.forge/lib/upgrade_merge.py`, invoked via
+`stoke.py apply`) is now the **DEFAULT** `/forge stoke` backend. If `$ARGUMENTS`
+contains `--classic`: this invocation instead uses the classic `copier update`
+pipeline (Steps 0pre.0a through 0pre.2c below) — deprecated, scheduled for removal
+in v4.0.0, and printing exactly one warning line to stderr per run naming
+`docs/process-kit/migration-decision-guide.md`. `--merge-native` is accepted as a
+no-op alias (content-merge is already the default; the flag exists for consumers'
+explicit scripts/muscle memory). Absent `--classic`, skip Steps 0pre.0a through
+0pre.2c entirely and run this branch, then go straight to Step 0pre.3 STOP.
+
+1. **One-shot migration (idempotent, safe to run every invocation)**:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/upgrade_migrate_once.py migrate --project-root .
+   ```
+   Reports `migrated` (first run against a copier-era project — bridges
+   `.copier-answers.yml`'s `_commit` / `_acknowledged_legacy_artifacts` into the
+   merge-native state format) or `already migrated` (no-op thereafter).
+
+2. **Resolve upstream source**: fetch/checkout the template source referenced by
+   `.copier-answers.yml::_src_path` at `_commit` (or the latest commit if
+   `--vcs-ref` is given) into a scratch directory — this is the "theirs" tree.
+   FORGE-owned project-data files (the same surface `copier.yml::_exclude`
+   governs for the classic path) are the merge candidates.
+
+3. **Run the default apply** (content-merge via `stoke.py apply`; `.forge/lib/upgrade_merge.py`
+   under the hood):
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py apply \
+     --live-root . \
+     --upstream <scratch-upstream-dir> \
+     --consent-key <key>=true   # repeatable, one per operator-consented key (Spec 591 Req 1)
+   ```
+   Base-snapshot state lives at `.forge/state/upgrade-base/` — OUTSIDE `.git/`; the
+   engine never writes git objects/refs/index directly (closes the git-corruption
+   defect class in `docs/process-kit/stoke-recovery-runbook.md` Sec 1a). On a file with
+   no recorded base yet (first run for that file), the engine bootstraps from the
+   current working-tree content — no synthetic-base guessing. Every invocation also
+   runs the live six-key consent gate (see below) ahead of the merge, and appends one
+   `stoke-merge-apply` soak event to `docs/sessions/activity-log.jsonl`.
+
+4. **Report**: exit 0 (all files merged clean) — confirm success. Exit nonzero (one
+   or more conflicts) — surface the helper's own recovery output verbatim; it names
+   the conflicted file(s) and `docs/process-kit/stoke-recovery-runbook.md` (same
+   runbook the classic path uses — no parallel recovery reference).
+
+**Classic opt-out** (deprecated, removal targeted v4.0.0):
+```bash
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py apply --classic --live-root . [--trust] [--vcs-ref SHA]
+```
+Reaches the unchanged `direct-apply` pipeline (Steps 0pre.0a–0pre.2c below) and
+prints exactly one deprecation line to stderr per run (stdout is byte-identical to
+the pre-591 `direct-apply` output — automation parsing stdout is unaffected).
+
+**PowerShell parity**:
+```powershell
+& ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/upgrade_migrate_once.py migrate --project-root .
+& ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/stoke.py apply --live-root . --upstream <scratch-upstream-dir>
+# Classic opt-out:
+& ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/stoke.py apply --classic --live-root .
+```
+
+**Live-wired (Spec 591)**: the six consent-gated keys (`test_command`,
+`lint_command`, `harness_command`, `include_nanoclaw`, `include_advanced_autonomy`,
+`include_two_stage_review`) now resolve through `runtime_consent_gate.py`'s live gate
+as well — `stoke.py apply`'s shared `_live_gate_six_keys` call site runs ahead of
+BOTH backends (classic and merge-native) every invocation, logging one
+`consent-gate-live` JSONL event per resolved key to `docs/sessions/activity-log.jsonl`
+(fields `{key, event_type, outcome, timestamp}` only — never the resolved value).
+`forge_consent_gate.py` / copier's `secret: true` render path remain in place as the
+render-time BACKSTOP (Spec 558 deletes it once this live path has soaked). Supply
+per-key CLI consent with repeatable `--consent-key KEY=true|false` (operator-explicit
+per invocation — never persisted, never env/config).
+
 ### Step 0pre.0a — Legacy artifact detection (Spec 431, report-only)
 
 Run **before** the `.gitignore` audit so legacy findings surface in the same
@@ -207,22 +318,22 @@ Pass --trust to copier? (y/N)
 
 The prompt is unconditional per invocation. There is NO env-var override, NO config file that grants persistent consent, NO `--trust-always` flag. /consensus 427 round 3 CISO hard finding closed by this gate.
 
-### Step 0pre.2 — direct-apply invocation
+### Step 0pre.2 — classic apply invocation (`apply --classic`; reached only when `--classic` was given per Step 0pre.-1)
 
-After Step 0pre.05 completes (or after the legacy Step 0pre.1 trust prompt for the bare-copier reference path), invoke the helper with the accumulated flags:
+After Step 0pre.05 completes (or after the legacy Step 0pre.1 trust prompt for the bare-copier reference path), invoke the helper with the accumulated flags. Spec 591: the operator-facing entry point is now `apply --classic` (routes to the unchanged `direct-apply`/`cmd_direct_apply` body, plus the shared live consent-gate call site and the one-line deprecation warning to stderr) — the bare `direct-apply` subcommand still exists for internal reuse/testing, but `/forge stoke`'s documented invocation path is `apply --classic`:
 
 ```bash
 # Spec 444 chat-mediated path — operator answered yes to BOTH trust AND
 # security-override:
-${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply --trust \
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py apply --classic --trust \
     --data accept_security_overrides=true \
     --data accept_security_overrides_confirmed=true
 
 # Operator answered yes to trust only (no security customizations):
-${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply --trust
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py apply --classic --trust
 
 # Operator answered 'n' / empty / anything else:
-${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply
+${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py apply --classic
 ```
 
 The `--data` flag is repeatable and originates EXCLUSIVELY from operator yes-answers in the current chat turn (Spec 444 Constraint). Never from env vars, config files, or session context.
@@ -231,9 +342,9 @@ The `--data` flag is repeatable and originates EXCLUSIVELY from operator yes-ans
 
 ```powershell
 # With consent:
-${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply --trust
+${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/stoke.py apply --classic --trust
 # Without consent:
-${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke.py direct-apply
+${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/stoke.py apply --classic
 ```
 
 The helper orchestrates (in order):

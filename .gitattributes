@@ -13,6 +13,13 @@
 # working tree and break --check).
 *.md text eol=lf
 
+# Spec 599: force LF on invocation-policy.yaml — it feeds source_content_hash()
+# (scripts/lib/command-stages.sh) alongside the LF-pinned *.md sources above.
+# Without this pin it materializes as CRLF on a Windows autocrlf=true checkout
+# while Ubuntu CI reads it as LF, producing a different hash for byte-identical
+# content — the SIG-480-CRLF class recurring on a surface Spec 482 didn't cover.
+.forge/commands/invocation-policy.yaml text eol=lf
+
 # Force LF on Copier .jinja command/agent mirrors so the cross-level byte-compare
 # (forge-sync-cross-level.sh --check) is stable under autocrlf=true. These mirror
 # LF-pinned canonical *.md sources; without this pin they materialize as CRLF in the

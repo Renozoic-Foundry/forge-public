@@ -107,8 +107,9 @@ byte-identical to pre-582 (AC2 regression gate).
    "read_only":true}` covering the whole dispatch window (the Spec 100 hook blocks orchestrator
    writes identically for N=1 and N=14; no schema change); remove it only after ALL validators
    report. Dispatch ONE read-only validator per spec against its redacted spec + the shared
-   evidence bundle, using the standard template (evidence `ls -R` listing + key excerpts +
-   Spec 548 exit-code contract stated up front). Concurrency: waves of
+   evidence bundle, using **the validator dispatch template defined at Step 2d.5.a5/b —
+   by reference, never re-inlined** (Spec 583 single source; the template carries the
+   evidence listing + bounded excerpts + gitignore note + Spec 548 exit-code contract). Concurrency: waves of
    `forge.roles.implementer.max_parallel`; the Spec 042 swarm ceiling bounds the batch —
    over-ceiling degrades to sequential waves, never unbounded. Spec 548 post-check per report;
    a FAIL isolates THAT spec (remediate + re-validate inside the batch); others proceed.
@@ -520,6 +521,27 @@ Before transitioning to closed, spawn an independent validator to verify accepta
        mismatch) is a close-blocker — surface it and halt, never fall through to "no evidence".
        `runnable-acs.json` empty → skip a4 entirely.
 
+   a5. **Evidence visibility injection (Spec 583 — THE validator dispatch template, single
+       source)**: validator subagents' Read/Glob respect `.gitignore`, and evidence dirs are
+       gitignored by convention — without injection, validators false-negative with "evidence
+       dir does not exist" (SIG-SMILEY1 item 3). Before spawning, build the injection block:
+       - `ls -R tmp/evidence/SPEC-NNN-YYYYMMDD/` (the listing proves the dir exists and names
+         every artifact).
+       - **Bounded excerpts (R1b)**: extract ONLY lines matching the named pattern set —
+         `^=== ` (section headers), `exit code: [0-9-]+`, `^GATE \[`, `^(PASS|FAIL)[:  ]` —
+         hard-capped at 40 lines / 4KB total:
+         ```bash
+         grep -hE '^=== |exit code: [0-9-]+|^GATE \[|^(PASS|FAIL)[: ]' \
+           tmp/evidence/SPEC-NNN-YYYYMMDD/*.log tmp/evidence/SPEC-NNN-YYYYMMDD/*.txt 2>/dev/null \
+           | head -40 | cut -c1-200
+         ```
+         Never widen the pattern set or inject surrounding context — evidence artifacts can
+         contain tokens/PII/stack traces (the CISO 581 constraint; the bounding IS the control).
+       - The template TEXT below tells the validator the paths are gitignored and that targeted
+         `Bash cat/ls` of orchestrator-NAMED files works where Read/Glob do not.
+       The Spec 582 batch dispatch (Step 0-batch item 4) uses THIS template by reference —
+       never re-inline it.
+
    b. Spawn a validator sub-agent with the following prompt structure:
       ```
       [Role preamble from validator.md]
@@ -527,6 +549,18 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       You are validating: tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
       (a redacted copy of docs/specs/NNN-<slug>.md — implementer proof sections
       are withheld by design; form your own evidence)
+
+      Evidence availability (Spec 583): the evidence directory is GITIGNORED — your Read/Glob
+      tools will not see it. Rely on (a) the injected listing + excerpts below, and (b) targeted
+      Bash `cat`/`ls` of the exact paths named there (Bash does not honor .gitignore). Never
+      report "evidence dir does not exist" without attempting the named paths via Bash.
+      Evidence-report contract (Spec 548): notes for runnable-command ACs MUST include a literal
+      exit-code phrase (e.g. "exit code: 0") plus a short output excerpt; label each criterion
+      with its AC number exactly ("AC1: ..."), one entry per AC; never cite the spec's own
+      Evidence section as proof.
+
+      Injected evidence listing + bounded excerpts (Spec 583):
+      <ls -R output + the bounded excerpt block from step a5>
 
       Stage 1 — Behavioral/browser-verb AC check (Spec 540, pre-computed):
       <flagged-ac-list from step a2, or "none — scanner found no flagged ACs">

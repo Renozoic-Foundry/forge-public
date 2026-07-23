@@ -128,6 +128,31 @@ def _is_stale(parent_path: Path, generated_paths: list[Path]) -> bool:
     return max(candidates) > gen_mtime
 
 
+def _resolve_include_target(parent_path: Path, rel: str) -> Path:
+    """Resolve a FORGE-INCLUDE marker's target path (Spec 596).
+
+    Tries the marker's own parent-relative path first (legacy/non-reorganized
+    projects — marker text is never rewritten). If that doesn't resolve to an
+    existing file (e.g. the curated parent moved under `reorganize` but
+    `docs/.generated/` did not), falls back to the artifact's basename resolved
+    against `forge.paths.generated` (found by walking up from the parent to a
+    project root — a `docs/` sibling of `.forge/`).
+    """
+    direct = (parent_path.parent / rel).resolve()
+    if direct.is_file():
+        return direct
+    root = parent_path.resolve().parent
+    while root != root.parent:
+        if (root / "docs").is_dir() and (root / ".forge").is_dir():
+            generated_dir = root / _paths_key(root, "generated", "docs/.generated")
+            fallback = generated_dir / Path(rel).name
+            if fallback.is_file():
+                return fallback
+            break
+        root = root.parent
+    return direct
+
+
 def assemble(parent_path: Path) -> tuple[bytes, list[Path], list[Path]]:
     """Read parent + resolve markers → assembled bytes.
 
@@ -135,14 +160,13 @@ def assemble(parent_path: Path) -> tuple[bytes, list[Path], list[Path]]:
     Raises FileNotFoundError if parent itself is missing.
     """
     parent_bytes = parent_path.read_bytes()
-    parent_dir = parent_path.parent
 
     resolved: list[Path] = []
     missing: list[Path] = []
 
     def _replace(match: re.Match[bytes]) -> bytes:
         rel = match.group("path").decode("utf-8").strip()
-        target = (parent_dir / rel).resolve()
+        target = _resolve_include_target(parent_path, rel)
         if not target.exists():
             missing.append(target)
             return match.group(0)  # leave marker untouched on missing

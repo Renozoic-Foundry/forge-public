@@ -41,15 +41,17 @@
 # Windows verify failure root cause; pairs with the payload-manifest.txt eol=lf pin above).
 *.minisig binary
 
-# Spec 482 line-ending review (SIG-480-CRLF): the cross-level byte-compare
-# (forge-sync-cross-level.sh --check) is normalization-stable because every file
-# class it compares is pinned to eol=lf above — `.forge/commands/*.md`,
-# `docs/process-kit/*.md` (both *.md), `.claude/agents/*.md` (*.md), and the *.sh
-# scripts. With autocrlf=true these would otherwise materialize as CRLF in the
-# working tree and flag phantom drift. `.ps1` parity scripts are intentionally NOT
-# pinned: they are not in the cross-level byte-compare set, so their working-tree
-# EOL never affects --check. Verified by scripts/check-portability.sh (autocrlf
-# class) and .forge/bin/tests/test-spec-482-portability.sh (Test 3 / Test 4).
+# Spec 482 line-ending review (SIG-480-CRLF), amended by Spec 629: every file class
+# the sync byte-compare touches is pinned to eol=lf. Spec 482 originally left `.ps1`
+# unpinned ("not in the cross-level byte-compare set") — true in the Copier era, false
+# since Spec 558/627 made .ps1/.py/.yaml files signed plugin-payload members that
+# scripts/sync-to-public.sh byte-compares against the forge-public working tree. Under
+# autocrlf=true the unpinned files materialized CRLF there while this repo held LF,
+# giving the content-sync preflight (Spec 603/628) a permanent SYNC-PENDING floor of 9
+# (first observed live at the v4.0.0 cut, 2026-08-05). Pins below close the class.
+*.ps1 text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
 
 # ============================================================================
 # Spec 529 — merge-safe shared artifacts (union attrs for parallel-lane writes)

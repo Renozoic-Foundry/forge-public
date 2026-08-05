@@ -182,12 +182,13 @@ function Invoke-RecordObserved {
         }
     }
 
-    $validator_outcome = "SKIP"; $da_outcome = "SKIP"
+    # validator_outcome DELETED (Spec 619 Req 4): its regex target — GATE [validator]: PASS
+    # lines inside spec-file bodies — is essentially never persisted there (SKIP on 146/147
+    # live records); no genuinely independent durable source exists at this write site's
+    # trust boundary. Residual gap documented in score-calibration-loop.md § validator_outcome.
+    $da_outcome = "SKIP"
     if ($spec_file) {
         $body = Get-Content -LiteralPath $spec_file -Raw
-        if ($body -match 'GATE \[validator(-coverage)?\]: PASS') { $validator_outcome = "PASS" }
-        elseif ($body -match 'GATE \[validator(-coverage)?\]: PARTIAL') { $validator_outcome = "PARTIAL" }
-        elseif ($body -match 'GATE \[validator(-coverage)?\]: FAIL') { $validator_outcome = "FAIL" }
         if ($body -match 'DA-Decision:\s+PASS') { $da_outcome = "PASS" }
         elseif ($body -match 'DA-Decision:\s+CONDITIONAL_PASS') { $da_outcome = "CONDITIONAL_PASS" }
         elseif ($body -match 'DA-Decision:\s+FAIL') { $da_outcome = "FAIL" }
@@ -213,7 +214,7 @@ function Invoke-RecordObserved {
     }
 
     $git_sha = ConvertTo-JsonString (Get-GitSha)
-    $rec = '{"schema_version":1,"kind":"observed","spec_id":"' + (ConvertTo-JsonString $spec_id_raw) + '","git_sha":"' + $git_sha + '","iso_ts":"' + (ConvertTo-JsonString $close_iso_ts) + '","creation_iso_ts":"' + (ConvertTo-JsonString $creation_iso_ts) + '","close_iso_ts":"' + (ConvertTo-JsonString $close_iso_ts) + '","wallclock_days":' + $wallclock_days + ',"session_count":' + $session_count + ',"revise_rounds":' + $revise_rounds + ',"validator_outcome":"' + $validator_outcome + '","da_outcome":"' + $da_outcome + '","tc_overrun_derived":' + $tc_overrun_derived + ',"kind_tag":"' + (ConvertTo-JsonString $last_kind_tag) + '","creation_ts_source":"' + $creation_ts_source + '"}'
+    $rec = '{"schema_version":1,"kind":"observed","spec_id":"' + (ConvertTo-JsonString $spec_id_raw) + '","git_sha":"' + $git_sha + '","iso_ts":"' + (ConvertTo-JsonString $close_iso_ts) + '","creation_iso_ts":"' + (ConvertTo-JsonString $creation_iso_ts) + '","close_iso_ts":"' + (ConvertTo-JsonString $close_iso_ts) + '","wallclock_days":' + $wallclock_days + ',"session_count":' + $session_count + ',"revise_rounds":' + $revise_rounds + ',"da_outcome":"' + $da_outcome + '","tc_overrun_derived":' + $tc_overrun_derived + ',"kind_tag":"' + (ConvertTo-JsonString $last_kind_tag) + '","creation_ts_source":"' + $creation_ts_source + '"}'
     Add-Record -Record $rec
 }
 
@@ -252,8 +253,10 @@ function Invoke-BiasReport {
     param([string[]]$rest)
     $mode = if ($rest.Count -ge 1 -and $rest[0]) { $rest[0] } else { "lean" }
     $f = Get-AuditFile
+    # Spec 619: three distinguishable report states, rendered in EVERY mode (lean and
+    # verbose alike). The empty-log state is the ONLY state allowed to say "no data".
     if (-not (Test-Path $f)) {
-        Write-Output "0 records — calibration deferred until data accumulates"
+        Write-Output "score-audit: no calibration records yet (0 predicted / 0 observed) — calibration begins once /spec, /implement, and /close write records"
         return
     }
     $py = @"
@@ -276,8 +279,39 @@ try:
             elif r.get('kind') == 'observed':
                 observed.append(r)
 except OSError:
-    print('0 records — calibration deferred until data accumulates')
+    print('WARN: score-audit log unreadable — bias report unavailable this run')
     sys.exit(0)
+
+# --- Spec 619 report-state + pairing computation (all modes) ---
+pred_specs = set(predicted)
+obs_specs = set(o['spec_id'] for o in observed)
+both = pred_specs & obs_specs
+either = pred_specs | obs_specs
+n_pred = len(predicted)
+n_obs = len(observed)
+n_cal = n_pred + n_obs
+
+if n_cal == 0:
+    print('score-audit: no calibration records yet (0 predicted / 0 observed) — calibration begins once /spec, /implement, and /close write records')
+    sys.exit(0)
+
+backfilled_pairs = sum(1 for s in both if predicted[s].get('predicted_by') == 'backfill')
+pairing_pct = 100.0 * len(both) / len(either) if either else 0.0
+pairing_line = f"pairing rate: {pairing_pct:.0f}% ({len(both)} specs with both kinds / {len(either)} specs with either kind)"
+if backfilled_pairs:
+    pairing_line += f" — {backfilled_pairs} pair(s) via backfilled predictions"
+print(pairing_line)
+if pairing_pct < 50.0:
+    miss_pred = len(obs_specs - pred_specs)
+    miss_obs = len(pred_specs - obs_specs)
+    dominant, count = ('predicted', miss_pred) if miss_pred >= miss_obs else ('observed', miss_obs)
+    other = 'observed' if dominant == 'predicted' else 'predicted'
+    print(f"advisory: pairing below 50% — dominant missing kind: {dominant} ({count} specs carry only {other} records)")
+
+if not both:
+    print(f"score-audit: {n_cal} calibration record(s) ({n_pred} predicted / {n_obs} observed) — no spec carries both kinds yet; bias analysis needs matched pairs")
+    sys.exit(0)
+
 cells = collections.defaultdict(lambda: collections.defaultdict(list))
 for o in observed:
     p = predicted.get(o['spec_id'])
@@ -294,8 +328,8 @@ for o in observed:
         cells[(lane, kind_tag)]['E'].append('under')
     psr = int(p.get('sr', 3))
     rr = int(o.get('revise_rounds', 0) or 0)
-    vo = o.get('validator_outcome', 'SKIP')
-    if psr >= 4 and (rr >= 2 or vo in ('FAIL', 'PARTIAL')):
+    # validator_outcome removed (Spec 619 Req 4) — SR-over rule keys on revise rounds alone.
+    if psr >= 4 and rr >= 2:
         cells[(lane, kind_tag)]['SR'].append('over')
 emitted = False
 for (lane, kt), dims in cells.items():
@@ -315,8 +349,8 @@ for (lane, kt), dims in cells.items():
             continue
         emitted = True
         print(f"{dim} {direction}-prediction in lane={lane} kind_tag={kt} (based on N={majority} closed specs since first record) (direction-only; magnitude not measured)")
-if not emitted and mode == 'verbose' and not cells:
-    print("0 records — calibration deferred until data accumulates")
+if not emitted:
+    print(f"score-audit: {len(both)} matched pair(s) — no deviation cell crosses the N>=3 threshold. Calibration result: no bias detected")
 "@
     $tmp = [System.IO.Path]::GetTempFileName()
     Set-Content -Path $tmp -Value $py -Encoding UTF8

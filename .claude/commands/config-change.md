@@ -2,6 +2,7 @@
 name: config-change
 description: "Propose and apply changes to agent configuration files"
 workflow_stage: configuration
+argument-hint: "[--propose section change] [--rollback] [--log]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -132,7 +133,21 @@ If `notify_via=nanoclaw`: send the proposal via `mcp__nanoclaw__send_message` wi
 
 On `approve`:
 
-a. **Save rollback point**: write the current file content to `docs/sessions/config-change-rollback.md`:
+a. **Guard-protected target check (Spec 607)**: Determine whether the write this approval
+   authorizes targets a file in the Authority Guard's protected set
+   (`.forge/bin/check-authority-guard.sh` — currently `.claude/settings.json`,
+   `.claude/settings.local.json`, `.forge/config/authority.yaml`, or one of the guard scripts
+   listed in that file). `AGENTS.md` and `CLAUDE.md` are **not** in this set.
+   - **Not protected** (AGENTS.md / CLAUDE.md): continue with steps b-d below — unchanged
+     behavior.
+   - **Protected** (e.g. `.claude/settings.json`): the agent cannot self-apply — the guard
+     hard-denies the write with no in-session dialog (verified live, Spec 607 Evidence: an
+     Edit targeting `.claude/settings.json` is denied with
+     `AUTHORITY GUARD (Spec 469): write to the Authority Constitution protected set...`).
+     Skip b-d and go directly to the **Guard recourse procedure** below instead.
+
+b. **Save rollback point** (non-protected targets only): write the current file content to
+   `docs/sessions/config-change-rollback.md`:
    ```
    # Config Change Rollback Point — YYYY-MM-DD HH:MM
    File: AGENTS.md | CLAUDE.md
@@ -142,9 +157,10 @@ a. **Save rollback point**: write the current file content to `docs/sessions/con
    <full current section content>
    ```
 
-b. **Apply the diff**: edit the target file to apply the proposed change.
+c. **Apply the diff** (non-protected targets only): edit the target file to apply the proposed
+   change.
 
-c. **Record in audit log** (`docs/sessions/config-change-audit.md`):
+d. **Record in audit log** (non-protected targets only, `docs/sessions/config-change-audit.md`):
    ```
    ## Change YYYY-MM-DD — <section>
    - Proposed by: <agent>
@@ -156,12 +172,43 @@ c. **Record in audit log** (`docs/sessions/config-change-audit.md`):
    - Rollback: docs/sessions/config-change-rollback.md
    ```
 
-d. **Permission mode sync (Spec 117)**: If the change affects the `autonomy-levels` section and modifies `default_autonomy`:
-   - Map the new autonomy level to Claude Code permission mode: L0–L1 → `default`, L2 → `auto`, L3–L4 → `bypassPermissions`
-   - Read `.claude/settings.json` (create if absent). Update `defaultMode`.
-   - Report: `Permission mode updated: <old mode> → <new mode> (written to .claude/settings.json)`
+e. **Permission mode sync (Spec 117)**: If the change affects the `autonomy-levels` section and
+   modifies `default_autonomy`:
+   - Map the new autonomy level to Claude Code permission mode: L0–L1 → `default`, L2 → `auto`,
+     L3–L4 → `bypassPermissions`.
+   - The write target is `.claude/settings.json`'s `defaultMode` field — this **is**
+     guard-protected (step a applies). Fold this change into the same diff and route it through
+     the **Guard recourse procedure** below; never attempt a direct Edit/Write to
+     `.claude/settings.json` here.
 
-e. Report: "Config change applied. Rollback available: `/config-change --rollback`"
+f. Report: "Config change applied. Rollback available: `/config-change --rollback`" (protected
+   targets: report per the Guard recourse procedure instead — see below).
+
+### Guard recourse procedure (protected targets — Spec 607, AC3)
+
+This is the **single authoritative home** for guard-protected-target handling; `configure.md`
+references this procedure by name and does not restate it.
+
+1. Present the full diff from Step 3 (including any `defaultMode` change folded in via step e
+   above) plus:
+   ```
+   ⚠ Target (<file>) is on the Authority Guard's protected set — this agent cannot apply this
+   edit directly (check-authority-guard.sh denies it with no in-session dialog; ADR-046/453
+   trust-root boundary). Please apply the diff above yourself in the terminal.
+   Have you applied it? (yes/no)
+   ```
+2. **STOP — wait for the operator's response.**
+   - **yes**: record in the audit log with `outcome: proposed — operator-applied` (**never**
+     `applied` — the agent did not perform the write). No rollback point is saved (the agent
+     made no edit to roll back). Report: "Config change recorded as operator-applied."
+   - **no**: record in the audit log with `outcome: proposed — pending operator action`. Report:
+     "Proposal recorded; apply the diff yourself, then re-run `/config-change --log` to confirm
+     the outcome, or re-approve later to re-present it."
+
+Ledger truthfulness invariant (Req 3): `outcome: applied` is written ONLY when this agent
+performed the file write itself (step c above, non-protected targets). A guard-denied write is
+`outcome: proposed — operator-applied` or `outcome: proposed — pending operator action` —
+never `applied`.
 
 On `reject`:
 - Record in audit log with `outcome: rejected` and the human's reason (ask if not provided).

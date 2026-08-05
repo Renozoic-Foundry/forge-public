@@ -2,6 +2,7 @@
 name: scheduler
 description: "Run multi-agent scheduler for dependency-aware parallel execution"
 workflow_stage: lifecycle
+argument-hint: "[--max-concurrent N] [--dry-run] [--spec-filter status]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,

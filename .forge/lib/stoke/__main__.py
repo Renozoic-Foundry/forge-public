@@ -164,6 +164,20 @@ def _src_path_from_answers(project_root: Path) -> str | None:
     return answers.get("_src_path")
 
 
+def _default_catalog_path(template_root: Path | None) -> Path | None:
+    """Catalog resolution (Spec 558): the payload-resident copy at
+    .forge/data/legacy-signatures.yaml (sibling of this package's parent) is the
+    canonical location — the pre-558 template-tree copy was deleted with the
+    Copier surface. A template_root-relative copy is still honored first for
+    older checkouts that carry one."""
+    if template_root is not None:
+        legacy = template_root / ".forge" / "data" / "legacy-signatures.yaml"
+        if legacy.is_file():
+            return legacy
+    payload = Path(__file__).resolve().parent.parent / "data" / "legacy-signatures.yaml"
+    return payload if payload.is_file() else None
+
+
 def cmd_detect_legacy(args: argparse.Namespace) -> int:
     if args.skip_legacy_scan:
         return 0
@@ -176,7 +190,7 @@ def cmd_detect_legacy(args: argparse.Namespace) -> int:
     catalog_path = (
         Path(args.catalog).resolve()
         if args.catalog
-        else (template_root / ".forge" / "data" / "legacy-signatures.yaml" if template_root else None)
+        else _default_catalog_path(template_root)
     )
 
     current_user_files: set[str] | None
@@ -252,7 +266,7 @@ def cmd_cleanup_legacy(args: argparse.Namespace) -> int:
     catalog_path = (
         Path(args.catalog).resolve()
         if args.catalog
-        else (template_root / ".forge" / "data" / "legacy-signatures.yaml" if template_root else None)
+        else _default_catalog_path(template_root)
     )
 
     current_user_files: set[str] | None

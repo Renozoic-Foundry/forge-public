@@ -19,15 +19,24 @@
 #                   SINGLE shared command-detection source consumed by the
 #                   validator execution-evidence post-check. No second heuristic
 #                   may exist outside this script.)
-# Output: JSON on stdout — {"flagged_acs":[{"ac_number":N,"text":"...","pattern":"..."}]}
-#         Empty array when the spec's Acceptance Criteria contain no matches.
+# Output: JSON on stdout —
+#   browser mode (Spec 618 three-state):
+#     {"section_found":true|false,"flagged_acs":[{"ac_number":N,"text":"...","pattern":"..."}]}
+#     section_found:false = NO recognized AC heading found; the scan read nothing and the
+#     empty flagged_acs means nothing (could-not-check). An empty flagged_acs only ever
+#     means "section read, no matches" when section_found is true.
+#   runnable mode: {"flagged_acs":[...]} — schema unchanged (Spec 618 AC6 byte-parity).
 set -euo pipefail
 
 SPEC_FILE="${1:?usage: ac-pattern-scanner.sh <spec-file> [browser|runnable]}"
 MODE="${2:-browser}"
 
 if [[ ! -f "$SPEC_FILE" ]]; then
-  echo '{"flagged_acs":[]}'
+  if [[ "$MODE" == "runnable" ]]; then
+    echo '{"flagged_acs":[]}'
+  else
+    echo '{"section_found":false,"flagged_acs":[]}'
+  fi
   exit 0
 fi
 
@@ -100,6 +109,40 @@ has_exclusion_context() {
   return 1
 }
 
+# Spec 618 — strip backticked spans so a weak token matching ONLY inside `...`
+# is excluded (CLI subcommands, quoted flags/identifiers). Strong verbs are
+# unaffected — only the WEAK_PATTERNS re-test uses the stripped text.
+strip_backticks() {
+  printf '%s' "$1" | sed -E 's/`[^`]*`//g'
+}
+
+# Spec 618 — token-scoped exclusion contexts (browser mode, weak patterns only).
+# Unlike the whole-AC EXCLUSIONS above, each context binds to ONE token, so a
+# CLI-subcommand `show` cannot excuse an unrelated `displays` in the same AC.
+# NEVER add a bare `render` exclusion here — genuine "renders the page/view"
+# browser ACs must keep flagging (same non-overreach stance as `console`).
+has_token_exclusion() {
+  local pat="$1" t="$2"
+  case "$pat" in
+    *show*)
+      # `show` as a CLI subcommand: az pipelines runs show / git show / gh run show
+      if printf '%s' "$t" | grep -Eiq '\b(az|kubectl|gh|docker|git)( [a-z0-9._-]+){0,6} show(s)?\b'; then return 0; fi
+      ;;
+    *visible*)
+      # CLI-stdout prose (`visible` adjacent to `output`) and changelog-exemption
+      # prose (`user-visible ... change`)
+      if printf '%s' "$t" | grep -Eiq '\bvisible\b[^.]{0,16}\boutput\b|\boutput\b[^.]{0,16}\bvisible\b'; then return 0; fi
+      if printf '%s' "$t" | grep -Eiq '\buser-visible\b[^.]{0,30}\bchange\b'; then return 0; fi
+      ;;
+    *render*)
+      # render-tooling prose (Spec 625 live shapes): re-render forms; render
+      # immediately adjacent to a tooling noun
+      if printf '%s' "$t" | grep -Eiq '\bre-render(s|ed|ing)?\b|\brender (trigger|pipeline|source)s?\b'; then return 0; fi
+      ;;
+  esac
+  return 1
+}
+
 json_escape() {
   local s="$1"
   s="${s//\\/\\\\}"
@@ -114,9 +157,18 @@ trim() {
   printf '%s' "$s"
 }
 
-# Extract the "## Acceptance Criteria" section body (up to the next "## " heading).
+# Extract the acceptance-criteria section body (up to the next "## " heading).
+# Spec 618: case-insensitive, alternate heading names (Acceptance criteria /
+# Definition of done), trailing parentheticals allowed via prefix match.
+# section_found=false means NO recognized heading exists — the three-state
+# signal that gate consumers treat as could-not-check, never a silent pass.
+if grep -Eiq '^## (acceptance criteria|definition of done)' "$SPEC_FILE"; then
+  section_found=true
+else
+  section_found=false
+fi
 ac_section="$(awk '
-  /^## Acceptance Criteria/ { p=1; next }
+  tolower($0) ~ /^## (acceptance criteria|definition of done)/ { p=1; next }
   /^## / { p=0 }
   p { print }
 ' "$SPEC_FILE")"
@@ -127,7 +179,7 @@ ac_text=""
 
 flush() {
   if [[ -n "$ac_num" ]]; then
-    local pat
+    local pat stripped
     if [[ "$MODE" == "runnable" ]]; then
       for pat in "${RUNNABLE_PATTERNS[@]}"; do
         if printf '%s' "$ac_text" | grep -Eiq "$pat"; then
@@ -140,8 +192,13 @@ flush() {
     for pat in "${PATTERNS[@]}"; do
       if printf '%s' "$ac_text" | grep -Eiq "$pat"; then
         # Spec 550: excluded weak matches fall through to later patterns.
-        if is_weak_pattern "$pat" && has_exclusion_context "$ac_text"; then
-          continue
+        if is_weak_pattern "$pat"; then
+          if has_exclusion_context "$ac_text"; then continue; fi
+          # Spec 618: the weak token must match OUTSIDE backticked spans...
+          stripped="$(strip_backticks "$ac_text")"
+          if ! printf '%s' "$stripped" | grep -Eiq "$pat"; then continue; fi
+          # ...and outside its token-scoped exclusion contexts.
+          if has_token_exclusion "$pat" "$stripped"; then continue; fi
         fi
         entries+=("{\"ac_number\":${ac_num},\"text\":\"$(json_escape "$ac_text")\",\"pattern\":\"$(json_escape "$pat")\"}")
         break
@@ -164,9 +221,20 @@ while IFS= read -r line; do
 done <<< "$ac_section"
 flush
 
-if [[ ${#entries[@]} -eq 0 ]]; then
-  echo '{"flagged_acs":[]}'
+if [[ "$MODE" == "runnable" ]]; then
+  # Spec 618 AC6: runnable-mode output schema unchanged (byte-parity for Spec 548
+  # consumers) — no section_found key here.
+  if [[ ${#entries[@]} -eq 0 ]]; then
+    echo '{"flagged_acs":[]}'
+  else
+    joined="$(IFS=,; echo "${entries[*]}")"
+    echo "{\"flagged_acs\":[${joined}]}"
+  fi
 else
-  joined="$(IFS=,; echo "${entries[*]}")"
-  echo "{\"flagged_acs\":[${joined}]}"
+  if [[ ${#entries[@]} -eq 0 ]]; then
+    echo "{\"section_found\":${section_found},\"flagged_acs\":[]}"
+  else
+    joined="$(IFS=,; echo "${entries[*]}")"
+    echo "{\"section_found\":${section_found},\"flagged_acs\":[${joined}]}"
+  fi
 fi

@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: .forge/bin/forge-py scripts/gen-agents-config-reference.py
      Sources: AGENTS.md (live defaults) + scripts/lib/agents-config-reference-content.yaml (descriptions)
-     Source content hash: 70fe220f00e9 | FORGE plugin version: 3.3.0
+     Source content hash: be9beb9811db | FORGE plugin version: 4.0.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 
 # AGENTS.md configuration reference
@@ -229,21 +229,33 @@ Three enforcement modes determine how gate approval happens:
 - [Concept overview](concept-overview.md) for foundational FORGE concepts (Solve Loop, Evolve Loop, evidence gates)
 - [Getting started](getting-started.md) for initial project setup
 
+## Appendix — keys awaiting description
+
+These keys exist in AGENTS.md but have no description entry yet in
+`scripts/lib/agents-config-reference-content.yaml`. They are listed here automatically
+so new configuration never goes silently undocumented; add description rows to promote
+them into the tables above.
+
+| Field | Current value |
+|-------|---------------|
+| `forge.implement.inline_validation` | `auto` |
+| `forge.now.dormant_in_progress_days` | `21` |
+
 ---
 
 ## Provenance and revision history
 
 This document is **generated** by `scripts/gen-agents-config-reference.py` — defaults are read live from `AGENTS.md`
 (descriptions from `scripts/lib/agents-config-reference-content.yaml`; source content hash
-`70fe220f00e9`, FORGE plugin v3.3.0). Do not edit it by hand — changes belong in the
+`be9beb9811db`, FORGE plugin v4.0.0). Do not edit it by hand — changes belong in the
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to AGENTS.md:
 
 <!-- forge:gen:volatile:start -->
-- 2026-07-20 `308a850` (commit message withheld from public copy — contains private-tier reference)
-- 2026-07-08 `141138b` Spec 546 — spec-authoring pitfall-rule ports (verify-before-build, redirect reachability, wireframe)
-- 2026-07-08 `6b610d0` Spec 544 — presentation/visualization artifact spec-gate exemption (AGENTS.md + template surfaces)
+- 2026-07-30 `8a3ad66f` Spec 610 implemented — /forge:ahead alias + /now housekeeping synthesis + non-FORGE hook gate
+- 2026-07-30 `8457e55d` Spec 621 implemented — dormant in-progress detector in /now
+- 2026-07-29 `323a9897` Spec 615: push-gate auto-mode coverage + managed-settings doc/config true-up
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `git log -- AGENTS.md` and `docs/specs/CHANGELOG.md`.

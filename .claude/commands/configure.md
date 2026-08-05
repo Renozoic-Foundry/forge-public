@@ -2,6 +2,7 @@
 name: configure
 description: "Adjust any defaulted onboarding setting (stack, agents, autonomy, methodology, features, MCP servers)"
 workflow_stage: lifecycle
+argument-hint: "[setting-name|setting-number]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -186,7 +187,21 @@ Map level to permission mode:
 - L2 → `"defaultMode": "auto"`
 - L3–L4 → `"defaultMode": "bypassPermissions"`
 
-Update `.claude/settings.json` and `.forge/onboarding.yaml` (`project.autonomy_level`, `project.permission_mode`). Return to main menu.
+**Rule/guard-file routing (Spec 607) — mandatory named instance**: this step changes
+`.claude/settings.json`'s `defaultMode`, a file on the Authority Guard's protected set
+(`.forge/bin/check-authority-guard.sh`) and a setting `config-change.md`'s `allowed_sections`
+already governs (`autonomy-levels` / `permission-mode`). Do **not** write `.claude/settings.json`
+directly here. Instead, run `/config-change --propose autonomy-levels "Change autonomy level to
+L<N>"` and follow its Step 2 (cool-down check) through Step 5 (apply + the Guard recourse
+procedure for the protected `.claude/settings.json` write) — see `config-change.md` for the full
+cool-down, ledger, and guard-recourse mechanics; this step duplicates none of it. If
+`/config-change` reports the cool-down block, surface that block message verbatim here and
+return to the main menu with no change made.
+
+Once `/config-change` reports its outcome (`applied`, or the guard-recourse
+`proposed — operator-applied`), update `.forge/onboarding.yaml` (`project.autonomy_level`,
+`project.permission_mode`) to match — this file is **not** guard-protected, so it is written
+directly. Return to main menu.
 
 ---
 

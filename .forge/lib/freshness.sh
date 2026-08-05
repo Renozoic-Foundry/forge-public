@@ -60,11 +60,11 @@ usage() {
 classify() {
   local p="$1"
   case "$p" in
-    .forge/commands/*.md|.claude/commands/*.md|template/.forge/commands/*.md|template/.claude/commands/*.md)
+    .forge/commands/*.md|.claude/commands/*.md)
       echo "command" ;;
-    AGENTS.md|template/AGENTS.md.jinja)
+    AGENTS.md)
       echo "config" ;;
-    .claude-plugin/*|template/.claude-plugin/*|copier.yml|.forge/bin/forge-install.sh|.forge/bin/forge-install.ps1|template/.forge/bin/forge-install.sh|template/.forge/bin/forge-install.ps1)
+    .claude-plugin/*|.forge/bin/forge-install.sh|.forge/bin/forge-install.ps1)
       echo "install" ;;
   esac
 }
@@ -185,7 +185,7 @@ cmd_stamp() {
       # Stamp only when a YAML-key-shaped line was added/removed/edited (a config
       # block change), not on prose-only AGENTS.md edits. Heuristic: ± lines whose
       # first token is a lowercase/level-key identifier followed by ':'.
-      if ! git -C "$ROOT" diff "$baseline"..HEAD -- AGENTS.md template/AGENTS.md.jinja 2>/dev/null \
+      if ! git -C "$ROOT" diff "$baseline"..HEAD -- AGENTS.md 2>/dev/null \
            | grep -qE '^[+-][[:space:]]*(L[0-4]|-[[:space:]]+[a-z][A-Za-z0-9_.-]*|[a-z][A-Za-z0-9_.-]*)[[:space:]]*:'; then
         hit_config=0
       fi

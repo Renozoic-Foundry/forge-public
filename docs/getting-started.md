@@ -1,4 +1,5 @@
 # Getting Started with FORGE
+<!-- Last verified: (unset) | STALE: re-verify — Spec 627 changed an install/distribution surface (/close 2026-08-04, Spec 509) -->
 
 This tutorial walks you from zero to your first closed spec in a single short session.
 
@@ -26,7 +27,7 @@ The underlying methodology is Evidence-Gated Iterative Delivery (EGID). You will
 - **Git** — version control
 
 That is the whole list for the plugin path — no Python, no template engine. Using a different
-AI IDE (Cursor, Windsurf, Copilot)? The legacy Copier scaffold path applies instead; see the
+AI IDE (Cursor, Windsurf, Copilot)? The pinned-checkout runtime path applies instead; see the
 [README's collapsed cross-IDE section](../README.md#quickstart) and the pinned tool versions in
 [CONTRIBUTING.md](../CONTRIBUTING.md#prerequisites).
 
@@ -114,8 +115,8 @@ unaffected until they opt in — switching later is a `/forge configure` → Lay
 `/forge retrofit` migration. See `docs/process-kit/layout-guide.md` for the full comparison.
 
 The scaffold is your project's *data*; the framework itself stays in the plugin and updates with
-it. (The classic full-template Copier render remains available as an explicit fallback:
-`/forge init --copier`.)
+it. (The classic full-template Copier render was removed in v4.0.0 — Spec 558; existing classic
+projects stay supported on ≤v3.x, with `forge stoke --to-plugin` as the opt-in on-ramp.)
 
 ---
 

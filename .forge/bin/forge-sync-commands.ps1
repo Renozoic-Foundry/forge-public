@@ -30,8 +30,7 @@ param(
     [string]$Scope = "project",
     [switch]$DryRun,
     [switch]$Force,  # Spec 329: overwrite mirror files even when body diverges from canonical
-    [switch]$ForceJinja,  # Spec 390: opt-in override to overwrite .jinja Copier-time variations
-    [switch]$TemplateSide  # Spec 281: process template/.forge/commands -> template/.claude/commands (4th-edge sync)
+    [switch]$ForceJinja  # Spec 390: opt-in override to overwrite .jinja Copier-time variations
 )
 
 <#
@@ -50,18 +49,8 @@ $ForgeDir = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) ".."
 $ForgeDir = (Resolve-Path $ForgeDir).Path
 $ProjectDir = (Resolve-Path (Join-Path $ForgeDir "..")).Path
 $CanonicalDir = Join-Path $ForgeDir "commands"
-$BaseDir = $ProjectDir  # Spec 281: base for agent target directories (overridden by -TemplateSide)
+$BaseDir = $ProjectDir  # base for agent target directories
 $TriggerMap = Join-Path $ForgeDir "templates\codex-trigger-map.yaml"
-
-# --- Spec 281: -TemplateSide switches both canonical source and target base ---
-if ($TemplateSide) {
-    $CanonicalDir = Join-Path $ProjectDir "template\.forge\commands"
-    $BaseDir = Join-Path $ProjectDir "template"
-    if ($Scope -eq "user" -or $Scope -eq "both") {
-        Write-Error "-TemplateSide is incompatible with -Scope user|both (template processing is project-side only)"
-        exit 1
-    }
-}
 
 # --- Resolve agents ---
 function Resolve-Agents {
@@ -99,7 +88,6 @@ function Resolve-Agents {
 }
 
 # --- Get agent command directory ---
-# Spec 281: $BaseDir resolves to $ProjectDir by default, or $ProjectDir/template when -TemplateSide is set
 function Get-AgentCommandDir {
     param([string]$Agent)
     switch ($Agent) {
@@ -174,6 +162,50 @@ function Get-Frontmatter {
         }
     }
     return @()
+}
+
+# --- Spec 626: read one key's value from a file's YAML frontmatter ---
+function Read-FrontmatterKey {
+    param([string]$FilePath, [string]$Key)
+    $fm = Get-Frontmatter -FilePath $FilePath
+    foreach ($line in $fm) {
+        $stripped = $line -replace "`r$", ""
+        if ($stripped.StartsWith("$Key" + ": ")) {
+            return $stripped.Substring($Key.Length + 2)
+        }
+    }
+    return $null
+}
+
+# --- Spec 626: upsert exactly one key in a frontmatter block (add/update/remove) ---
+# Every other line passes through byte-untouched (Spec 329 preserve rule holds for
+# all other keys). A block without --- markers is returned unchanged.
+function Update-FrontmatterKey {
+    param([string[]]$Block, [string]$Key, [string]$Value)
+    if ($Block.Count -eq 0) { return $Block }
+    $first = $Block[0] -replace "`r$", ""
+    if ($first -ne "---") { return $Block }
+    $output = @()
+    $doneKey = $false
+    $closed = $false
+    $isFirst = $true
+    foreach ($line in $Block) {
+        $stripped = $line -replace "`r$", ""
+        if ($isFirst) { $isFirst = $false; $output += $line; continue }
+        if (-not $closed -and $stripped -eq "---") {
+            if (-not $doneKey -and $Value) { $output += "$Key" + ": " + $Value }
+            $closed = $true
+            $output += $line
+            continue
+        }
+        if (-not $closed -and $stripped.StartsWith("$Key" + ": ")) {
+            $doneKey = $true
+            if ($Value) { $output += "$Key" + ": " + $Value }
+            continue
+        }
+        $output += $line
+    }
+    return $output
 }
 
 # --- Spec 329: Check if file is FORGE-managed (frontmatter-aware) ---
@@ -442,6 +474,10 @@ foreach ($agent in $agentList) {
                     if ($mirrorFm.Count -eq 0) {
                         $mirrorFm = Get-Frontmatter -FilePath $srcFile.FullName
                     }
+                    # Spec 626: single-key upsert — argument-hint always tracks canonical
+                    # (add/update/remove); all other keys stay under the Spec 329 preserve rule.
+                    $canonicalHint = Read-FrontmatterKey -FilePath $srcFile.FullName -Key "argument-hint"
+                    $mirrorFm = Update-FrontmatterKey -Block $mirrorFm -Key "argument-hint" -Value $canonicalHint
                     if ($Force -and -not (Test-BodiesEqual -FileA $srcFile.FullName -FileB $dstFile)) {
                         Write-Warning "FORCE OVERWRITE: $dstFile body replaced from canonical"
                     }

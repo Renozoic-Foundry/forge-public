@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: scripts/gen-quick-reference.sh
      Canonical sources: .forge/commands/*.md + invocation-policy.yaml
-     Source content hash: 50db7d2841f8 | FORGE plugin version: 3.3.0
+     Source content hash: f456cd321abe | FORGE plugin version: 4.0.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 # FORGE Quick Reference
 
@@ -9,6 +9,7 @@
 - **Work-loop verbs are top-level**: `/spec`, `/implement`, `/close`, `/now`, … — the daily delivery loop.
 - **Project-lifecycle operations go through `/forge <sub>`**: `init`, `stoke`, `doctor`, `retrofit`, `status` — anything about the project's relationship to FORGE itself.
 - **`/forge:<name>` colon forms** are the harness's plugin-qualified spellings of the same invocables — valid, never advertised, needed only when a name collides. Full routing map: `docs/process-kit/migration-decision-guide.md`.
+- **`/forge configure` is the primary configuration surface** (Spec 607); `/configure` and `/config-change` remain valid direct dispatch names for it and `/forge config-change` respectively — both keep working unchanged, the `/forge <sub>` spelling above is simply what's advertised (Spec 580 lifecycle fold).
 
 ## Core Commands
 
@@ -45,6 +46,7 @@ only when you name it. All entries also run outside Claude Code as `bin/forge <n
 
 | Command | Purpose | Form |
 |---------|---------|------|
+| `/forge:ahead` | Momentum-framed alias for the FORGE orientation surface (dispatches to /now) | command |
 | `/note` | Add a scratchpad note for the next process checkpoint | skill (auto) |
 | `/now` | Review current project state and suggest next action | skill (auto) |
 | `/session` | Create or update the session log | command |
@@ -85,7 +87,7 @@ only when you name it. All entries also run outside Claude Code as `bin/forge <n
 | `/forge:doctor` | Plugin-qualified escape hatch for the FORGE health diagnostic (dispatches to /forge doctor) | command |
 | `/forge` | Unified FORGE project lifecycle command | command |
 | `/forge init` | Bootstrap FORGE into a new or existing project, upgrade legacy pre-Copier projects, or create new projects from scratch | command |
-| `/forge stoke` | Pull upstream FORGE updates into this project using Copier | command |
+| `/forge stoke` | Pull upstream FORGE updates into this project via the content-merge engine | command |
 | `/forge onboarding` | First-session interactive project configuration | command |
 
 ### Process and review
@@ -96,17 +98,6 @@ only when you name it. All entries also run outside Claude Code as `bin/forge <n
 | `/evolve` | Run the KCS Evolve Loop review | skill (explicit) |
 | `/nanoclaw` | Manage the NanoClaw container — start, stop, status, logs | command |
 | `/synthesize` | Synthesize accumulated project artifacts into refined documents | skill (explicit) |
-
-### Deprecated (invocation preserved, not advertised)
-
-Retired names still resolve (S2 MINOR — no physical removal) but only print a
-one-line redirect to their replacement. Not part of the active command surface.
-
-| Former name | Redirects to |
-|-------------|--------------|
-| `/dependency-audit` | /implement dependency-confirmation gate + dependency-vetting-checklist.md |
-| `/insights` | /evolve --insights |
-| `/signal-to-strategy` | /brainstorm --strategy |
 
 ### /forge subcommands
 
@@ -185,18 +176,18 @@ value that canonicalizes (symlinks resolved) outside the repo root.
 ## Provenance and revision history
 
 This document is **generated** by `scripts/gen-quick-reference.sh` from the canonical command surface
-(`.forge/commands/` + `invocation-policy.yaml`; source content hash `50db7d2841f8`,
-FORGE plugin v3.3.0). Do not edit it by hand — changes belong in the canonical
+(`.forge/commands/` + `invocation-policy.yaml`; source content hash `f456cd321abe`,
+FORGE plugin v4.0.0). Do not edit it by hand — changes belong in the canonical
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to the canonical command surface:
 
 <!-- forge:gen:volatile:start -->
-- 2026-07-21 `21f2222` WIP: merge specs 594-596 implementations, awaiting 597
-- 2026-07-21 `f24b957` Close Spec 591 — Plugin-primary functional cutover: live six-key consent gate + stoke content-merge backend + classic deprecation signal
-- 2026-07-20 `be7b00f` Spec 560 implemented — classic-mode consumer enumeration + opt-in stoke --to-plugin converter
-- 2026-07-20 `79d1cc8` Merge Spec 587 — plugin surface quick-wins (parallel batch 20260720-1505)
-- 2026-07-20 `677ce78` Spec 587 implemented — plugin-surface quick-wins: doctor alias, /forge update, near-dead skill folds, native-collision naming policy
+- 2026-08-04 `68b9fd6b` Spec 626 — typing-time argument hints + empty-args menus (implement + close, batch 558+626): 19 canonical hints, single-key frontmatter upsert (sh+ps1), skills emission, colon lint, 52-assertion fixture, docs + regenerated references; validator PASS 10/10
+- 2026-08-04 `7c264ce8` Spec 558 D4 — command surfaces: close.md gate retirements (2b6/2d++/2d+++/2d++++), implement.md Steps 4e/7b retired, forge-stoke/forge-init rewritten plugin-only, now/evolve copier surfaces pruned + customer-tier-name genericization; mirrors regenerated
+- 2026-08-03 `a1f5ba01` Spec 620 implemented — repro-provenance capture-and-compare gate: forge run/repro-block wrappers (-- bypass), subprocess-free comparator + gitsha helper, /close Step 2b7 gate, /evolve unverifiable-rate, Step 6e adoption wiring, template/.claude mirror true-up
+- 2026-08-03 `c37a040d` Spec 619 implemented — score-audit three report states + pairing diagnostics; live pairing 26%->92% (103 backfilled); validator_outcome deleted; implement-approval predicted safety net
+- 2026-07-30 `8a3ad66f` Spec 610 implemented — /forge:ahead alias + /now housekeeping synthesis + non-FORGE hook gate
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `docs/specs/CHANGELOG.md` and `git log -- .forge/commands/`.

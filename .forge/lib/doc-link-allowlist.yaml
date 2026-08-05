@@ -1,0 +1,17 @@
+# doc-link-allowlist.yaml — false-positive escape hatch for check-doc-links.py (Spec 574).
+#
+# Every entry REQUIRES a non-empty reason (the checker exits 2 on a reason-less entry —
+# same mandatory-rationale pattern as auth-rules-whitelist). Entries are exact
+# (path, link) pairs as printed by a BROKEN line.
+#
+# Spec 584 (2026-07-19): the 34 SIG-574-03 entries were PRUNED — their three defect
+# classes are now fixed structurally (generated-skill link depth via forge-sync-skills
+# rewrite; unshipped targets shipped via public-manifest; command-body root-relative
+# resolution taught to the checker). New entries need a new justification.
+#
+# allow:
+#   - path: docs/example.md
+#     link: ../some/target.md
+#     reason: "why this unresolvable reference is intentionally kept"
+
+allow: []

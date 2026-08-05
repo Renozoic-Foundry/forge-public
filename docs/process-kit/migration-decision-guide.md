@@ -29,7 +29,7 @@ Start with **`/forge doctor`** — it detects which state you're in and offers t
 | 4 | **Classic layout, wants segregation** | D-PATHS pre-migration WARN (config points at contained, files still classic) or operator intent | `/configure` → Layout (config-only), then `/forge retrofit` phase 3 (physical move, git-mv, history preserved) |
 | 5 | **Split-brain** (files in BOTH layouts for one key) | D-PATHS SPLIT-BRAIN HIGH | `/forge retrofit` phase 3 — one location must end up owning the data |
 | 6 | **Pre-v3 vendored tree** (framework files mixed into the repo) | Vendored `.forge/bin`, `.forge/lib`, command mirrors present with plugin installed | `/forge retrofit` (full four phases: inventory → de-vendor → reorganize → reconcile); dry-run first, always; mixed teams need the Spec 576 runtime installed before de-vendor |
-| 7 | **Copier-scaffold consumer behind upstream** | `.copier-answers.yml` present, upstream tag newer | `/forge stoke` — content-merge is now the DEFAULT apply path (Spec 591); `--classic` reaches the deprecated `copier update` path (removal targeted **v4.0.0** — see below) until the Spec 558 cutover deletes it |
+| 7 | **Copier-scaffold consumer behind upstream** | `.copier-answers.yml` present, upstream tag newer | On ≤v3.x: `/forge stoke` (content-merge default, Spec 591). On v4.0.0+: the classic Copier path is DELETED (Spec 558) — migrate with `forge stoke --to-plugin` (Spec 560), or stay on ≤v3.x (supported in place — see below) |
 | 8 | **Stale user-level `/forge-bootstrap`** | `~/.claude/commands/forge-bootstrap.md` present + plugin installed | Delete the user-level file — the plugin supersedes it (`install.sh --legacy-bootstrap` re-plants it if a pre-v3 Copier workflow genuinely needs it) |
 
 States compose: a pre-v3 tree on a stale cache shows #3 first (update the plugin), then #6.
@@ -49,31 +49,38 @@ first, then this five-step chain (never mutates without an explicit yes/no):
    forge@<marketplace>` — a full reinstall, since stale caches occasionally survive an
    `update` alone
 
-## `/forge stoke` deprecation window: `--classic` → removal in v4.0.0 (Spec 591)
+## Classic (Copier) path: REMOVED in v4.0.0 (Spec 558) — ≤v3.x support statement
 
-As of Spec 591, `/forge stoke`'s default apply backend is content-merge (Spec 559's
-3-way `upgrade_merge.py` engine) instead of shelling out to `copier update`. The
-classic Copier-update path remains reachable via `--classic` during the soak
-window — it is **deprecated and scheduled for removal in v4.0.0** (Spec 558 deletes
-`copier.yml` / `scripts/copier-hooks/**` / the Copier apply machinery once this
-release has soaked for at least one release cycle).
+The Spec 591 deprecation window closed with the v4.0.0 cutover: Spec 558 deleted
+`copier.yml`, `scripts/copier-hooks/**`, the `template/` Copier surface, and the
+`--classic` apply branch. On v4.0.0+:
 
-- **Default (`/forge stoke`, no flag)**: content-merge. No warning printed.
-- **`/forge stoke --classic`**: reaches the unchanged `copier update` pipeline.
-  Prints exactly one line to **stderr** per run:
-  > `DEPRECATION: --classic (the `copier update` stoke apply path) is scheduled for removal in v4.0.0. The default content-merge path is now the supported mechanism -- see docs/process-kit/migration-decision-guide.md.`
-- **`/forge stoke --merge-native`**: accepted no-op alias — content-merge is already
-  the default; the flag exists for consumers' explicit scripts/muscle memory.
+- **Default (`/forge stoke`, no flag)**: content-merge (Spec 559's 3-way
+  `upgrade_merge.py` engine) — the ONLY apply backend.
+- **`/forge stoke --classic`**: gone — an unknown-flag error.
+- **Classic-mode invocation** (`.copier-answers.yml` present, no plugin runtime):
+  a documented converter-pointer error (never a stack trace) naming
+  `forge stoke --to-plugin` and this guide.
+- **`/forge stoke --merge-native`**: still an accepted no-op alias.
 - **Six consent-gated keys** (`test_command`, `lint_command`, `harness_command`,
-  `include_nanoclaw`, `include_advanced_autonomy`, `include_two_stage_review`) now
-  resolve through a live consent gate on every `/forge stoke apply` invocation
-  (both backends), in addition to the render-time `secret: true` /
-  `forge_consent_gate.py` backstop, which remains active until Spec 558.
+  `include_nanoclaw`, `include_advanced_autonomy`, `include_two_stage_review`)
+  resolve through the live consent gate on every apply (Spec 591). The render-time
+  `secret: true` / `forge_consent_gate.py` backstop was deleted with the Copier
+  surface — the live gate is the sole mechanism.
 
-**Action for consumers still on `--classic`**: no forced migration — the flag and
-the render-time backstop both remain functional through the soak window. Migrate at
-your own pace before the v4.0.0 cut; `/forge doctor` will flag `--classic` usage
-once evidence supports it.
+**Support statement for classic consumers (Req 5/10, Spec 558).** Classic
+(Copier-embedded) consumers remain **supported in place on ≤v3.x releases
+indefinitely** — no forced migration, and the Spec 560 refusal path is preserved
+verbatim (`--to-plugin` still refuses under a Lane B compliance profile). This is
+not only a hypothetical population: the two KNOWN active classic-mode consumers at
+cutover time, **polaris** and **SmileyOne** (both `.copier-answers.yml` projects —
+the same two whose live consent-gate/stoke-merge soak evidence cleared the Spec 558
+pre-delete gate), continue to work unchanged on ≤v3.x. Their on-ramp to v4.0.0+,
+whenever they choose it, is the opt-in converter:
+
+    forge stoke --to-plugin
+
+followed by normal plugin updates (Spec 616/617 mechanism).
 
 ## Vendored-shadow self-rescue (Spec 587, field report rec #1)
 

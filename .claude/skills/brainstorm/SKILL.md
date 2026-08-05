@@ -19,8 +19,8 @@ If $ARGUMENTS is `?` or `help`:
   ```
   /brainstorm — Generate spec recommendations from roadmap, signals, and scratchpad.
   Usage: /brainstorm [focus area]
-  Usage: /brainstorm --strategy [focus area]   — external-research mode (folded from
-                                                  /signal-to-strategy, Spec 587)
+  Usage: /brainstorm --strategy [focus area]   — external-research mode (folded from the
+                                                  retired signal-to-strategy command, Spec 587)
   Arguments: focus area (optional) — e.g. "Phase 2", "messaging", "process improvement"
   Behavior:
     - Reads roadmap, signals, scratchpad, and backlog
@@ -176,7 +176,7 @@ After creating specs (or if skipped), present:
 
 ---
 
-## `--strategy` mode (Spec 587 fold — formerly `/signal-to-strategy`)
+## `--strategy` mode (Spec 587 fold — formerly the `signal-to-strategy` command)
 
 Run the Signal-to-Strategy Loop: review external AI/software-development research, map it to
 FORGE gaps, generate and score advantage hypotheses, and recommend ONE PRD/spec/watchlist

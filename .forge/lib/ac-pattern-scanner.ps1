@@ -13,7 +13,11 @@
 #
 # Usage: pwsh ac-pattern-scanner.ps1 <spec-file> [mode]
 #   mode: browser (default) | runnable (Spec 548 — shared command-detection source)
-# Output: JSON on stdout — {"flagged_acs":[{"ac_number":N,"text":"...","pattern":"..."}]}
+# Output: JSON on stdout —
+#   browser mode (Spec 618 three-state):
+#     {"section_found":true|false,"flagged_acs":[{"ac_number":N,"text":"...","pattern":"..."}]}
+#     section_found:false = NO recognized AC heading; the scan read nothing (could-not-check).
+#   runnable mode: {"flagged_acs":[...]} — schema unchanged (Spec 618 AC6 byte-parity).
 param(
   [Parameter(Mandatory = $true, Position = 0)]
   [string]$SpecFile,
@@ -22,7 +26,12 @@ param(
 )
 
 if (-not (Test-Path -LiteralPath $SpecFile -PathType Leaf)) {
-  Write-Output '{"flagged_acs":[]}'
+  if ($Mode -eq "runnable") {
+    Write-Output '{"flagged_acs":[]}'
+  }
+  else {
+    Write-Output '{"section_found":false,"flagged_acs":[]}'
+  }
   exit 0
 }
 
@@ -81,6 +90,32 @@ function Test-ExclusionContext {
   return $false
 }
 
+# Spec 618 — strip backticked spans so a weak token matching ONLY inside `...`
+# is excluded. Must stay behaviorally identical to strip_backticks in the .sh.
+function Remove-BacktickSpans {
+  param([string]$Text)
+  return ($Text -replace '`[^`]*`', '')
+}
+
+# Spec 618 — token-scoped exclusion contexts (browser mode, weak patterns only).
+# Must stay identical (in content and token binding) to has_token_exclusion in
+# the .sh. NEVER add a bare `render` exclusion (genuine "renders the page/view"
+# browser ACs must keep flagging).
+function Test-TokenExclusion {
+  param([string]$Pattern, [string]$Text)
+  if ($Pattern -like '*show*') {
+    if ($Text -match '(?i)\b(az|kubectl|gh|docker|git)( [a-z0-9._-]+){0,6} show(s)?\b') { return $true }
+  }
+  if ($Pattern -like '*visible*') {
+    if ($Text -match '(?i)\bvisible\b[^.]{0,16}\boutput\b|\boutput\b[^.]{0,16}\bvisible\b') { return $true }
+    if ($Text -match '(?i)\buser-visible\b[^.]{0,30}\bchange\b') { return $true }
+  }
+  if ($Pattern -like '*render*') {
+    if ($Text -match '(?i)\bre-render(s|ed|ing)?\b|\brender (trigger|pipeline|source)s?\b') { return $true }
+  }
+  return $false
+}
+
 function ConvertTo-JsonEscape {
   param([string]$Text)
   # Single-quoted PowerShell strings are literal (no backslash escapes), so
@@ -94,9 +129,14 @@ function ConvertTo-JsonEscape {
 
 $lines = Get-Content -LiteralPath $SpecFile
 $inSection = $false
+$sectionFound = $false
 $acSectionLines = @()
 foreach ($line in $lines) {
-  if ($line -match '^## Acceptance Criteria') { $inSection = $true; continue }
+  # Spec 618: alternate heading names + trailing parentheticals (prefix match).
+  # PowerShell -match is case-insensitive by default, so case variants are
+  # covered without an explicit (?i) — the .sh needed tolower(); this side
+  # needed only the alternate names (asymmetric baseline, Req 6 note).
+  if ($line -match '^## (Acceptance Criteria|Definition of done)') { $inSection = $true; $sectionFound = $true; continue }
   if ($inSection -and $line -match '^## ') { $inSection = $false }
   if ($inSection) { $acSectionLines += $line }
 }
@@ -122,8 +162,13 @@ function Invoke-Flush {
     foreach ($pat in $script:Patterns) {
       if ($script:acText -match "(?i)$pat") {
         # Spec 550: excluded weak matches fall through to later patterns.
-        if (($script:WeakPatterns -contains $pat) -and (Test-ExclusionContext $script:acText)) {
-          continue
+        if ($script:WeakPatterns -contains $pat) {
+          if (Test-ExclusionContext $script:acText) { continue }
+          # Spec 618: the weak token must match OUTSIDE backticked spans...
+          $stripped = Remove-BacktickSpans $script:acText
+          if (-not ($stripped -match "(?i)$pat")) { continue }
+          # ...and outside its token-scoped exclusion contexts.
+          if (Test-TokenExclusion $pat $stripped) { continue }
         }
         $escapedText = ConvertTo-JsonEscape $script:acText
         $escapedPat = ConvertTo-JsonEscape $pat
@@ -150,9 +195,22 @@ foreach ($line in $acSectionLines) {
 }
 Invoke-Flush
 
-if ($entries.Count -eq 0) {
-  Write-Output '{"flagged_acs":[]}'
+if ($Mode -eq "runnable") {
+  # Spec 618 AC6: runnable-mode output schema unchanged (byte-parity for Spec 548
+  # consumers) — no section_found key here.
+  if ($entries.Count -eq 0) {
+    Write-Output '{"flagged_acs":[]}'
+  }
+  else {
+    Write-Output ('{{"flagged_acs":[{0}]}}' -f ($entries -join ','))
+  }
 }
 else {
-  Write-Output ('{{"flagged_acs":[{0}]}}' -f ($entries -join ','))
+  $sfJson = if ($sectionFound) { 'true' } else { 'false' }
+  if ($entries.Count -eq 0) {
+    Write-Output ('{{"section_found":{0},"flagged_acs":[]}}' -f $sfJson)
+  }
+  else {
+    Write-Output ('{{"section_found":{0},"flagged_acs":[{1}]}}' -f $sfJson, ($entries -join ','))
+  }
 }

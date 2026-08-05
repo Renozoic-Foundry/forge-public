@@ -12,7 +12,7 @@ Yes, with varying integration depth. The core workflow — specs, evidence gates
 
 ## How do I install FORGE in Claude Code?
 
-Install the plugin — it is the runtime and the primary path: `claude plugin marketplace add Renozoic-Foundry/forge-public`, then `/plugin install forge@forge` (or `claude plugin install ./` from a checkout). Then scaffold your project with `/forge init` — the plugin-native scaffolder writes the project structure with no Copier involved. The legacy install script + Copier render remain available for other IDEs and as the explicit `/forge init --copier` fallback.
+Install the plugin — it is the runtime and the primary path: `claude plugin marketplace add Renozoic-Foundry/forge-public`, then `/plugin install forge@forge` (or `claude plugin install ./` from a checkout). Then scaffold your project with `/forge init` — the plugin-native scaffolder writes the project structure. (The Copier render path was removed in v4.0.0 — Spec 558; other IDEs use the pinned-checkout runtime via `bin/forge`.)
 
 ## How do I uninstall FORGE?
 
@@ -44,12 +44,12 @@ Run **`/forge update`** (Spec 587) — the single verb for the plugin-update jou
 whether your cache is stale first (the skew probe), then prints the five-step chain
 (marketplace update → plugin update → reload → re-verify → reinstall-if-needed) and only runs
 a mutating step behind an explicit yes/no. Framework behavior (commands, agents, skills, hooks)
-always comes from the installed plugin version. Projects scaffolded by the legacy Copier path
-additionally use `/forge stoke` to merge scaffold-file changes, with conflicts presented for
-manual resolution. As of Spec 591, `/forge stoke`'s default apply backend is a 3-way
-content-merge (no `copier update` shell-out); the classic Copier-update path is still reachable
-with `--classic` but is deprecated and scheduled for removal in **v4.0.0** — see the
-[migration decision guide](process-kit/migration-decision-guide.md#forge-stoke-deprecation-window-classic--removal-in-v400-spec-591).
+always comes from the installed plugin version. Projects additionally use `/forge stoke` to
+merge scaffold-file changes, with conflicts presented for manual resolution. `/forge stoke`'s
+apply backend is a 3-way content-merge (Spec 591); the classic Copier-update path was removed
+in **v4.0.0** (Spec 558) — classic projects stay supported on ≤v3.x, with
+`forge stoke --to-plugin` as the opt-in on-ramp; see the
+[migration decision guide](process-kit/migration-decision-guide.md#classic-copier-path-removed-in-v400-spec-558--v3x-support-statement).
 
 If `/forge help` is missing `doctor`/`retrofit`, a project-local vendored `forge.md` is likely
 shadowing the plugin — run **`/forge:doctor`** to bypass the shadow (see the

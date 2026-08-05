@@ -2,7 +2,6 @@
 # install-pre-commit-hook.sh — Install FORGE combined pre-commit hook (Specs 270 + 314 + 320 + 367)
 #
 # Installs a pre-commit hook that runs FOUR checks:
-#   - .forge/bin/forge-sync-cross-level.sh --check       (Spec 270 — template/ ↔ repo-root sync)
 #   - .forge/bin/forge-sync-commands.sh --check          (Spec 314 — .forge/commands/ ↔ .claude/commands/ sync)
 #   - scripts/tests/test-choice-block-conventions.sh --staged
 #                                                        (Spec 320 — choice-block convention enforcement)
@@ -43,17 +42,16 @@ HOOK="${HOOKS_DIR}/pre-commit"
 
 cat > "${HOOK}" <<'HOOK_EOF'
 #!/usr/bin/env bash
-# FORGE combined pre-commit hook — Specs 270 + 314 + 320 + 367
-# Runs cross-level sync (Spec 270), commands-sync (Spec 314), choice-block
-# convention (Spec 320), and spec-integrity sentinel parity + token-set
-# coherence (Spec 367) checks. All checks run to completion. Hook fails if any
-# reports a violation.
+# FORGE combined pre-commit hook — Specs 314 + 320 + 367 (Spec 270's cross-level
+# check was retired by Spec 558 with the template/ surface).
+# Runs commands-sync (Spec 314), choice-block convention (Spec 320), and
+# spec-integrity sentinel parity + token-set coherence (Spec 367) checks. All
+# checks run to completion. Hook fails if any reports a violation.
 # FORGE_SKIP_SYNC=1 bypasses all checks but emits a stderr audit-trail warning.
 
 set +e  # do not abort on individual check failure — we want all to run
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-CROSS_LEVEL_CHECK="${REPO_ROOT}/.forge/bin/forge-sync-cross-level.sh"
 COMMANDS_CHECK="${REPO_ROOT}/.forge/bin/forge-sync-commands.sh"
 CHOICE_BLOCK_CHECK="${REPO_ROOT}/scripts/tests/test-choice-block-conventions.sh"
 SENTINEL_CHECK="${REPO_ROOT}/scripts/validate-spec-integrity-sentinels.sh"
@@ -61,20 +59,15 @@ SENTINEL_CHECK="${REPO_ROOT}/scripts/validate-spec-integrity-sentinels.sh"
 STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
 
 # Determine which checks are relevant based on staged paths.
-RUN_CROSS_LEVEL=0
 RUN_COMMANDS=0
 RUN_CHOICE_BLOCK=0
 RUN_SENTINEL=0
-# forge:path-literal-ok (framework-structure) — this hook governs FORGE's own repo
-# (cross-level sync between .forge/commands, docs/process-kit and template/), not a
-# generic consumer project's process-state location.
-if grep -qE '^(\.forge/commands/|\.claude/agents/|docs/process-kit/|template/)' <<<"${STAGED}"; then
-  RUN_CROSS_LEVEL=1
-fi
+# forge:path-literal-ok (framework-structure) — this hook governs FORGE's own repo,
+# not a generic consumer project's process-state location.
 if grep -qE '^\.forge/commands/' <<<"${STAGED}"; then
   RUN_COMMANDS=1
 fi
-if grep -qE '^(\.forge/commands/|\.claude/commands/|template/\.forge/commands/|template/\.claude/commands/)' <<<"${STAGED}"; then
+if grep -qE '^(\.forge/commands/|\.claude/commands/)' <<<"${STAGED}"; then
   RUN_CHOICE_BLOCK=1
 fi
 # Spec 367: sentinel parity + token-set coherence runs when staged paths touch
@@ -82,24 +75,15 @@ fi
 # Lane B compliance profile. Pattern matches the union of:
 #   - .forge/commands/{implement,close,revise}.md
 #   - .claude/commands/{implement,close,revise}.md
-#   - template/{.forge,.claude}/commands/{implement,close,revise}.md
 #   - docs/process-kit/close-validator-coverage.md
 #   - docs/compliance/profile.yaml
-if grep -qE '^((\.forge|\.claude|template/\.forge|template/\.claude)/commands/(implement|close|revise)\.md|docs/process-kit/close-validator-coverage\.md|docs/compliance/profile\.yaml)$' <<<"${STAGED}"; then  # forge:path-literal-ok (framework-structure)
+if grep -qE '^((\.forge|\.claude)/commands/(implement|close|revise)\.md|docs/process-kit/close-validator-coverage\.md|docs/compliance/profile\.yaml)$' <<<"${STAGED}"; then  # forge:path-literal-ok (framework-structure)
   RUN_SENTINEL=1
 fi
 
 # No watched paths staged — nothing to do.
-if [[ ${RUN_CROSS_LEVEL} -eq 0 && ${RUN_COMMANDS} -eq 0 && ${RUN_CHOICE_BLOCK} -eq 0 && ${RUN_SENTINEL} -eq 0 ]]; then
+if [[ ${RUN_COMMANDS} -eq 0 && ${RUN_CHOICE_BLOCK} -eq 0 && ${RUN_SENTINEL} -eq 0 ]]; then
   exit 0
-fi
-
-# Run cross-level check (Spec 270).
-CROSS_LEVEL_EXIT=0
-CROSS_LEVEL_OUTPUT=""
-if [[ ${RUN_CROSS_LEVEL} -eq 1 && -x "${CROSS_LEVEL_CHECK}" ]]; then
-  CROSS_LEVEL_OUTPUT="$("${CROSS_LEVEL_CHECK}" --check 2>&1)"
-  CROSS_LEVEL_EXIT=$?
 fi
 
 # Run commands-sync check (Spec 314).
@@ -129,9 +113,6 @@ fi
 # Override path: FORGE_SKIP_SYNC=1 bypasses but leaves an audit trail.
 if [[ "${FORGE_SKIP_SYNC:-0}" = "1" ]]; then
   BYPASSED=()
-  if [[ ${CROSS_LEVEL_EXIT} -ne 0 ]]; then
-    BYPASSED+=("forge-sync-cross-level.sh")
-  fi
   if [[ ${COMMANDS_EXIT} -ne 0 ]]; then
     BYPASSED+=("forge-sync-commands.sh")
   fi
@@ -145,10 +126,6 @@ if [[ "${FORGE_SKIP_SYNC:-0}" = "1" ]]; then
     echo "" >&2
     echo "FORGE_SKIP_SYNC=1 — bypassing pre-commit checks" >&2
     echo "Bypassed checks: ${BYPASSED[*]}" >&2
-    if [[ ${CROSS_LEVEL_EXIT} -ne 0 ]]; then
-      echo "--- Drift from forge-sync-cross-level.sh ---" >&2
-      echo "${CROSS_LEVEL_OUTPUT}" >&2
-    fi
     if [[ ${COMMANDS_EXIT} -ne 0 ]]; then
       echo "--- Drift from forge-sync-commands.sh ---" >&2
       echo "${COMMANDS_OUTPUT}" >&2
@@ -169,14 +146,6 @@ if [[ "${FORGE_SKIP_SYNC:-0}" = "1" ]]; then
 fi
 
 # Standard path: report any failing check and abort if any failed.
-if [[ ${CROSS_LEVEL_EXIT} -ne 0 ]]; then
-  echo "" >&2
-  echo "ERROR: cross-level sync drift detected (Spec 270)." >&2
-  echo "${CROSS_LEVEL_OUTPUT}" >&2
-  echo "" >&2
-  echo "Recovery:" >&2
-  echo "  bash .forge/bin/forge-sync-cross-level.sh" >&2
-fi
 if [[ ${COMMANDS_EXIT} -ne 0 ]]; then
   echo "" >&2
   echo "ERROR: commands-sync drift detected (Spec 314)." >&2
@@ -205,7 +174,7 @@ if [[ ${SENTINEL_EXIT} -ne 0 ]]; then
   echo "  See docs/process-kit/close-validator-coverage.md § Spec 367 CI parity gate" >&2  # forge:path-literal-ok (comment)
 fi
 
-if [[ ${CROSS_LEVEL_EXIT} -ne 0 || ${COMMANDS_EXIT} -ne 0 || ${CHOICE_BLOCK_EXIT} -ne 0 || ${SENTINEL_EXIT} -ne 0 ]]; then
+if [[ ${COMMANDS_EXIT} -ne 0 || ${CHOICE_BLOCK_EXIT} -ne 0 || ${SENTINEL_EXIT} -ne 0 ]]; then
   echo "" >&2
   echo "Re-stage updated files and retry the commit, or set FORGE_SKIP_SYNC=1 to bypass." >&2
   exit 1
@@ -217,7 +186,6 @@ HOOK_EOF
 chmod +x "${HOOK}"
 echo "Installed FORGE combined pre-commit hook at: ${HOOK}"
 echo "It runs:"
-echo "  - .forge/bin/forge-sync-cross-level.sh --check       (Spec 270)"
 echo "  - .forge/bin/forge-sync-commands.sh --check          (Spec 314)"
 echo "  - scripts/tests/test-choice-block-conventions.sh --staged"
 echo "                                                       (Spec 320)"

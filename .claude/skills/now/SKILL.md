@@ -2,6 +2,7 @@
 name: now
 description: "Review current project state and suggest next action"
 disable-model-invocation: false
+argument-hint: "[--watch]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -316,6 +317,58 @@ This step is read-only and advisory — it never blocks. It complements Step 1 (
 close/review choice) by quantifying the pile-up and surfacing the file-overlap risk that deferred-close
 chaining introduces.
 
+### [mechanical] Step 0h — Housekeeping synthesis (Spec 610)
+
+Three read-only probes that surface post-4.0 migration/housekeeping state the operator would
+otherwise only discover by accident. **Detect-and-surface ONLY** — this step never runs
+`/forge doctor`, `stoke --to-plugin`, or `/reconcile`; it reuses their existing logic
+read-only and reports. Each probe is silent when it does not apply; when ALL are silent this
+step emits nothing at all.
+
+1. **Plugin/runtime version skew** — reuse `/forge doctor`'s existing skew check (the
+   D-INSTALLED-VERSION check in `.forge/bin/forge-doctor.sh`, or `forge.md`'s skew probe):
+   payload `plugin.json` version vs the resolved runtime/checkout version. **Same
+   marketplace/tier ONLY** — the reused checks are single-installation comparisons by
+   construction and MUST NOT be extended to take a second marketplace's version as input
+   (a customer-tier fork install is never compared against the public marketplace's
+   numbering, or vice versa). Report both versions when they differ.
+2. **Pending classic-mode migration** — `.copier-answers.yml` present AND no FORGE plugin
+   detected (the same detection `stoke.py`'s `apply` uses post-Spec-558) → surface the
+   `stoke --to-plugin` recommendation. Never runs it.
+3. **Un-reconciled history** — reuse `/reconcile`'s own `stub_min_files` /
+   `stub_min_lines` thresholds (`forge.reconcile` in AGENTS.md) as a read-only probe.
+   Report a **count only**, matching the count-only convention this command already uses
+   for watchlist and digest items. Never auto-runs `/reconcile`.
+
+**Integration (R4)**: findings feed `/now`'s existing "Recommended next action" ranking and
+the Step 13 choice block — they are NOT emitted as a separate orphaned section. A skew or
+pending-migration finding ranks alongside the other housekeeping recommendations; the
+un-reconciled count is informational unless it crosses the reconcile thresholds.
+
+**Cost note**: all three probes are local-filesystem/git reads (two small JSON reads plus
+one bounded `reconcile_classify` probe, itself bounded by its marker/50-commit fallback) —
+consistent with this command's `Model-Tier: haiku` budget and the existing Step-0-lettered
+probes.
+
+### [mechanical] Step 1c — Dormant in-progress detector (Spec 621)
+
+Disjoint sibling of Step 1b by status: Step 1b counts `implemented`-awaiting-`/close`; this
+step counts `in-progress` specs that have stopped moving (consumer field case: five specs sat
+at `in-progress` for 142–148 days while /now reported a clean queue — stalling also exempts
+them from ranked-backlog scoring). Read the threshold from `forge.now.dormant_in_progress_days`
+in AGENTS.md (default: **21** if absent), then run the delegate:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/dormant-in-progress.sh "" <threshold-days>
+```
+
+- Non-zero count → the delegate prints exactly one advisory line
+  (`Dormant in-progress: <count> spec(s) untouched >Nd — <comma-separated spec IDs>`);
+  surface it verbatim adjacent to the Step 1b output.
+- Zero count, missing/unparseable `Last updated:` fields, or delegate absent (consumer
+  mid-template-sync) → silent; this line is advisory, never a gate. Strictly read-only —
+  the check never writes to any spec file and never auto-transitions anything.
+
 <!-- parallel: steps 2-5 are independent reads — run them simultaneously -->
 2. **Backlog top-of-queue (Spec 399)**: Run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json`. Parse the stdout as JSON; the array contains one row per backlog entry with keys `rank, spec_id, title, bv, e, r, sr, score, depends, status`. Identify the highest-ranked spec with status `draft` or `approved`. (Helper internalizes mode-detection + parsing — Spec 399 helper-as-contract; do NOT open canonical files directly in any rendering mode.)
 3. Read docs/sessions/ and find the most recent session log. Check its "Spec triggers" and "Process improvement items" sections for any open items (unchecked boxes).
@@ -367,7 +420,7 @@ chaining introduces.
    - Emit nothing otherwise (count zero, or the helper unavailable).
    - This surface is count-only — never enumerate individual capabilities, never emit a per-capability row. It mirrors the unreviewed-digests / aging-drafts count pattern. Activation and dismissal happen via `/configure → Capabilities` (the sole write path); `/now` never edits `.claude/settings.json` or the registry.
 
-8c. **Process-kit external-source freshness check** (Spec 278): Read `forge.process_kit.freshness_threshold_days` from AGENTS.md (default: **180** if absent or unset). Scan `.md` files under `docs/process-kit/` AND `template/docs/process-kit/` for a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker within the first 10 lines.
+8c. **Process-kit external-source freshness check** (Spec 278): Read `forge.process_kit.freshness_threshold_days` from AGENTS.md (default: **180** if absent or unset). Scan `.md` files under `docs/process-kit/` for a `<!-- Last verified: YYYY-MM-DD against <source-url> -->` marker within the first 10 lines.
    - For each file carrying the marker: compare the date to today. If the date is older than the threshold, flag the guide as stale.
    - Files without the marker are skipped silently (not every guide needs one — the convention applies only to guides that cite external authorities; see `docs/process-kit/runbook.md` § Process-Kit Doc Freshness Convention).
    - If any flagged: report
@@ -461,11 +514,8 @@ Read `docs/sessions/signals.md`. Count entries matching `^### SIG-[0-9]+-RE`
 Scan two surfaces for machine-readable deprecation markers (per
 release-policy.md § Deprecation policy):
 
-1. **Surface 1 — `copier.yml`**: parse for top-level variables carrying
-   `deprecated: true`. Emit one line per match:
-   ```
-   ⚠ Deprecated copier variable: <name> (deprecated_in: <ver>, removed_in: <ver>) — see release-policy.md.
-   ```
+1. **Surface 1 — retired (Spec 558)**: `copier.yml` and its variable-deprecation
+   markers were deleted with the Copier surface in v4.0.0 — nothing to scan.
 
 2. **Surface 2 — slash command files**: scan `.claude/commands/*.md` for files
    whose YAML frontmatter (between `---` markers at the top) or first 10 lines
@@ -474,8 +524,7 @@ release-policy.md § Deprecation policy):
    ⚠ Deprecated command: /<name> (deprecated_in: <ver>, removed_in: <ver>) — see release-policy.md.
    ```
 
-If `copier.yml` is absent (consumer projects without the template's `copier.yml`):
-skip Surface 1 silently. If `.claude/commands/` is absent: skip Surface 2 silently.
+If `.claude/commands/` is absent: skip Surface 2 silently.
 
 These advisories are read-only and non-blocking. They surface twice — once at
 `/now` (for daily visibility) and again at `/evolve` (during periodic review).

@@ -2,6 +2,7 @@
 name: spec
 description: "Create a new spec from the template"
 workflow_stage: planning
+argument-hint: "[description] [--from-explore topic]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -408,7 +409,12 @@ See: docs/specs/466-pre-consensus-draft-time-role-pass.md for the full AC set an
 
 ## [mechanical] Steps 7–10
 
-7. **Write-side mode check (Spec 399)**: Before any canonical-table-row write, run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --skip-canonical-write`. Read stdout: if `skip`, the project is in split-file mode — skip steps 7-9 below entirely. The new spec's frontmatter is already on disk; renderers (which the operator runs via `/matrix` or stoke) will reflect the new spec on next render. Event-stream writes (`.forge/state/events/<spec-id>/`) proceed unchanged. If stdout is `proceed`, run steps 7-9 (Phase 1 dual-write). If the helper exits nonzero, abort the canonical-write step and surface stderr — do NOT default to either behavior.
+7. **Write-side mode check (Spec 399)**: Before any canonical-table-row write, run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --skip-canonical-write`. Read stdout: if `skip`, the project is in split-file mode — skip steps 7-9 below entirely, then run the **spec-time re-render (Spec 625)**: after the new spec file and its score-audit record are written, refresh the two derived views best-effort so the new spec's row appears immediately (closes the CI-490/EA-470 freshness window — stale generated tables have shipped wrong statuses into fresh drafts):
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/render_backlog.py --mode=split-file
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/render_spec_index.py --mode=split-file
+   ```
+   EXACTLY these two — `render_changelog.py` is excluded (/spec writes no event-stream entry, so it would be a no-op) and `assemble_view.py` is excluded (interactive /matrix concern). **Advisory-only**: if a renderer fails, emit one WARN line per failed renderer — `WARN: spec-time re-render skipped for <renderer> (<exit/reason>) — views refresh at next /matrix` — and /spec still completes normally; never block or fail /spec on a render error. Event-stream writes (`.forge/state/events/<spec-id>/`) proceed unchanged. If stdout is `proceed`, run steps 7-9 (Phase 1 dual-write) — NO render invocation is added on this branch (canonical-table writes already update the operator view). If the helper exits nonzero, abort the canonical-write step and surface stderr — do NOT default to either behavior.
    - In `proceed` mode only:
      7a. Update docs/specs/README.md — add a row for the new spec (sorted by number).
      8. Update docs/specs/CHANGELOG.md — add an entry for the new spec.

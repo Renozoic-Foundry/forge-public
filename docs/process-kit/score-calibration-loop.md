@@ -16,8 +16,26 @@ The audit log lives at `.forge/state/score-audit.jsonl`, append-only, one JSON o
 
 Each record has `schema_version: 1` and one of two `kind` values:
 
-- `predicted` — written at `/spec` and at `/revise` when scores change. Contains the predicted BV/E/R/SR/TC, lane, `kind_tag`, `revise_round`, and `predicted_by` (`operator` or `claude`).
-- `observed` — written at `/close` after the status transition. Contains shell-derived `wallclock_days`, `session_count`, `revise_rounds`, `validator_outcome`, `da_outcome`, `tc_overrun_derived`, `kind_tag`, and `creation_ts_source` (`git-log` or `frontmatter`).
+- `predicted` — written at `/spec`, at `/revise` when scores change, and (Spec 619) as a
+  guarded safety net at `/implement` inline approval for specs that never passed through
+  `/spec` (splits, promoted stubs, reconcile drafts). `predicted_by` distinguishes the
+  provenance: `operator` (or `claude`) at `/spec`/`/revise`, `implement-approval` for the
+  safety net, and `backfill` for the one-shot historical backfill (records mined from spec
+  frontmatter after the fact; the bias report keeps them visibly distinct).
+- `observed` — written at `/close` after the status transition. Contains shell-derived `wallclock_days`, `session_count`, `revise_rounds`, `da_outcome`, `tc_overrun_derived`, `kind_tag`, and `creation_ts_source` (`git-log` or `frontmatter`).
+
+### validator_outcome removed (Spec 619)
+
+Older `observed` records carry a `validator_outcome` field; it was `SKIP` on 146 of 147
+live records because its write site grepped spec-file bodies for `GATE [validator]: PASS`
+lines that are never persisted there — a structurally dead input. No genuinely independent
+durable source exists at the write site's trust boundary (the registry and gate ledgers are
+orchestrator-written, i.e. still self-attested below the managed-settings trust root), so
+wiring it to a new source would have reproduced the vacuous-signal class Spec 619 exists to
+kill. The field is therefore **removed from new records** and from the SR rule it fed; the
+report reads old records tolerantly (`.get()`), so historical lines stay parseable.
+**Residual gap (documented, not closed)**: SR calibration now keys on `revise_rounds` alone;
+an independent validator-verdict feed remains future work gated on the trust-root arc.
 
 The helper writes records via a single `>>` redirection of a string short enough to fit in `PIPE_BUF` (4096 bytes per POSIX) so concurrent appends from `/parallel` worktrees are safe. The 4000-byte ceiling triggers a `WARN: record exceeds atomic-append bound; truncating discretionary fields` warning and truncates `kind_tag` to its bare value.
 
@@ -56,10 +74,11 @@ Bias triggers:
 
 ### SR (Spec Readiness) observed proxy
 
-SR uses `revise_rounds` and `validator_outcome`:
+SR uses `revise_rounds` (the `validator_outcome` input was removed by Spec 619 — see the
+removal note above):
 
-- SR=5 prediction with `revise_rounds == 0` AND `validator_outcome == PASS` is a calibration **HIT**.
-- SR≥4 prediction with `revise_rounds >= 2` OR `validator_outcome ∈ {FAIL, PARTIAL}` is a HIGH-confidence **MISS** (over-prediction).
+- SR=5 prediction with `revise_rounds == 0` is a calibration **HIT**.
+- SR≥4 prediction with `revise_rounds >= 2` is a HIGH-confidence **MISS** (over-prediction).
 
 ### R (Risk) observed proxy
 
@@ -97,6 +116,23 @@ The `/evolve` F4 step invokes `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-au
 4. Suffixes every advisory with the literal `(direction-only; magnitude not measured)`.
 5. Annotates each advisory `(based on N=<count> closed specs since first record)`.
 6. In **lean** mode (Spec 225), suppresses sub-threshold cells. In **verbose** mode, renders them as `insufficient data (N=<count>)`.
+
+### Report states + pairing diagnostics (Spec 619)
+
+The report always opens with a state line and a pairing line, **in every mode** — lean and
+verbose alike (before Spec 619, the default lean path printed nothing at all for the two
+most common conditions). Three distinguishable states; only the first may claim "no data":
+
+| State | Line | Meaning |
+|-------|------|---------|
+| Empty log | `score-audit: no calibration records yet (0 predicted / 0 observed) …` | No calibration records (role-dispatch records alone don't count). The only "no data" state. |
+| Records without pairs | `score-audit: N calibration record(s) (P predicted / O observed) — no spec carries both kinds yet …` | Data exists; bias analysis needs matched pairs. |
+| Pairs without deviations | `score-audit: B matched pair(s) — no deviation cell crosses the N>=3 threshold. Calibration result: no bias detected` | A RESULT: calibration ran; anchors look sound. Never a warm-up message. |
+
+Every run also prints `pairing rate: X% (B specs with both kinds / T specs with either kind)`
+— suffixed `— K pair(s) via backfilled predictions` when backfill records participate — and,
+below 50%, `advisory: pairing below 50% — dominant missing kind: <kind> (…)` naming what to
+fix. The literal `0 records` never prints.
 
 Example output:
 

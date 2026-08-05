@@ -64,6 +64,62 @@ extract_frontmatter() {
   ' "$file"
 }
 
+# --- Read a single key value from a file's YAML frontmatter (Spec 626) ---
+# read_frontmatter_key <file> <key>  — prints the raw value (may be quoted), or nothing.
+read_frontmatter_key() {
+  local file="$1" key="$2"
+  [[ -f "$file" ]] || return 0
+  extract_frontmatter "$file" | awk -v key="$key" '
+    {
+      stripped = $0
+      sub(/$/, "", stripped)
+      if (index(stripped, key ": ") == 1) {
+        print substr(stripped, length(key) + 3)
+        exit
+      }
+    }
+  '
+}
+
+# --- Upsert a single key in a YAML frontmatter block (Spec 626) ---
+# upsert_frontmatter_key <fm-block-string> <key> <value>
+#   Prints the block with exactly that key added (before the closing ---),
+#   updated in place, or REMOVED when <value> is empty. Every other line is
+#   passed through byte-untouched (Spec 329 preserve rule stays in force for
+#   all other keys). Input without opening/closing --- markers is printed
+#   unchanged (caller-side guard prints a warning; never wholesale-replaces).
+upsert_frontmatter_key() {
+  local block="$1" key="$2" value="$3"
+  if [[ -z "$block" ]]; then
+    return 0
+  fi
+  printf '%s
+' "$block" | awk -v key="$key" -v value="$value" '
+    BEGIN { in_fm=0; first=1; done_key=0 }
+    {
+      stripped = $0
+      sub(/$/, "", stripped)
+      if (first) {
+        first=0
+        if (stripped == "---") { in_fm=1; print; next }
+        else { print; next }  # not a frontmatter block — pass through untouched
+      }
+      if (in_fm && stripped == "---" && !closed) {
+        # closing marker: inject the key here if not yet seen and value non-empty
+        if (!done_key && value != "") { print key ": " value }
+        closed=1; print; next
+      }
+      if (in_fm && !closed && index(stripped, key ": ") == 1) {
+        # existing key line: update (or drop when value empty)
+        done_key=1
+        if (value != "") { print key ": " value }
+        next
+      }
+      print
+    }
+  '
+}
+
 # --- Check if file is a FORGE-managed command (frontmatter-aware) ---
 # Returns 0 (true) if the body of the file (after any leading YAML frontmatter
 # delimited by `---` on the first line and a closing `---`) contains

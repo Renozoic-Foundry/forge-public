@@ -2,6 +2,7 @@
 name: revise
 description: "Revise an existing spec based on feedback or correction"
 disable-model-invocation: true
+argument-hint: "[spec-number] [change-description]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -13,7 +14,7 @@ disable-model-invocation: true
 # Framework: FORGE
 Revise an existing spec based on validation feedback or a correction.
 
-If $ARGUMENTS is `?` or `help`:
+If $ARGUMENTS is empty, `?`, or `help`:
   Print:
   ```
   /revise — Apply a correction or change request to an existing spec.

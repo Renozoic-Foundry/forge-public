@@ -105,22 +105,7 @@ function Test-Prereqs {
         $missing++
     }
 
-    # Copier
-    try {
-        $copierVer = & python -m copier --version 2>&1 | Select-String -Pattern '\d+\.\d+' | ForEach-Object { $_.Matches[0].Value }
-        $major = [int]($copierVer -split '\.')[0]
-        if ($major -ge 9) {
-            Write-LogInfo "Copier: $copierVer"
-        } else {
-            Write-LogWarn "Copier: $copierVer (need 9.0+)"
-            Write-Host "  Install: pip install copier"
-            $missing++
-        }
-    } catch {
-        Write-LogError "Copier: not found (need 9.0+)"
-        Write-Host "  Install: pip install copier"
-        $missing++
-    }
+    # (Copier prereq check removed by Spec 558 - the render path was deleted in v4.0.0.)
 
     # Shellcheck (advisory)
     if (Get-Command shellcheck -ErrorAction SilentlyContinue) {
@@ -165,14 +150,12 @@ function Resolve-ForgeSource {
         return $candidate
     }
 
-    # Walk up looking for copier.yml
+    # Walk up looking for a FORGE repo root (AGENTS.md + .forge/ pair; the pre-558
+    # copier.yml marker was deleted with the Copier surface)
     $dir = $ScriptDir
     while ($dir -and $dir -ne [System.IO.Path]::GetPathRoot($dir)) {
-        if ((Test-Path (Join-Path $dir "copier.yml")) -or (Test-Path (Join-Path $dir "copier.yaml"))) {
-            $forgeDir = Join-Path $dir ".forge"
-            if (Test-Path $forgeDir -PathType Container) {
-                return (Resolve-Path $forgeDir).Path
-            }
+        if ((Test-Path (Join-Path $dir "AGENTS.md")) -and (Test-Path (Join-Path $dir ".forge") -PathType Container)) {
+            return (Resolve-Path (Join-Path $dir ".forge")).Path
         }
         $dir = Split-Path -Parent $dir
     }

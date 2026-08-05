@@ -15,8 +15,6 @@
 #                                        disable-model-invocation: true, every
 #                                        model-invokable skill is false. Exit non-zero on
 #                                        any violation.
-#   forge-sync-skills.sh --template-side Operate on template/ (canonical + target both
-#                                        under template/) instead of repo root.
 #   forge-sync-skills.sh -h|--help       Show this help.
 #
 # Exit codes: 0 = success / in-sync / policy-clean; 1 = drift (--check) / policy
@@ -30,13 +28,11 @@ PROJECT_DIR="$(cd "${FORGE_DIR}/.." && pwd)"
 source "${FORGE_DIR}/lib/sync-helpers.sh"
 
 MODE="generate"
-TEMPLATE_SIDE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check)         MODE="check"; shift ;;
     --verify-policy) MODE="verify-policy"; shift ;;
-    --template-side) TEMPLATE_SIDE=true; shift ;;
     -h|--help)
       sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
@@ -49,16 +45,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# --- Resolve canonical source + skills target (root, or template/ in --template-side) ---
-if $TEMPLATE_SIDE; then
-  CANONICAL_DIR="${PROJECT_DIR}/template/.forge/commands"
-  SKILLS_DIR="${PROJECT_DIR}/template/.claude/skills"
-  POLICY_FILE="${PROJECT_DIR}/template/.forge/commands/invocation-policy.yaml"
-else
-  CANONICAL_DIR="${FORGE_DIR}/commands"
-  SKILLS_DIR="${PROJECT_DIR}/.claude/skills"
-  POLICY_FILE="${FORGE_DIR}/commands/invocation-policy.yaml"
-fi
+# --- Resolve canonical source + skills target ---
+CANONICAL_DIR="${FORGE_DIR}/commands"
+SKILLS_DIR="${PROJECT_DIR}/.claude/skills"
+POLICY_FILE="${FORGE_DIR}/commands/invocation-policy.yaml"
 
 if [[ ! -f "$POLICY_FILE" ]]; then
   echo "ERROR: invocation policy not found: $POLICY_FILE" >&2
@@ -129,20 +119,13 @@ read_existing_dmi() {
   done < "$file"
 }
 
-# --- Write one SKILL.md (canonical frontmatter -> 3-line skill frontmatter + body) ---
+# --- Write one SKILL.md (canonical frontmatter -> skill frontmatter + body; argument-hint passed through when canonical carries it — Spec 626) ---
 # Args: <name> <disable-model-invocation flag> <output-skills-root>
 write_skill() {
   local name="$1" dmi="$2" out_root="$3"
   local src="${CANONICAL_DIR}/${name}.md"
   local out_dir="${out_root}/${name}"
   local out="${out_dir}/SKILL.md"
-
-  # Spec 491: --template-side canonical may carry a .md.jinja Copier-time variation
-  # instead of a plain .md (e.g. template/.forge/commands/explore.md.jinja). Fall back
-  # to it so the template skill surface generates from the same canonical body.
-  if [[ ! -f "$src" ]] && [[ -f "${CANONICAL_DIR}/${name}.md.jinja" ]]; then
-    src="${CANONICAL_DIR}/${name}.md.jinja"
-  fi
 
   if [[ ! -f "$src" ]]; then
     echo "ERROR: canonical source missing for skill '${name}': ${CANONICAL_DIR}/${name}.md" >&2
@@ -156,12 +139,19 @@ write_skill() {
     description="$(read_description "${SKILLS_DIR}/${name}/SKILL.md")"
   fi
 
+  # Spec 626: pass argument-hint through from canonical when present.
+  local arg_hint
+  arg_hint="$(read_frontmatter_key "$src" "argument-hint")"
+
   mkdir -p "$out_dir"
   {
     printf -- '---\n'
     printf 'name: %s\n' "$name"
     printf 'description: "%s"\n' "$description"
     printf 'disable-model-invocation: %s\n' "$dmi"
+    if [[ -n "$arg_hint" ]]; then
+      printf 'argument-hint: %s\n' "$arg_hint"
+    fi
     printf -- '---\n'
     # Spec 584 (SIG-574-03): the skill lives one directory DEEPER than its canonical command
     # (<root>/.claude/skills/<name>/SKILL.md vs <root>/.forge/commands/<name>.md), so

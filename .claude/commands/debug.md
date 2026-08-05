@@ -2,6 +2,7 @@
 name: debug
 description: "Structured debugging session — hypothesis-first, verify before fixing"
 workflow_stage: implementation
+argument-hint: "[defect-description]"
 ---
 # Framework: FORGE
 Structured debugging session — hypothesis-first, verify before fixing. Usage: /debug [defect description]

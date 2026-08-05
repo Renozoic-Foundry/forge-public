@@ -2,6 +2,7 @@
 name: close
 description: "Framework: FORGE"
 workflow_stage: review
+argument-hint: "[spec-number ...] [--batch first-last]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -84,7 +85,6 @@ byte-identical to pre-582 (AC2 regression gate).
    their named inputs (the R3 decision rule — a gate qualifies ONLY if its inputs are
    batch-invariant):
    - status verification sweep (input: each spec's frontmatter — per-spec attribution recorded)
-   - plugin-parity gate Step 2b6 (inputs: `.claude/` + `template/.claude/` trees + exemption file)
    - suite runs: validate-public-docs, forge-parity --check, validate-bash, paths-sweep, link
      checks (inputs: whole tree)
    - orchestrator evidence capture to `tmp/evidence/CLOSE-BATCH-<date>/orchestrator-run.txt`
@@ -261,6 +261,16 @@ If browser test evidence exists for this spec (`tmp/evidence/SPEC-NNN-browser-*/
    ```bash
    ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh docs/specs/NNN-<slug>.md
    ```
+   a0. **Could-not-check (Spec 618)**: if the scanner output carries
+      `"section_found":false`, the spec has NO recognized acceptance-criteria heading
+      (`## Acceptance Criteria` / `## Definition of done`, any case, trailing
+      parentheticals allowed) — the scan read no ACs, and the empty `flagged_acs` means
+      nothing. Never treat this as "no browser-verb ACs". Emit
+      `GATE [browser-evidence]: COULD-NOT-CHECK — <spec file> has no recognized
+      acceptance-criteria heading; the browser-verb scan could not read any ACs.
+      Remediation: fix or add the heading and re-run /close, or use
+      --accept-deferred-acs "<reason>" / --force (the same override paths as a FAIL).`
+      **This is blocking — halt the close workflow exactly like the FAIL branch below.**
    a. `flagged_acs` and `visual_deliverables` (step 4b) both empty → skip silently.
       Mark `[x] Visual evidence gate (Spec 093) — no browser-verb ACs and no visual
       deliverables detected, no manifest required.` Proceed.
@@ -358,31 +368,55 @@ Sibling to the Step 2b3/2b4 evidence checks. `/implement` Step 6e *detects* live
    - Evidence present → `GATE [live-smoke]: PASS — live-smoke evidence found for <N> Test-Plan step(s).` Proceed.
    - Test Plan flagged a live step but no `### Live-smoke evidence` present → `GATE [live-smoke]: FAIL — Test Plan contains a live-smoke step ("<matched text>") but no ### Live-smoke evidence was captured. Remediation: re-run /implement Step 6e and execute the live-smoke step (answer "yes" at the prompt), or record the output manually under ### Live-smoke evidence in the spec's Evidence section.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
 
-## [mechanical] Step 2b6 — Plugin parity gate (Spec 463, conditional)
+<!-- Step 2b6 (plugin-parity gate, Spec 463/581) retired by Spec 558: the Copier source
+     (template/.claude/) it compared against was deleted; .claude/ is now the only payload
+     surface, covered by Step 2d^2 (forge-parity). Step number retired, not reused. -->
 
-Sibling to the Step 2b3/2b4/2b5 evidence gates. Enforces the P1=C two-source parity
-contract: the plugin payload source (`.claude/`) and the Copier source
-(`template/.claude/`) MUST be byte-identical across `commands/`, `agents/`, `skills/`.
+## [mechanical] Step 2b7 — Repro-provenance gate (Spec 620)
 
-1. **Detect applicability**: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/plugin-parity-check.sh` absent
-   (pre-Spec-463 projects) → skip silently. Mark `[x] Plugin parity gate (Spec 463) — not present in this project`. Proceed.
+Sibling of the Step 2b3–2b5 evidence gates. Verifies the spec's `## Reproduction Commands`
+block against what was actually captured via `forge run <spec-id> -- <command…>` —
+**string comparison only** (settled safety model: the gate NEVER executes, resolves, or
+interprets spec text; provenance, not execution).
 
-2. **Resolve the checked-tree root and its class (Spec 581 — posture split)**: the check runs
-   against the tree that OWNS the twin copies:
-   - Project working tree contains `template/.claude/` (FORGE-self, forks, checkout runtimes the
-     operator owns) → root = project tree → class = **consumer-side** (operator can remediate).
-   - Otherwise, `CLAUDE_PLUGIN_ROOT` (or the resolved runtime root) contains `template/.claude/`
-     → root = that payload tree → class = **payload-side** (read-only installed cache — the
-     consumer CANNOT remediate it; the defect is upstream).
-   - Neither resolvable, or resolution fails mid-check → class = **ambiguous** → treated as
-     consumer-side/blocking (conservative default; a resolution failure must never silently
-     downgrade — Spec 581 AC3/DA).
+1. **Skip conditions**: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/repro_provenance.py` absent
+   (consumer mid-template-sync) → mark `[x] Repro-provenance gate — helper absent, skipped`
+   and proceed. A spec with no `## Reproduction Commands` section, or whose fenced block
+   contains only comment/placeholder lines (`#`-prefixed), compares as zero lines → emit
+   `GATE [repro-provenance]: PASS — no reproduction commands declared.` Proceed.
 
-3. **Run the gate**: `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/plugin-parity-check.sh --root <resolved root>`
-   (omit `--root` when the root is the project tree — identical behavior).
-   - Exit 0 → `GATE [plugin-parity]: PASS — plugin payload source and Copier source are byte-identical across the common subset.` Proceed.
-   - Exit non-zero, class **consumer-side or ambiguous** → `GATE [plugin-parity]: FAIL — byte-level drift between .claude/ (plugin payload) and template/.claude/ (Copier source). Remediation: re-sync the two sources so they are byte-identical across commands/, agents/, skills/, then re-run /close.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
-   - Exit non-zero, class **payload-side** → `GATE [plugin-parity]: CONDITIONAL_PASS — drift is inside the installed plugin payload (read-only cache), not in this project's files. This is an upstream packaging defect: report it to the FORGE maintainers (name the drifted files from the check output) and update the plugin when the fix ships. The close proceeds — a consumer cannot remediate its own cache.` Record the drifted-file list in the spec's Evidence section under `### Upstream payload drift (reported)`. Proceed — non-blocking.
+2. **Resolve captured SHAs, then compare** (Req 11 — hex-shape guard runs inside the
+   helpers; a malformed sha never reaches git):
+   ```bash
+   EV=tmp/evidence/SPEC-NNN-YYYYMMDD
+   mkdir -p "$EV"
+   grep -ho '"git_sha": *"[^"]*"' .forge/state/events/NNN/repro-command.jsonl 2>/dev/null \
+     | sed -E 's/.*: *"([^"]*)"/\1/' | sort -u \
+     | xargs -r ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/repro_gitsha.py resolve > "$EV/repro-valid-shas.txt" || : > "$EV/repro-valid-shas.txt"
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/repro_provenance.py \
+     compare docs/specs/NNN-<slug>.md NNN --valid-shas "$EV/repro-valid-shas.txt" | tee "$EV/repro-compare.txt"
+   ```
+   The comparator prints one outcome per line (`verified` — with its capture `git_sha` for
+   staleness visibility — / `broken` / `unverifiable`) and exits nonzero iff any line is
+   `broken`.
+
+3. **Outcomes**:
+   - All lines `verified` → `GATE [repro-provenance]: PASS — <N>/<N> reproduction command(s) verified against captured runs.` Proceed.
+   - Any `broken` line, `--repro-accept "<reason>"` NOT present → `GATE [repro-provenance]: FAIL — <N> documented command(s) demonstrably fail as written (byte-match to nonzero-exit captures only). Remediation: fix the command and re-run it via forge run NNN -- <command…>, regenerate the block with forge repro-block NNN, or re-run /close NNN --repro-accept "<reason>" to downgrade broken to unverifiable (reason recorded verbatim).` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
+   - Any `broken` line WITH `--repro-accept "<reason>"` → downgrade those lines to `unverifiable` for this close; the reason is recorded verbatim in Evidence (step 4). Continue as below.
+   - `unverifiable` lines present (the rollout-day default for pre-existing blocks) →
+     collect ONE operator reason covering all of this spec's unverifiable lines (a single
+     prompt, never per-line): `N reproduction command(s) were never captured via forge run — reason? (Enter to accept the standing default)`. Operator declines / non-interactive →
+     auto-record the standing reason `not captured via forge run (pre-adoption block)`.
+     Emit `GATE [repro-provenance]: CONDITIONAL_PASS — <V> verified, <U> unverifiable (reason recorded). Remediation hint: forge repro-block NNN emits a ready-to-paste block from captured exit-0 runs.` Proceed — unverifiable never blocks; it is a labelled attestation, never a silent pass.
+
+4. **Record**: append to the spec's `## Evidence` under `### Repro-provenance record`:
+   the per-line outcomes (with capture SHAs), the unverifiable reason verbatim (operator-
+   supplied or the standing auto-reason — visibly distinct), and any `--repro-accept`
+   downgrade reason. Then persist the gate outcome for the /evolve telemetry:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/repro_provenance.py record-gate NNN <verified> <broken-after-downgrade> <unverifiable>
+   ```
 
 <!-- module:compliance -->
 ## [mechanical] Step 2c — Lane B spec sealing (Spec 052, conditional)
@@ -469,40 +503,52 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       - Report: "Spec NNN failed two-stage validation. Fix the findings with /implement NNN, then run /close NNN again."
       - Stop. Do not proceed to Step 3.
 
+**Constraint reaffirmation (Spec 608/609)**: this Step 2d validator pass ALWAYS runs unconditionally,
+regardless of whether `/implement` Step 6d's inline validator ran, passed, or was auto-triggered
+(`true`/`false`/`auto`) under Spec 609. There is no code path anywhere in this step that skips,
+shortcuts, or lightens this pass based on a prior inline result — this is the load-bearing safety
+property both specs depend on.
+
 5. **If `forge.review.enabled` is `false` or absent**: fall back to existing validator behavior.
 
    a. Read `.claude/agents/validator.md` for the role preamble.
 
-   a2. **Stage-1 scanner pre-check (Spec 540)**: run the shared AC-pattern
-       scanner and fold its output into the validator prompt (the validator has
-       no Bash tool, so the prompt carries the findings rather than the
-       subagent re-deriving them):
-       ```bash
-       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh docs/specs/NNN-<slug>.md
-       ```
-       For each `flagged_acs` entry, check whether
-       `tmp/evidence/SPEC-NNN-browser-*/manifest.json` exists. Build
-       `{ac_number, text, pattern, evidence: "verified"|"missing"}`. Empty
-       `flagged_acs` → empty list, Stage 1 is a no-op (clean specs see no
-       behavior change).
+   a1b. **Shared-script presence check (Spec 608 AC8)**: if
+       `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh` does not exist (e.g. a
+       consumer project mid-template-sync that hasn't yet received it): report "Validator gate:
+       validator-pipeline.sh absent — skipping the fortified validator pass this close (will
+       apply once the template sync delivers it)." and proceed directly to step d (treat as a
+       skip, not a FAIL) — never hard-error `/close` over a missing helper script.
 
-   a3. **Spec-copy redaction (Spec 548)**: produce the redacted spec copy the
-       validator receives — implementer-authored proof sections (`## Evidence`,
-       `## Disposition Record`, `## Devil's Advocate Findings`) are stripped
-       mechanically so the evidence-blind rule no longer depends on prompt
-       compliance (SIG-532-04, SIG-535-02):
+   a2-a3. **Scanner pre-check + spec-copy redaction (Spec 540/548, single-sourced — Spec 608)**:
+       run the shared validator-pipeline script, which performs the AC-pattern scanner pre-check,
+       the spec-copy redaction (implementer-authored proof sections — `## Evidence`,
+       `## Disposition Record`, `## Devil's Advocate Findings` — stripped mechanically so the
+       evidence-blind rule no longer depends on prompt compliance, SIG-532-04/535-02), and the
+       runnable-command AC extraction (Spec 550 shared matcher), all in one call:
        ```bash
        mkdir -p tmp/evidence/SPEC-NNN-YYYYMMDD
-       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/spec_redact.py \
-         docs/specs/NNN-<slug>.md -o tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh prepare \
+         docs/specs/NNN-<slug>.md tmp/evidence/SPEC-NNN-YYYYMMDD
        ```
-       The validator prompt below references the REDACTED copy, not the
-       original. Also pre-compute the runnable-command AC list (shared matcher
-       — the Spec 550 scanner is the single command-detection source):
-       ```bash
-       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/ac-pattern-scanner.sh docs/specs/NNN-<slug>.md runnable \
-         > tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
-       ```
+       **Fail-closed on script error (Spec 608 AC9)**: if this call exits non-zero for a reason
+       OTHER than the presence check in a1b (i.e. the script itself errored/crashed rather than
+       being absent), emit `GATE [validator]: FAIL — validator-pipeline.sh prepare errored (exit
+       <code>).` and STOP — never fall through to a PASS.
+
+       This writes `flagged-acs.json`, `<slug>-redacted.md`, and `runnable-acs.json` into the
+       evidence directory. For each `flagged_acs` entry, check whether
+       `tmp/evidence/SPEC-NNN-browser-*/manifest.json` exists and build
+       `{ac_number, text, pattern, evidence: "verified"|"missing"}`.
+       **Could-not-check (Spec 618)**: if `flagged-acs.json` carries `"section_found":false`,
+       the spec has no recognized acceptance-criteria heading — the scan read NO ACs and the
+       empty `flagged_acs` means nothing. Surface `prepare`'s warning line to the operator
+       verbatim and treat Stage 1 as could-not-check, NOT as "no browser-verb ACs" (the
+       Step 2b2 COULD-NOT-CHECK outcome is the blocking point; it will already have fired for
+       the same spec — never let this path silently no-op past it). Only when
+       `section_found` is `true` does an empty `flagged_acs` mean a clean spec:
+       empty list, Stage 1 is a no-op (clean specs see no behavior change). The validator prompt
+       below references the REDACTED copy, not the original.
 
    a4. **Orchestrator-run execution evidence (Spec 556)**: the `forge:validator` agent is read-only
        (no Bash — can't execute a suite), so when `runnable-acs.json` is **non-empty** the
@@ -521,44 +567,34 @@ Before transitioning to closed, spawn an independent validator to verify accepta
        mismatch) is a close-blocker — surface it and halt, never fall through to "no evidence".
        `runnable-acs.json` empty → skip a4 entirely.
 
-   a5. **Evidence visibility injection (Spec 583 — THE validator dispatch template, single
-       source)**: validator subagents' Read/Glob respect `.gitignore`, and evidence dirs are
-       gitignored by convention — without injection, validators false-negative with "evidence
-       dir does not exist" (SIG-SMILEY1 item 3). Before spawning, build the injection block:
-       - `ls -R tmp/evidence/SPEC-NNN-YYYYMMDD/` (the listing proves the dir exists and names
-         every artifact).
-       - **Bounded excerpts (R1b)**: extract ONLY lines matching the named pattern set —
-         `^=== ` (section headers), `exit code: [0-9-]+`, `^GATE \[`, `^(PASS|FAIL)[:  ]` —
-         hard-capped at 40 lines / 4KB total:
-         ```bash
-         grep -hE '^=== |exit code: [0-9-]+|^GATE \[|^(PASS|FAIL)[: ]' \
-           tmp/evidence/SPEC-NNN-YYYYMMDD/*.log tmp/evidence/SPEC-NNN-YYYYMMDD/*.txt 2>/dev/null \
-           | head -40 | cut -c1-200
-         ```
-         Never widen the pattern set or inject surrounding context — evidence artifacts can
-         contain tokens/PII/stack traces (the CISO 581 constraint; the bounding IS the control).
-       - The template TEXT below tells the validator the paths are gitignored and that targeted
-         `Bash cat/ls` of orchestrator-NAMED files works where Read/Glob do not.
-       The Spec 582 batch dispatch (Step 0-batch item 4) uses THIS template by reference —
-       never re-inline it.
+   a5. **Evidence visibility injection (Spec 583, single-sourced — Spec 608)**: validator
+       subagents' Read/Glob respect `.gitignore`, and evidence dirs are gitignored by
+       convention — without injection, validators false-negative with "evidence dir does not
+       exist" (SIG-SMILEY1 item 3). Build the injection block via the shared script (same
+       bounded-pattern-set logic step a2-a3 uses — the bounding IS the control, Spec 581 CISO
+       constraint; never widen the pattern set):
+       ```bash
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh evidence-excerpt \
+         tmp/evidence/SPEC-NNN-YYYYMMDD
+       ```
+       The prompt template below tells the validator the paths are gitignored and that targeted
+       `Bash cat/ls` of orchestrator-NAMED files works where Read/Glob do not. The Spec 582 batch
+       dispatch (Step 0-batch item 4) uses this template by reference — never re-inline it.
 
-   b. Spawn a validator sub-agent with the following prompt structure:
+   b. Spawn a validator sub-agent using the single-sourced prompt template at
+      `${CLAUDE_PLUGIN_ROOT:-.}/.forge/templates/validator-dispatch-prompt.md` (Spec 608 —
+      the SAME template `/implement`'s inline-validation step uses). Fill its placeholders:
+      - `{{REDACTED_SPEC_PATH}}`: `tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md`
+      - `{{ORIGINAL_SPEC_PATH}}`: `docs/specs/NNN-<slug>.md`
+      - `{{EVIDENCE_EXCERPT_BLOCK}}`: the `evidence-excerpt` output from step a5
+      - `{{FLAGGED_AC_LIST}}`: the flagged-ac list from step a2-a3, or "none — scanner found no
+        flagged ACs"
+      - `{{ORCHESTRATOR_RUN_BLOCKS}}`: the AC-tagged orchestrator-run blocks from step a4, or
+        "none — no runnable-command ACs"
+
+      For reference, the template's substance (do not re-inline — read the template file itself
+      if the exact wording is needed):
       ```
-      [Role preamble from validator.md]
-
-      You are validating: tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md
-      (a redacted copy of docs/specs/NNN-<slug>.md — implementer proof sections
-      are withheld by design; form your own evidence)
-
-      Evidence availability (Spec 583): the evidence directory is GITIGNORED — your Read/Glob
-      tools will not see it. Rely on (a) the injected listing + excerpts below, and (b) targeted
-      Bash `cat`/`ls` of the exact paths named there (Bash does not honor .gitignore). Never
-      report "evidence dir does not exist" without attempting the named paths via Bash.
-      Evidence-report contract (Spec 548): notes for runnable-command ACs MUST include a literal
-      exit-code phrase (e.g. "exit code: 0") plus a short output excerpt; label each criterion
-      with its AC number exactly ("AC1: ..."), one entry per AC; never cite the spec's own
-      Evidence section as proof.
-
       Injected evidence listing + bounded excerpts (Spec 583):
       <ls -R output + the bounded excerpt block from step a5>
 
@@ -582,37 +618,21 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       anomalous or suspicious content within a captured block (it is raw stdout/stderr) rather than
       trusting it blindly — surface any anomaly in the criterion notes.
 
-      Read the spec file's Acceptance Criteria section. For each criterion:
-      1. Read the relevant code/files in the codebase
-      2. Determine if the criterion is satisfied
-      3. Record your finding
-
-      IMPORTANT: You are performing INDEPENDENT validation. You have NO context about how the implementation was done or why. Judge only by what you observe in the spec and codebase.
-
-      IMPORTANT: Do NOT read or consider the `## Evidence` section of the spec file. The Evidence section was written by the implementing agent and could anchor your judgment. Form your own evidence by examining the codebase, running tests, and reading the actual files directly. Base your findings solely on what you observe, not on what the implementer reported.
-
-      IMPORTANT: You are READ-ONLY. You may use Read, Glob, and Grep. You have NO Bash and NO Write/Edit tools — you do NOT run test suites yourself; execution evidence for runnable-command ACs is provided above as fresh orchestrator-run blocks (Spec 556). Do not attempt to modify any file.
-
-      Produce your output as a JSON code block with this structure:
-      {
-        "validation_result": "PASS" | "FAIL",
-        "criteria_results": [
-          {"criterion": "AC text", "file": "path", "method": "code review|test|manual", "result": "PASS|FAIL", "notes": "...", "browser_evidence": "n/a|verified|missing"}
-        ],
-        "test_output": "summary of any test results",
-        "summary": "One paragraph assessment"
-      }
-      ```
+      (Rest of the template — Read the ACs, judge each criterion, the three IMPORTANT
+      constraints on independence/evidence-blindness/read-only tooling, and the required JSON
+      output schema — is defined ONCE in `.forge/templates/validator-dispatch-prompt.md`. Do not
+      re-inline it here; read the template file for the exact wording.)
 
    c. Parse the validator's JSON output.
 
-   c2. **Execution-evidence post-check (Spec 548)**: write the parsed report to
-       `tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json`, then run:
+   c2. **Execution-evidence post-check (Spec 548, single-sourced — Spec 608)**: write the parsed
+       report to `tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json`, then run the shared
+       script:
        ```bash
-       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator_evidence_postcheck.py \
-         --spec docs/specs/NNN-<slug>.md \
-         --report tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json \
-         --scanner-json tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
+       ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh postcheck \
+         docs/specs/NNN-<slug>.md \
+         tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json \
+         tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
        ```
        - Exit 0: proceed to step d/e on the validator's own verdict.
        - Exit 1: the report PASSes a runnable-command AC without execution evidence
@@ -756,48 +776,20 @@ See `docs/process-kit/gate-comparison-methodology.md` for the shadow-run rationa
 - MUST NOT block `/close` under any circumstance in Phase 1.
 - MUST NOT add or read `Ultrareview:` / `Ultrareview-Blocking:` spec front-matter fields (no such fields exist in Phase 1).
 
-### [mechanical] Step 2d++ — Template/FORGE Dual-Check (Spec 188, upgraded by Spec 180)
-
-Before generating the Review Brief, actively verify bidirectional sync:
-
-**Detection logic**: run `git diff --name-only <spec-baseline>..HEAD`. For each changed file:
-- Under `template/.claude/commands/`, `template/.forge/commands/`, `template/.claude/agents/`, `template/docs/process-kit/`, `template/docs/QUICK-REFERENCE.md`, `template/bin/`, or `template/scripts/`: check for a corresponding own-copy at `.claude/commands/`, `.forge/commands/`, `.claude/agents/`, `docs/process-kit/`, `docs/QUICK-REFERENCE.md`, `bin/`, or `scripts/` (same filename, ignoring `.jinja`).
-- Under `.claude/commands/`, `.forge/commands/`, `.claude/agents/`, `docs/process-kit/`, `bin/`, `scripts/`, or `docs/QUICK-REFERENCE.md`: check for a corresponding template file.
-
-**Evaluation**:
-- No dual files in the changed set: mark `[x] Template/FORGE dual-check — no dual files changed`. Proceed silently.
-- Dual files found, both sides changed: mark `[x] Template/FORGE dual-check — both sides updated`. Proceed silently.
-- Only one side changed (drift detected):
-
-  Present:
-  ```
-  TEMPLATE/FORGE DRIFT DETECTED — The following files were changed on one side but not the other:
-  <list of drifted files with which side was changed>
-
-  This drift must be resolved before closing. FORGE requires template and own-copy command files to stay in sync.
-  ```
-  > **Choose** — type a number or keyword:
-  > | # | Rank | Action | Rationale | What happens |
-  > |---|------|--------|-----------|--------------|
-  > | **1** | 1 | `sync` | Restores parity automatically; safest default | Apply the changes to the missing side now |
-  > | **2** | 2 | `intentional` | Drift may be intentional; record reason | Drift is intentional — document reason and proceed |
-  > | **3** | — | `block` | Manual fix path; use only if sync is unsafe | Block close until drift is fixed manually |
-
-  - `sync`: copy each drifted file's changes to the other side. Re-run the check to confirm sync.
-  - `intentional`: append to the Revision Log: `YYYY-MM-DD: Template/FORGE dual-check: drift noted as intentional for <files> — <reason>.` Proceed.
-  - `block`: report "Close blocked — resolve template/own-copy drift and re-run /close." Stop.
+<!-- Step 2d++ (Template/FORGE dual-check, Spec 188/180) retired by Spec 558: the template/
+     mirror side it compared against was deleted. Step number retired, not reused. -->
 
 ### [mechanical] Step 2d^2 — Single-source parity gate (Spec 480 / NC-1a)
 
-The repo-root tree is the single canonical source; both the plugin payload (`.claude/commands/`) and the `template/` Copier surface are generated downstream. This gate mechanically enforces that no canonical source was edited without regenerating its downstream surfaces — the machine-checked backstop to the prose dual-check above.
+The repo-root tree is the single canonical source; the plugin payload surfaces (`.claude/commands/`, `.claude/skills/`) are generated downstream. This gate mechanically enforces that no canonical source was edited without regenerating its downstream surfaces.
 
-Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh --check`. Delegates to the two existing sync scripts' `--check` modes (`.claude/commands/` body-equivalence per Spec 329; `template/` mirror byte-equivalence; `.jinja` Copier-var files excluded per Spec 281/390). Bounded runtime — no Copier re-render.
+Run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-parity.sh --check`. Delegates to the existing sync scripts' `--check` modes (`.claude/commands/` body-equivalence per Spec 329; `.claude/skills/` per Spec 491) plus the manifest/classifier/generated-docs surfaces. Bounded runtime.
 
 **win32 timeout convention (Spec 554)**: this check measures >2 minutes on win32 Git Bash (spawn-bound; profiled 2026-07-13). Invoke with an explicit generous timeout (≥5 min) or `run_in_background` — never a bare foreground call inheriting the 2-minute default. **Result-check-before-proceed (mandatory)**: a backgrounded run MUST be polled to completion and its exit code read before this gate is evaluated — a non-zero exit is a gate FAIL exactly as if it ran foreground. Never advance with the check still running or its exit code unread.
 
 **Evaluation**:
 - Exit 0: mark `[x] Single-source parity — canonical and generated surfaces in sync`. Emit `GATE [single-source-parity]: PASS.` Proceed silently.
-- Non-zero: the gate output names the drifted surface(s) (`.claude/commands/` and/or `template/` mirrors). Present:
+- Non-zero: the gate output names the drifted surface(s). Present:
   ```
   SINGLE-SOURCE PARITY DRIFT — A canonical source file was edited without regenerating its downstream surface(s):
   <drifted surface list from forge-parity.sh --check output>
@@ -829,57 +821,21 @@ remain the enforcement primitives).
   authority-constitution-guide.md; exit 4 → new fields require a spec, not a config edit;
   exit 2 → repair the YAML block.` **Stop close** — do not proceed.
 
-### [mechanical] Step 2d+++ — Consumer-Propagation Check (Spec 303)
-
-After the template/FORGE dual-check passes, verify that any documentation referenced from template command files will actually reach consumer projects. Catches the Spec 299 defect class: a new `docs/<path>.md` linked from a `template/.../command.md`, but neither mirrored into `template/docs/` (Copier ships nothing) nor listed in `scripts/sync-to-public.sh`'s `PUBLIC_DOC_FILES` whitelist (forge-public receives nothing) — leaving every consumer with a broken pointer.
-
-**Scope**: runs only when the closing spec's Implementation Summary `Changed files` list contains at least one path matching `template/.claude/commands/*.md` or `template/.forge/commands/*.md`. None found: mark `[x] Consumer-propagation check — no template command files in scope`. Emit `GATE [consumer-propagation]: PASS — no template command files changed.` Proceed silently.
-
-**Detection logic**: for each changed file matching `template/(.claude|.forge)/commands/*.md`:
-1. Extract markdown link targets under `docs/` via `\[[^\]]+\]\((docs/[^)#\s]+\.md)(?:#[^)]*)?\)`, stripping any `#anchor` suffix.
-2. Deduplicate targets across all scanned template command files.
-3. For each target `docs/<path>`:
-   a. Check whether `template/docs/<path>` exists.
-   b. If not, check whether `docs/<path>` appears in the `PUBLIC_DOC_FILES=( ... )` array in `scripts/sync-to-public.sh` (`grep -F "docs/<path>" scripts/sync-to-public.sh` scoped to the array block).
-   c. Neither present: record as a violation, noting the referencing template command file(s).
-
-**Evaluation**:
-- No violations: mark `[x] Consumer-propagation check — all doc links propagate`. Emit `GATE [consumer-propagation]: PASS — <N> doc link(s) verified across <M> template command file(s).` Proceed silently.
-- Violations found:
-
-  Present:
-  ```
-  CONSUMER-PROPAGATION DRIFT — The following docs are referenced from template command files but will not reach consumer projects:
-  <list: "docs/<path>" referenced by "template/<command>.md" — missing template mirror AND sync whitelist entry>
-
-  Consumer projects bootstrap from the template and/or receive the sync-to-public stream. A referenced doc must be reachable via at least one path or the pointer will be broken on their side.
-  ```
-  > **Choose per violation** — type a number or keyword:
-  > | # | Rank | Action | Rationale | What happens |
-  > |---|------|--------|-----------|--------------|
-  > | **1** | 1 | `sync` | Mirrors the doc; consumers receive it via Copier | Create `template/docs/<path>` by copying the source `docs/<path>` |
-  > | **2** | 1 | `whitelist` | Sync-to-public path; consumers receive via forge-public stream | Append `docs/<path>` to `scripts/sync-to-public.sh`'s `PUBLIC_DOC_FILES` array |
-  > | **3** | — | `skip` | Record intentional drift; reason required | Record intentional drift in the spec's Revision Log (reason required) |
-
-  - `sync`: `mkdir -p template/docs/<dirname>` then `cp docs/<path> template/docs/<path>`. Re-verify — check passes for this violation.
-  - `whitelist`: edit `scripts/sync-to-public.sh` to add `"docs/<path>"` inside the `PUBLIC_DOC_FILES=( ... )` array block. Re-verify — check passes.
-  - `skip`: prompt for a one-line reason, append to the Revision Log: `YYYY-MM-DD: Consumer-propagation check: skipped for docs/<path> — <reason>.`
-
-  After iterating all violations:
-  - All resolved via `sync`/`whitelist`: emit `GATE [consumer-propagation]: PASS — <N> violation(s) resolved (<sync count> synced, <whitelist count> whitelisted).` Proceed.
-  - Any resolved via `skip`: emit `GATE [consumer-propagation]: CONDITIONAL_PASS — <N> violation(s) skipped with documented reason.` Proceed.
-  - Any unresolved: emit `GATE [consumer-propagation]: FAIL — <N> unresolved violation(s). Remediation: mirror the doc under template/docs/, add docs/<path> to PUBLIC_DOC_FILES, or explicitly skip with reason.` Stop close.
+<!-- Step 2d+++ (consumer-propagation check, Spec 303) retired by Spec 558: it fired only on
+     template/(.claude|.forge)/commands/*.md changes; that surface was deleted. Doc reachability
+     for consumers is now the sync-to-public PUBLIC_DOC_FILES whitelist alone (validated by
+     scripts/validate-public-docs.sh). Step number retired, not reused. -->
 
 ### [mechanical] Step 2d+++b — Public-doc freshness stamp (Spec 509)
 
 When the closing spec changed a documented public surface (a slash command, an AGENTS.md config block, or an install/distribution path), stamp the mapped public doc's Spec 278 `Last verified:` marker STALE so `/now`'s freshness surfacer flags it and `/evolve` sees chronic deferral. **Signal only** — never blocks close, never prompts, never edits doc content beyond the marker line.
 
-**Scope**: reuse the changed-files list already computed by the Step 2d++/2d+++ detection logic (the Spec 188/303 scan against `<spec-baseline>`) — do NOT run a new traversal. `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh` absent: mark `[x] Doc-freshness stamp — helper absent`. Proceed silently.
+**Scope**: compute the changed-files list once via `git diff --name-only <spec-baseline>..HEAD` (the Spec 188/303 gates that previously computed it were retired by Spec 558). `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh` absent: mark `[x] Doc-freshness stamp — helper absent`. Proceed silently.
 
-**Execution**: pass that same list (as arguments or stdin) to the Spec 278 marker helper, which owns the single machine-readable copy of the Spec 511 canonical surface→doc mapping (validator-side assertions on the same doc set live in `scripts/validate-public-docs.sh` Sections 6–7) — do not re-inline the mapping here:
+**Execution**: pass that list (as arguments or stdin) to the Spec 278 marker helper, which owns the single machine-readable copy of the Spec 511 canonical surface→doc mapping (validator-side assertions on the same doc set live in `scripts/validate-public-docs.sh` Sections 6–7) — do not re-inline the mapping here:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh stamp --spec <NNN> --baseline <spec-baseline> -- <changed-files list from Step 2d++>
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/freshness.sh stamp --spec <NNN> --baseline <spec-baseline> -- <changed-files list>
 ```
 
 **Evaluation** (always exit 0 — no gate outcome, no Review Brief content; surfacing is `/now`'s job):
@@ -904,47 +860,9 @@ Verify the closing spec declares its documentation impact. Read the spec frontma
   `GATE [docs-impact]: WARN — legacy spec without Docs-Impact frontmatter (advisory; specs
   created after Spec 571 carry it).` Proceed — never blocks legacy specs.
 
-### [mechanical] Step 2d++++ — Gate-mediation drift gate (Spec 444 Req 8a/8c)
-
-When a spec touches `copier.yml` to add a new `validator:`, a new `_tasks:` entry, or a new `secret: true` runtime token, the corresponding gate kind MUST be modeled in `template/.forge/lib/stoke/gates.py` so `/forge stoke` can mediate it in chat (Spec 444). Convention statements alone have a sub-6-month half-life (Specs 427/431 violated mirror-sync conventions inside that window), so this gate enforces it mechanically.
-
-**Scope**: runs only when the closing spec's committed diff against the spec baseline modifies at least one of:
-- `copier.yml` (or `template/copier.yml`)
-- `template/.forge/lib/stoke/gates.py` (or its `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke/gates.py` own-copy mirror)
-
-Neither file in diff: mark `[x] Gate-mediation drift gate — no copier.yml / gates.py changes in scope`. Emit `GATE [gate-mediation]: PASS — no surface in scope.` Proceed silently.
-
-**Exemption**: `Gate-Mediation-Exempt: <≥30-char rationale>` in the closing spec's frontmatter skips the gate: emit `GATE [gate-mediation]: SKIP — Gate-Mediation-Exempt: <reason snippet>`. Usage is logged for Spec 444 AC 11 telemetry (CTO: ≥2 specs in a 30-day window escalates as a cultural-drift signal).
-
-**Detection logic** (Req 8a):
-
-1. Compute the diff: `git diff <spec-baseline>..HEAD -- copier.yml template/copier.yml`.
-2. Scan the added lines for tokens indicating a new gate surface:
-   - `^\+\s*validator\s*:` — new validator declaration
-   - `^\+\s*-` immediately following a `_tasks:` header in the added range — new task entry
-   - `^\+\s*secret\s*:\s*true` — new runtime secret token
-3. Apply the YAML-adversarial fixture set (AC 9a) during test runs — anchors (`&anchor`), aliases (`*alias`), and folded scalars (`>`) inside `validator:` declarations MUST be detected as additions. Fixtures: `.forge/tests/test_stoke_gates.py`.
-4. Any new-gate token found:
-   a. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke/gates.py`.
-   b. Empty diff (gates.py NOT modified): emit `GATE [gate-mediation]: FAIL — copier.yml adds a new validator/_tasks/secret surface but template/.forge/lib/stoke/gates.py was not extended. Remediation: extend detect_gates() to model the new gate, OR add 'Gate-Mediation-Exempt: <≥30-char rationale>' to the spec frontmatter.` Stop close.
-   c. gates.py WAS modified: proceed to the fixture-rotation check (Req 8c).
-
-**Fixture-rotation check** (Req 8c):
-
-When `gates.py` itself is modified, the smoke-test fixture at `template/.forge/tests/test_stoke_mediation_coverage.py` MUST also update so the deliberately-unmodeled token rotates — otherwise the test decays to tautology (would PASS against a now-modeled gate).
-
-1. Compute `git diff <spec-baseline>..HEAD -- template/.forge/lib/stoke/gates.py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/stoke/gates.py`.
-2. If non-empty, also check `git diff <spec-baseline>..HEAD -- template/.forge/tests/test_stoke_mediation_coverage.py .forge/tests/test_stoke_mediation_coverage.py`.
-3. `gates.py` changed AND the fixture's `LAST-ROTATED:` marker not updated (absent from the added-lines diff): emit `GATE [gate-mediation]: FAIL — gates.py was modified but test_stoke_mediation_coverage.py's LAST-ROTATED marker was not updated. The smoke-test fixture must rotate to a still-unmodeled token (Spec 444 Req 8c) — otherwise the unknown-validator coverage test decays to tautology. Remediation: update the CURRENT-FIXTURE-TOKEN and LAST-ROTATED comment in test_stoke_mediation_coverage.py.` Stop close.
-4. Both files updated in the same spec: emit `GATE [gate-mediation]: PASS — gates.py extended AND fixture rotated.` Proceed.
-
-**Telemetry hook** (AC 11):
-
-Each gate firing records a single JSONL line to `docs/sessions/activity-log.jsonl`:
-```json
-{"timestamp":"<ISO 8601>","event_type":"gate-mediation-check","spec_id":"<NNN>","decision":"PASS|FAIL|SKIP","exemption_reason":"<empty | reason snippet>"}
-```
-The `exemption_reason` field is non-empty only when the `Gate-Mediation-Exempt:` exemption was used; `/insights` and `/brainstorm` watchlist scans count occurrences per 30-day window.
+<!-- Step 2d++++ (gate-mediation drift gate, Spec 444 Req 8a/8c) retired by Spec 558: its
+     entire scope trigger (copier.yml / stoke gates.py) was deleted with the Copier surface.
+     Step number retired, not reused. -->
 
 ## [mechanical] Step 2e — Generate Review Brief (Spec 160)
 
@@ -1161,7 +1079,7 @@ spec_file="docs/specs/NNN-*.md"
 section=$(awk '/^## Safety Enforcement$/{p=1; next} /^## /{p=0} p' "$spec_file")
 
 if [[ -z "$section" ]]; then
-  echo "GATE [safety-property]: FAIL — Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md."
+  echo "GATE [safety-property]: FAIL — Safety enforcement section incomplete or missing. See docs/process-kit/safety-property-gate-guide.md."
   exit 2
 fi
 
@@ -1170,7 +1088,7 @@ np_line=$(echo "$section" | grep -E '^Negative-path test: ' || true)
 val_line=$(echo "$section" | grep -E '^Validates' || true)
 
 if [[ -z "$ep_line" || -z "$np_line" || -z "$val_line" ]]; then
-  echo "GATE [safety-property]: FAIL — Safety enforcement section incomplete or missing. See template/docs/process-kit/safety-property-gate-guide.md."
+  echo "GATE [safety-property]: FAIL — Safety enforcement section incomplete or missing. See docs/process-kit/safety-property-gate-guide.md."
   exit 2
 fi
 
@@ -1502,8 +1420,7 @@ After the spec status transitions to `closed`, scan `## Implementation Summary`
 `Changed files` for any path matching one of the four release-policy trigger
 paths (per `docs/process-kit/release-policy.md` § Tag-cut triggers):
 
-- `template/**`
-- `copier.yml`
+- `.forge/commands/**` (canonical command source)
 - `.claude/commands/**`
 - `.forge/templates/project-schema.yaml`
 
@@ -1514,9 +1431,8 @@ At least one trigger file present:
 
 1. **Classify surfaces** (one or more of S1/S2/S3 per release-policy.md
    § Versioning contract):
-   - `copier.yml` → S1
-   - Any `*/commands/*.md` mirror under `.claude/commands/`, `.forge/commands/`,
-     `template/.claude/commands/`, or `template/.forge/commands/` → S2
+   - Any `*/commands/*.md` mirror under `.claude/commands/` or `.forge/commands/` → S2
+     (S1, the Copier template surface, was retired by Spec 558)
    - `.forge/templates/project-schema.yaml` → S3
 
 2. **Append signal** to `docs/sessions/signals.md`:

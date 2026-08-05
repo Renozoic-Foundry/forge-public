@@ -2,6 +2,7 @@
 name: evolve
 description: "Run the KCS Evolve Loop review"
 disable-model-invocation: true
+argument-hint: "[--auto|--full|--spec NNN|--insights]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -33,9 +34,9 @@ If $ARGUMENTS is `?` or `help`:
 <!-- /module:nanoclaw -->
     --full        — force full F1-F4 review regardless of trigger mode
     --spec NNN    — fast-path review triggered by closing spec NNN
-    --insights    — process-mining mode (folded from /insights, Spec 587): cross-session
-                    insights report only; does not run the rest of the evolve loop. Accepts
-                    the former /insights sub-flags: --errors, --friction, --signals,
+    --insights    — process-mining mode (folded from the retired insights command, Spec
+                    587): cross-session insights report only; does not run the rest of the
+                    evolve loop. Accepts the former insights-command sub-flags: --errors, --friction, --signals,
                     --velocity, --since YYYY-MM-DD.
   Triggers: after each spec reaches `implemented` (fast path F1+F4),
     or monthly (full F1-F4 with KPI review and score calibration).
@@ -54,14 +55,14 @@ Read `docs/sessions/evolve-config.yaml` (skip silently if absent — defaults: t
 
 Determine run mode:
 - `--insights`: process-mining mode (Spec 587 fold). Run Step INSIGHTS below with the
-  remainder of `$ARGUMENTS` (its former `/insights` sub-flags), then **stop** — do not run
+  remainder of `$ARGUMENTS` (its former insights-command sub-flags), then **stop** — do not run
   Step 0-cd or any later step in this file.
 - `--auto`: automated mode; admission decided by signal thresholds in Step 0-cd (Spec 500 — supersedes the legacy `trigger=on_spec_count|time|manual` triggers). Proceed to Step 0-cd.
 - `--spec NNN`: fast-path mode for spec NNN.
 - `--full`: full F1-F4 review.
 - Otherwise: interactive — ask which spec was just completed (or confirm periodic review).
 
-### [mechanical] Step INSIGHTS — Insights mode (Spec 587 fold — formerly `/insights`)
+### [mechanical] Step INSIGHTS — Insights mode (Spec 587 fold — formerly the `insights` command)
 
 Mine all FORGE process data to produce a cross-session, project-scoped insights report. This
 mode is fully self-contained — it does not touch the rest of the evolve loop's state (no
@@ -374,9 +375,26 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    - Annotates each advisory `(based on N=<count> closed specs since first record)` (Req 14d, AC6).
    - Lean mode suppresses cells below the N≥3 threshold (Spec 225); verbose mode renders them as `insufficient data (N=<count>)` (AC7).
 
-   If the audit log is empty/absent (pre-instrumentation specs only): the helper emits `0 records — calibration deferred until data accumulates`. Continue with operator-recall calibration from Step 6b.
+   The helper always prints a report-state line plus a pairing-rate line, in every verbosity
+   mode (Spec 619 — three distinguishable states):
+   - `score-audit: no calibration records yet (0 predicted / 0 observed) …` — empty log
+     (the only state that means "no data"). Continue with operator-recall calibration from Step 6b.
+   - `score-audit: N calibration record(s) … no spec carries both kinds yet` — records exist but
+     no matched pairs. Continue with operator-recall calibration from Step 6b; the pairing-rate
+     advisory names the dominant missing kind (the thing to fix).
+   - `score-audit: N matched pair(s) — no deviation cell crosses the N>=3 threshold. Calibration
+     result: no bias detected` — this is a RESULT, not a warm-up message: calibration ran and the
+     anchors look sound. Do NOT fall back to operator-recall; record "no bias detected" in F4.
 
    Note: this report is data, not authority — anchor revisions still require operator judgment (`docs/process-kit/score-calibration-loop.md` § Time-blindness mitigation).
+
+6b+. **Repro-provenance unverifiable rate (Spec 620 Req 6)**: run
+   `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/repro_provenance.py rate`
+   and surface its one-line figure (aggregated over the repro-gate events the /close
+   Step 2b7 gate records; default 90-day window). Above 50% the helper itself prints the
+   hollowing warning — surface it verbatim (the unverifiable fallback must not silently
+   hollow the gate). Helper absent (consumer mid-sync) or no gated closes in the window →
+   the line says so; never blocks. Skip silently only if the helper file does not exist.
 
 6b++. **Consensus acceptance-rate (F4 read side — Spec 497, closes Spec 258 AC#5)**: run `forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/acceptance_rate.py` and surface the rolling-30-day figure (`accepted / (accepted + modified + rejected)` over `docs/sessions/*.json`, per `docs/process-kit/telemetry-capture-guide.md`). When it reports `n/a` (no rated decisions in window), surface that verbatim — never a divide error. A persistently low or sharply dropping rate is a calibration/process signal worth a CEfO/CQO note; the figure is data, not authority.
 
@@ -405,7 +423,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
       ```
       Recommend the operator review the audit and decide whether to cut now or keep accumulating. Missing audit doc = process defect (release-policy.md § Post-cut disposition expects it between cuts).
 
-   2. **Deprecation surface scan**: scan `copier.yml` and `.claude/commands/*.md` frontmatter for `deprecated: true`. For each match:
+   2. **Deprecation surface scan**: scan `.claude/commands/*.md` frontmatter for `deprecated: true` (the copier.yml variable surface was retired by Spec 558). For each match:
       ```
       ⚠ Deprecated <surface>: <name> (deprecated_in: <ver>, removed_in: <ver>)
       ```

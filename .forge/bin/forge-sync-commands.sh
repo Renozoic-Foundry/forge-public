@@ -21,10 +21,9 @@ FORCE=false
 FORCE_JINJA=false  # Spec 390: opt-in override to overwrite .jinja Copier-time variations
 AGENTS_OVERRIDE=""
 SCOPE="project"
-TEMPLATE_SIDE=false  # Spec 281: process template/.forge/commands -> template/.claude/commands instead
 CANONICAL_DIR="${FORGE_DIR}/commands"
 TRIGGER_MAP="${FORGE_DIR}/templates/codex-trigger-map.yaml"
-BASE_DIR="${PROJECT_DIR}"  # Spec 281: base for agent target directories (overridden by --template-side)
+BASE_DIR="${PROJECT_DIR}"  # base for agent target directories
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
@@ -50,11 +49,6 @@ while [[ $# -gt 0 ]]; do
       FORCE_JINJA=true
       shift
       ;;
-    --template-side)
-      # Spec 281: process template/.forge/commands -> template/.claude/commands (the 4th-edge sync)
-      TEMPLATE_SIDE=true
-      shift
-      ;;
     --scope)
       SCOPE="$2"
       if [[ "$SCOPE" != "user" && "$SCOPE" != "project" && "$SCOPE" != "both" ]]; then
@@ -73,7 +67,6 @@ while [[ $# -gt 0 ]]; do
       echo "  --force         Overwrite mirror files even when body diverges from canonical (Spec 329 safety)"
       echo "  --force-jinja   Override .jinja skip — overwrite Copier-time variations (Spec 390)"
       echo "                  Use only when intentionally collapsing a Copier-time variation."
-      echo "  --template-side Process template/.forge/commands -> template/.claude/commands (Spec 281 4th-edge sync)"
       echo "  --agents LIST   Comma-separated agent list (default: read from onboarding.yaml)"
       echo "  --scope SCOPE   Installation scope: project (default), user, or both"
       echo "                  project: sync to project agent directories (existing behavior)"
@@ -121,16 +114,6 @@ is_skill_form() {
   done
   return 1
 }
-
-# --- Spec 281: --template-side switches both canonical source and target base ---
-if $TEMPLATE_SIDE; then
-  CANONICAL_DIR="${PROJECT_DIR}/template/.forge/commands"
-  BASE_DIR="${PROJECT_DIR}/template"
-  if [[ "$SCOPE" == "user" || "$SCOPE" == "both" ]]; then
-    forge_log_error "--template-side is incompatible with --scope user|both (template processing is project-side only)"
-    exit 1
-  fi
-fi
 
 # --- Spec 416: initialize logging only for write-paths ---
 # Skip in --dry-run (Spec 404 hermeticity) and --check (read-only comparison).
@@ -421,9 +404,6 @@ install_claude_code_user() {
 }
 
 # --- Check mode: verify .claude/commands/ bodies match canonical bodies (Spec 329 — body-to-body) ---
-# Spec 281: BASE_DIR resolves to project root by default, or template/ when --template-side is set.
-# In template-side mode, .md.jinja files are SKIPPED — Copier substitutions intentionally differ
-# between template-canonical (FORGE-internal literals) and template-agent (consumer Copier vars).
 if $CHECK_MODE; then
   DRIFT_COUNT=0
   CHECK_TARGET_DIR="${BASE_DIR}/.claude/commands"
@@ -432,11 +412,6 @@ if $CHECK_MODE; then
   for src_file in "$CANONICAL_DIR"/*.md "$CANONICAL_DIR"/*.md.jinja; do
     [[ -f "$src_file" ]] || continue
     src_base="$(basename "$src_file")"
-
-    # Spec 281: skip .md.jinja files in template-side check (Copier substitution drift is intentional)
-    if $TEMPLATE_SIDE && [[ "$src_base" == *.md.jinja ]]; then
-      continue
-    fi
 
     # Spec 491: the --check target is always .claude/commands (claude-code). Skill-form
     # names have no command mirror there — skip them so they are not reported missing.
@@ -466,11 +441,6 @@ if $CHECK_MODE; then
     [[ -f "$dst_file" ]] || continue
     dst_base="$(basename "$dst_file")"
 
-    # Spec 281: same skip for orphan .md.jinja files in template-side check
-    if $TEMPLATE_SIDE && [[ "$dst_base" == *.md.jinja ]]; then
-      continue
-    fi
-
     # Spec 491: a skill-form name must NOT have a .claude/commands mirror. If one
     # reappears (regression), flag it as drift — canonical still carries the .md, so
     # the orphan check below would otherwise miss it.
@@ -495,11 +465,7 @@ if $CHECK_MODE; then
     exit 0
   else
     echo ""
-    if $TEMPLATE_SIDE; then
-      echo "FAILED: $DRIFT_COUNT files out of sync. Run forge-sync-commands.sh --template-side to fix."
-    else
-      echo "FAILED: $DRIFT_COUNT files out of sync. Run forge-sync-commands.sh to fix."
-    fi
+    echo "FAILED: $DRIFT_COUNT files out of sync. Run forge-sync-commands.sh to fix."
     exit 1
   fi
 fi
@@ -605,6 +571,11 @@ for agent in "${AGENTS[@]}"; do
             # Mirror has no frontmatter — fall back to canonical's frontmatter
             mirror_fm="$(extract_frontmatter "$src_file")"
           fi
+          # Spec 626: single-key upsert — argument-hint always tracks canonical
+          # (add/update/remove); every OTHER key stays under the Spec 329
+          # preserve rule, byte-untouched. Never a wholesale replacement.
+          canonical_hint="$(read_frontmatter_key "$src_file" "argument-hint")"
+          mirror_fm="$(upsert_frontmatter_key "$mirror_fm" "argument-hint" "$canonical_hint")"
           if $FORCE; then
             # Log every overridden file to stderr for audit visibility (Spec 329 AC 4)
             if ! bodies_equal "$src_file" "$dst_file"; then

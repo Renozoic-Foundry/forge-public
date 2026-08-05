@@ -15,8 +15,9 @@
 #      with name + source; each source resolves to a directory containing .claude-plugin/
 #      plugin.json). Absent marketplace.json is a SKIP, not a failure. Full schema authority
 #      stays with `claude plugin validate` (MT consensus 2026-07-07 — no parallel validator).
-#   7. Hooks parity root<->template with a sha256-pinned expected-divergence pair (Spec 535).
-#   8. plugin.json lockstep: version+homepage equality root == template == public (Spec 535).
+#   7. Hooks pin, single-sided (Spec 535 as reshaped by Spec 558): root .claude-plugin/hooks
+#      files are sha256-pinned; any change fails the gate and forces a posture re-review.
+#   8. plugin.json lockstep: version+homepage equality root == public (Spec 535/558).
 #   9. Best-effort: if the `claude` CLI is present, also run `claude plugin validate --strict`.
 #
 # Exit 0 = schema-valid; 1 = violation; 3 = jq unavailable. Run: bash .forge/bin/check-plugin-manifest.sh
@@ -139,71 +140,67 @@ else
   echo "check-plugin-manifest: no marketplace.json at $MP — marketplace checks skipped."
 fi
 
-# 7. Hooks parity root↔template (Spec 535 — SIG-518-01). DETECTION-ONLY: the two payloads
-#    deliberately diverge in posture (root/plugin = Spec 488 fail-closed signed verifier +
-#    full PreToolUse guard chain; template renders = Spec 463 decorative posture, because an
-#    unsigned consumer render carrying the fail-closed verifier would brick SessionStart).
-#    That divergence is PINNED by sha256 below — any further change to EITHER side of the
-#    pinned pair fails this gate and forces a re-review of the posture split; any file
-#    present on one side only, or drifted outside the pinned pair, fails immediately.
-#    Skipped when template/ is absent (consumer payload shape).
+# 7. Hooks pin, single-sided (Spec 535 — SIG-518-01; reshaped by Spec 558). The Copier
+#    template twin was deleted, so the former root<->template divergence pin collapses to
+#    a single-sided sha256 pin on the root payload hooks: the fail-closed signed verifier
+#    chain (Spec 488) must not change silently. Any content change to a pinned file — or
+#    any unpinned file appearing in .claude-plugin/hooks/ — fails this gate and forces a
+#    deliberate re-pin. Hashes are LF-normalized (CR stripped) so Windows autocrlf
+#    checkouts and Linux CI compute the same digest (Spec 549).
+#    Skipped when .claude-plugin/hooks is absent (consumer payload shape).
 HOOKS_ROOT="$ROOT/.claude-plugin/hooks"
-HOOKS_TPL="$ROOT/template/.claude-plugin/hooks"
-if [ -d "$HOOKS_TPL" ] && [ -d "$HOOKS_ROOT" ]; then
-  echo "=== check-plugin-manifest: hooks parity root<->template (Spec 535) ==="
-  # Pinned expected-divergence pair: "<basename> <root-sha256> <template-sha256>"
-  # Hashes are LF-normalized (CR stripped) so Windows autocrlf checkouts and Linux CI
-  # compute the same digest (Spec 549 — the original hooks.json pin was minted from a
-  # CRLF working copy and failed every LF checkout on CI).
-  PINNED="hooks.json 9027f6fa7218044fbc56ed3fe47010e54438a829e98c6714a96c54c237ec7c6b a615eeafbc72297f3a8287610ff076a19879ad8535dfd7c70bad6026520d5898
-session-start-integrity.sh 4e3cd42bbc617022f6c778c2d4366cab6d6adce39579cddddf3866f0bbfc75d5 164d6a778eaf5373641e99b54782f5f998434ce66464db0f803b2b3c379a18e4"
-  for f in "$HOOKS_ROOT"/* "$HOOKS_TPL"/*; do
+if [ -d "$HOOKS_ROOT" ]; then
+  echo "=== check-plugin-manifest: hooks pin, single-sided (Spec 535/558) ==="
+  # Pinned: "<basename> <root-sha256>"
+  PINNED="hooks.json 9027f6fa7218044fbc56ed3fe47010e54438a829e98c6714a96c54c237ec7c6b
+session-start-integrity.sh 4e3cd42bbc617022f6c778c2d4366cab6d6adce39579cddddf3866f0bbfc75d5"
+  for f in "$HOOKS_ROOT"/*; do
     [ -e "$f" ] || continue
     base="$(basename "$f")"
-    rf="$HOOKS_ROOT/$base"; tf="$HOOKS_TPL/$base"
-    if [ ! -f "$rf" ]; then err "hooks parity: $base exists in template/ but not root (.claude-plugin/hooks/)"; continue; fi
-    if [ ! -f "$tf" ]; then err "hooks parity: $base exists in root but not template/.claude-plugin/hooks/"; continue; fi
     pin="$(printf '%s\n' "$PINNED" | grep "^$base " || true)"
-    rh="$(tr -d '\r' < "$rf" | sha256sum | awk '{print $1}')"
-    th="$(tr -d '\r' < "$tf" | sha256sum | awk '{print $1}')"
-    if [ -n "$pin" ]; then
-      want_rh="$(printf '%s' "$pin" | awk '{print $2}')"
-      want_th="$(printf '%s' "$pin" | awk '{print $3}')"
-      if [ "$rh" != "$want_rh" ] || [ "$th" != "$want_th" ]; then
-        err "hooks parity: pinned divergence pair changed for $base (root ${rh:0:8}.. vs pinned ${want_rh:0:8}..; template ${th:0:8}.. vs pinned ${want_th:0:8}..) — re-review the Spec 535 posture split and re-pin"
-      fi
-    elif [ "$rh" != "$th" ]; then
-      err "hooks parity: $base drifted between root and template (not on the pinned-divergence list)"
+    if [ -z "$pin" ]; then
+      err "hooks pin: $base present in .claude-plugin/hooks/ but not on the pinned list — pin it deliberately or remove it"
+      continue
+    fi
+    rh="$(tr -d '\r' < "$f" | sha256sum | awk '{print $1}')"
+    want_rh="$(printf '%s' "$pin" | awk '{print $2}')"
+    if [ "$rh" != "$want_rh" ]; then
+      err "hooks pin: $base changed (${rh:0:8}.. vs pinned ${want_rh:0:8}..) — re-review the Spec 488 fail-closed hook chain and re-pin"
+    fi
+  done
+  # Pinned files must actually exist (a deleted hook is as dangerous as a changed one).
+  for base in hooks.json session-start-integrity.sh; do
+    if [ ! -f "$HOOKS_ROOT/$base" ]; then
+      err "hooks pin: pinned file $base missing from .claude-plugin/hooks/"
     fi
   done
 else
-  echo "check-plugin-manifest: no template/.claude-plugin/hooks under root — hooks parity skipped (consumer payload shape)."
+  echo "check-plugin-manifest: no .claude-plugin/hooks under root — hooks pin skipped (consumer payload shape)."
 fi
 
-# 8. plugin.json lockstep root == template == public (Spec 535 — SIG-520-01). Version and
-#    homepage must agree across the three copies; the value-vs-release-tag truth check lives
-#    in scripts/cut-release.sh Step 7b (asserts public/ == the tag being cut). Equality here
-#    is ownership-free — compatible with hand-edited or future generated plugin.json.
-TPL_PJ="$ROOT/template/.claude-plugin/plugin.json"
+# 8. plugin.json lockstep root == public (Spec 535 — SIG-520-01; template copy retired by
+#    Spec 558). Version and homepage must agree across the two remaining copies; the
+#    value-vs-release-tag truth check lives in scripts/cut-release.sh Step 7b (asserts
+#    public/ == the tag being cut). Equality here is ownership-free — compatible with
+#    hand-edited or future generated plugin.json.
 PUB_PJ="$ROOT/public/.claude-plugin/plugin.json"
-if [ -f "$TPL_PJ" ]; then
-  echo "=== check-plugin-manifest: plugin.json lockstep (Spec 535) ==="
+if [ -f "$PUB_PJ" ]; then
+  echo "=== check-plugin-manifest: plugin.json lockstep (Spec 535/558) ==="
   root_v="$(jq -r '.version // ""' "$PJ")"; root_h="$(jq -r '.homepage // ""' "$PJ")"
-  for other in "$TPL_PJ" "$PUB_PJ"; do
-    [ -f "$other" ] || continue
-    o_v="$(jq -r '.version // ""' "$other")"; o_h="$(jq -r '.homepage // ""' "$other")"
-    if [ "$o_v" != "$root_v" ]; then
-      err "plugin.json lockstep: version drift — root=$root_v vs $other=$o_v"
-    fi
-    if [ "$o_h" != "$root_h" ]; then
-      err "plugin.json lockstep: homepage drift — root=$root_h vs $other=$o_h"
-    fi
-  done
+  o_v="$(jq -r '.version // ""' "$PUB_PJ")"; o_h="$(jq -r '.homepage // ""' "$PUB_PJ")"
+  if [ "$o_v" != "$root_v" ]; then
+    err "plugin.json lockstep: version drift — root=$root_v vs $PUB_PJ=$o_v"
+  fi
+  if [ "$o_h" != "$root_h" ]; then
+    err "plugin.json lockstep: homepage drift — root=$root_h vs $PUB_PJ=$o_h"
+  fi
 fi
 
 # 9. Best-effort: native validator if the claude CLI is available (non-strict so the known
 #    CLAUDE.md-at-root advisory — SIG-489-01, doctrine is not plugin-injectable — does not fail).
-if command -v claude >/dev/null 2>&1; then
+#    FORGE_SKIP_NATIVE_VALIDATE=1 skips it (hermetic fixture runs — headless `claude plugin
+#    validate` can hang; Spec 558 fixture reshape).
+if [ "${FORGE_SKIP_NATIVE_VALIDATE:-0}" != "1" ] && command -v claude >/dev/null 2>&1; then
   if ! claude plugin validate "$ROOT" >/dev/null 2>&1; then
     echo "  WARN: 'claude plugin validate' reported errors — run it directly for detail." >&2
   fi

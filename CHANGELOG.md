@@ -1,3 +1,46 @@
+## v4.0.0 — 2026-08-05
+
+**Bump rationale**: MAJOR bump driven by audit-classified surface impacts.
+
+### Surface impacts
+- Surface 1 (copier.yml): MAJOR
+- Surface 2 (slash commands): MAJOR
+- Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
+
+### Specs in window
+- Spec 558 — S1=MAJOR S2=MAJOR — Deletes `copier.yml`, `copier-hooks/`, and the `template/` tree — Surface 1 is retired outright (ren
+- Spec 610 — S2=MINOR — Adds the `/forge:ahead` momentum-framed alias dispatching to `/now` (add command, old path preserved
+- Spec 620 — S2=MINOR — Adds `forge run <spec-id> -- <cmd>` and `forge repro-block <spec-id>` CLI subcommands (additive oper
+- Spec 626 — S2=MINOR — Additive `argument-hint` frontmatter on 19 commands/skills (PATCH-class presentation metadata; no co
+- Spec 627 — S2=MAJOR — Physically deletes the Spec 587 deprecation stubs — `/insights`, `dependency-audit`, `/signal-to-str
+
+### Batched-audit specs in window
+- Spec 588 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 589 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 590 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 601 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 602 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 603 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 604 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 605 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 606 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 607 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 608 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 609 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 611 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 615 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 616 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 617 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 618 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 619 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 621 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 622 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 623 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 624 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 625 — classified in a batched audit expansion (see the audit doc's bucket tables)
+
+### Audit reference
+ADR-NNN — v3.3.0 → v4.0.0 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
 # FORGE Changelog
 
 Releases of the FORGE (Framework for Organized Reliable Gated Engineering) template.

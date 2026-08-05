@@ -2,6 +2,7 @@
 name: consensus
 description: "Run a proposal through all registry roles for structured consensus"
 disable-model-invocation: true
+argument-hint: "[topic|spec-number|ADR-number] [--round N]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -212,7 +213,7 @@ where concerns differ per subsystem? [y/N])
 
 The `Round 4` rationale (whichever criterion was met) is recorded in the session log alongside the operator's choice.
 
-When extending past round 3, **Spec 389's Consensus-Close-SHA encoding is no longer applicable** — Step 4c skips SHA writing for `N > 2` because rounds 3+ indicate unresolved divergence. A fresh DA pass is warranted at `/implement` for any spec that required round 4+ to converge.
+When extending past round 3, **Spec 389's Consensus-Close-SHA encoding is no longer applicable** — Step 4c skips SHA writing for `N > 2` because rounds 3+ indicate unresolved divergence. A fresh DA pass is warranted at `/implement` for any spec that required round 4+ to converge. The spec is still marked `Consensus-Rounds: N` at every completed round (Step 4c+, Spec 623), so its review depth stays machine-readable at `/implement` Step 0d even when no SHA is written — review depth never reduces review standing.
 
 The maximum extension is to round 5 — operator may extend round 3→4 then 4→5 (each gated by the same criteria), but rounds 6+ are not supported. If round 5 still does not converge, the spec needs `/revise` rather than further consensus.
 
@@ -235,6 +236,31 @@ When the consensus topic is a spec AND the current round converges (round ≤ 2 
 7. **Report**: emit `Consensus-Close-SHA recorded: <8-char-prefix> (round N, aligned-approve M/M). /implement Step 2b can now verify DA-Encoded-Via: consensus-round-N for this spec.`
 
 This step is purely additive — specs without `Consensus-Close-SHA` (legacy + non-convergent + opt-out) continue to use fresh DA at `/implement` Step 2b. **/implement MUST NOT write `Consensus-Close-SHA`**; the SHA is exclusively written here at convergent close. See `docs/process-kit/devils-advocate-checklist.md` § DA-Encoded-Via convention for the end-to-end picture.
+
+## [mechanical] Step 4c+ — Consensus-Rounds universal marker (Spec 623)
+
+At EVERY completed round N of a spec-topic consensus — convergent or not, round 1 through 5 —
+record the universal review-evidence marker, alongside (never replacing) Step 4c's
+convergent-only SHA. This is what keeps a 3+-round review machine-readably REVIEWED at
+`/implement` Step 0d (the Spec 395 × Spec 389 inversion fix):
+
+1. **Topic check**: skip silently for ADR/freeform topics — spec-only, same as Step 4c.
+2. **Round detection**: same source as Step 4c step 2 (`--round N` / `round=N` / the
+   workflow's own round counter). If the round number is unavailable, skip with the same
+   note — the marker is only ever written with a known N.
+3. **Write ordering (load-bearing — Spec 623 Req 1)**: FIRST append/flush this round's
+   record to the session sidecar's `consensus_reviews[]` (the Spec 258 artifact), THEN
+   write the frontmatter marker. An interrupted run must leave record ≥ marker — never
+   marker > record — so Step 0d's inflated-claim FAIL keeps meaning forgery/manual-edit,
+   never crash residue.
+4. **Write**: set `Consensus-Rounds: <N>` in the spec's frontmatter — replace an existing
+   value only with a HIGHER N (monotonic max; re-running an earlier round never lowers it).
+5. **Report**: emit `Consensus-Rounds recorded: N (universal review-evidence marker;
+   /implement Step 0d cross-checks it against the session consensus record).`
+
+Unlike the SHA, this marker carries no convergence claim — a non-convergent three-round
+review is marked `Consensus-Rounds: 3` and never masquerades as convergent (Spec 389
+semantics unchanged; Spec 623 Req 2).
 
 ## [reference] Autonomous consensus batches and the HUMAN-JUDGMENT taxonomy (Spec 468)
 

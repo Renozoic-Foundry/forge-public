@@ -1,50 +1,32 @@
 #!/usr/bin/env python3
-"""Spec 427 — /forge stoke copier-direct apply helper.
+"""/forge stoke apply helper (Spec 427 lineage; reshaped by Spec 558).
 
-Replaces the Spec 381 shadow-tree apply mechanism with direct in-place
-`copier update` invocation. Project-data exclusion is centralized at
-`copier.yml::_exclude` (single source of truth — DA + MT convergent concern
-from /consensus 427 round 1).
+Spec 558 (v4.0.0) removed the Copier machinery: the `copier update` classic
+path, its backup/cleanup/list-tasks subcommands, and the render-time consent
+hooks are gone. The ONLY apply backend is the Spec 559/591 content-merge
+engine; classic (.copier-answers.yml, no plugin) invocations receive the
+documented converter pointer (`to-plugin`), never a stack trace.
 
-Subcommands:
-  direct-apply [--live-root DIR] [--allow-dirty] [--no-cleanup-old-backups]
-                [--vcs-ref SHA] [--trust]
-      Entry point for the new stoke apply mechanism. Orchestrates:
-        1. _exclude integrity preflight (AC 17)
-        2. Dirty-tree pre-apply guard (Req 4 / AC 1 dirty-tree-refuses)
-        3. Old-backup cleanup (Req 7 / AC 11)
-        4. Pre-apply backup snapshot with mode 0700 (Req 5,6 / AC 5,6)
-        5. `copier update --vcs-ref=HEAD --skip-answered --defaults` (Spec 567 D9:
-           default target is the template's latest content; pass --vcs-ref to pin)
-        6. Conflict-marker check + crash-recovery output (Req 8 / AC 15,16)
+Subcommands (post-558 surface):
+  apply [--live-root DIR] [--upstream DIR] [--files ...] [--state-dir DIR]
+        [--consent-key KEY=BOOL] [--merge-native]
+      Content-merge apply (the only backend). Live consent gate (Spec 591)
+      runs ahead of the merge.
 
   audit <backup-dir> [--live-root DIR] [--hard-pct N] [--min-lines N]
-      Compare live vs backup snapshot for Tier 3 files (AGENTS.md, CLAUDE.md,
-      .mcp.json). Predicate: fires on sections_lost > 0 OR (delta_pct > N AND
-      delta_lines >= M) OR path-classification (any file matching _exclude
-      fires CONDITIONAL_PASS regardless of delta — Spec 427 Req 9).
+      Compare live vs a snapshot dir for Tier 3 files (AGENTS.md, CLAUDE.md,
+      .mcp.json). Tolerates a missing consumer-side copier.yml.
 
   parse-sections <file>
       Print H2 section names. Used by fixtures.
 
-  backup-create [--live-root DIR] [--copier-yml PATH]
-      Standalone backup snapshot helper (also invoked by direct-apply).
-      Reads `copier.yml::_exclude` at runtime to derive the backup-set
-      (programmatic derivation — Req 5). Creates mode 0700 dir, copies
-      classified files + .git/ into it, prints backup-dir path on stdout.
-
-  cleanup-old-backups [--max-age-days N]
-      Remove backup dirs older than N days (default 30). Best-effort:
-      cleanup failure emits warning to stderr and exits 0 (Req 7 / COO).
-
   to-plugin [--project-root DIR] [--plugin-root DIR] [--dry-run]
              [--manifest PATH] [--override-lane-b]
       Spec 560 — opt-in one-shot migration off Copier-embedded classic mode
-      onto plugin consumption (F9 playbook). NEVER invoked by default
-      `direct-apply` or any other subcommand — reached only via this explicit
-      `to-plugin` subcommand every time. Refuses on a Lane B / pinned-kit
-      compliance profile (`docs/compliance/profile.yaml`) unless
-      `--override-lane-b` is also passed.
+      onto plugin consumption (F9 playbook). The supported on-ramp for
+      classic consumers (<=v3.x stays supported in place). Refuses on a
+      Lane B / pinned-kit compliance profile (`docs/compliance/profile.yaml`)
+      unless `--override-lane-b` is also passed.
 
 # CROSS-SPEC CONTRACT — DO NOT EDIT, RENAME, OR DELETE.
 # The literal byte-string below is a contract token grepped by Spec 426's
@@ -92,11 +74,6 @@ DEFAULT_MAX_BACKUP_AGE_DAYS = 30
 # Spec 591 Req 3 / AC3 / AC8 — classic-path deprecation signal. Printed to
 # STDERR ONLY (Req 6 DA finding) so `/forge stoke` stdout stays byte-identical
 # to pre-591 automation-parsed output. Exactly one line per classic-path run.
-DEPRECATION_WARNING = (
-    "DEPRECATION: --classic (the `copier update` stoke apply path) is scheduled "
-    "for removal in v4.0.0. The default content-merge path is now the supported "
-    "mechanism -- see docs/process-kit/migration-decision-guide.md."
-)
 
 # Spec 591 Req 4 — canonical soak-instrumentation activity-log path (matches
 # the Spec 134 canonical path every other JSONL-emitting spec uses).
@@ -265,24 +242,6 @@ def _read_copier_tasks(copier_yml: Path) -> list[str]:
     return names
 
 
-def _exclude_integrity_preflight(copier_yml: Path) -> list[str]:
-    """AC 17: stoke aborts cleanly if `_exclude` is empty/missing/malformed
-    BEFORE any apply or backup work. Returns the validated pattern list."""
-    try:
-        patterns = _read_copier_exclude(copier_yml)
-    except (FileNotFoundError, ValueError) as e:
-        raise SystemExit(
-            f"GATE [_exclude-integrity]: FAIL — {e}\n"
-            f"Remediation: ensure {copier_yml} contains a non-empty `_exclude:` list "
-            f"of gitignore-style patterns. See docs/process-kit/stoke-recovery-runbook.md."
-        )
-    if not patterns:
-        raise SystemExit(
-            "GATE [_exclude-integrity]: FAIL — `_exclude` is empty in copier.yml.\n"
-            "Remediation: add project-data patterns to copier.yml::_exclude. "
-            "Without these, stoke would overwrite operator-curated content."
-        )
-    return patterns
 
 
 # ---- pattern matching -------------------------------------------------------
@@ -291,11 +250,17 @@ def _path_matches_patterns(rel_path: str, patterns: list[str]) -> bool:
     """Match a relative path against a list of gitignore-style patterns.
 
     Supports `**` (recursive), `*` (segment), `?` (single char), and `[...]`
-    via fnmatch. Patterns ending in `/` match directories.
+    via fnmatch. Patterns ending in `/` match the directory itself AND
+    everything under it (recursive prefix — Spec 589, consolidating the
+    Spec 560 call-site patch into the single shared matcher; always
+    case-sensitive, like the `**` branch).
     """
     rel = rel_path.replace("\\", "/")
     for pat in patterns:
         p = pat.replace("\\", "/")
+        # Bare directory prefix: `dir/` == the dir itself or anything under it.
+        if p.endswith("/") and (rel == p[:-1] or rel.startswith(p)):
+            return True
         # `**` recursive match
         if "**" in p:
             # Convert `docs/sessions/**` -> regex
@@ -312,24 +277,6 @@ def _path_matches_patterns(rel_path: str, patterns: list[str]) -> bool:
 
 # ---- dirty-tree guard -------------------------------------------------------
 
-def _check_dirty_tree(live_root: Path) -> tuple[bool, str]:
-    """Returns (is_dirty, status_porcelain_output).
-
-    Req 4 / AC 1 (dirty-tree-refuses): hard-abort if modified, staged, or
-    untracked files exist in template scope.
-    """
-    try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=live_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False, ""
-    output = result.stdout.strip()
-    return bool(output), output
 
 
 # ---- backup snapshot --------------------------------------------------------
@@ -372,104 +319,12 @@ def _create_backup_dir() -> Path:
     return backup
 
 
-def _create_backup_snapshot(live_root: Path, copier_yml: Path) -> Path:
-    """Create pre-apply backup snapshot.
-
-    Req 5: backup-set derived programmatically from copier.yml::_exclude
-    (read at runtime, no parallel list).
-    Req 6: created with mode 0700.
-    AC 10: includes `.git/` + all files matching _exclude.
-    """
-    patterns = _exclude_integrity_preflight(copier_yml)
-    backup = _create_backup_dir()
-
-    # Copy .git/ verbatim (audit/recovery safety net)
-    git_dir = live_root / ".git"
-    if git_dir.is_dir():
-        shutil.copytree(git_dir, backup / ".git", symlinks=True)
-
-    # Copy files matching _exclude
-    copied = 0
-    for root, dirs, files in os.walk(live_root):
-        # Skip .git (already copied) and the backup dir itself if it lives under live_root
-        root_path = Path(root)
-        try:
-            rel_root = root_path.relative_to(live_root)
-        except ValueError:
-            continue
-        rel_root_str = str(rel_root).replace("\\", "/")
-        if rel_root_str == ".git" or rel_root_str.startswith(".git/"):
-            dirs[:] = []
-            continue
-        for fname in files:
-            full = root_path / fname
-            try:
-                rel = full.relative_to(live_root)
-            except ValueError:
-                continue
-            rel_str = str(rel).replace("\\", "/")
-            if _path_matches_patterns(rel_str, patterns):
-                dst = backup / rel
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(full, dst)
-                copied += 1
-
-    # Write the patterns that drove this backup as a manifest (audit trail).
-    manifest = backup / ".forge-backup-manifest.json"
-    manifest.write_text(
-        json.dumps(
-            {
-                "spec": "427",
-                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                "live_root": str(live_root),
-                "exclude_patterns": patterns,
-                "file_count": copied,
-                "git_dir_included": git_dir.is_dir(),
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    return backup
 
 
-def cmd_backup_create(args: argparse.Namespace) -> int:
-    live_root = Path(args.live_root) if args.live_root else Path.cwd()
-    copier_yml = Path(args.copier_yml) if args.copier_yml else (live_root / "copier.yml")
-    backup = _create_backup_snapshot(live_root, copier_yml)
-    print(str(backup))
-    return 0
 
 
 # ---- cleanup-old-backups ----------------------------------------------------
 
-def cmd_cleanup_old_backups(args: argparse.Namespace) -> int:
-    """Req 7 / AC 11: remove backup dirs older than --max-age-days.
-
-    Best-effort-with-warning: cleanup failure emits warning, exits 0.
-    """
-    tmp = Path(tempfile.gettempdir())
-    cutoff = time.time() - (args.max_age_days * 86400)
-    removed = 0
-    warnings = []
-    for entry in tmp.glob(f"{BACKUP_PREFIX}*"):
-        if not entry.is_dir():
-            continue
-        try:
-            mtime = entry.stat().st_mtime
-        except OSError as e:
-            warnings.append(f"WARNING: could not stat {entry}: {e}")
-            continue
-        if mtime < cutoff:
-            try:
-                shutil.rmtree(entry)
-                removed += 1
-            except OSError as e:
-                warnings.append(f"WARNING: could not prune {entry}: {e}")
-    for w in warnings:
-        print(w, file=sys.stderr)
-    print(json.dumps({"removed": removed, "warnings": len(warnings)}))
-    return 0  # Always exit 0 — best-effort per Req 7
 
 
 # ---- conflict-marker detection ----------------------------------------------
@@ -546,18 +401,6 @@ def _emit_recovery_output(backup_dir: Path, conflicts: list[Path], error_msg: st
 
 # ---- direct-apply orchestration --------------------------------------------
 
-def _stoke_sentinel_path() -> Path:
-    """Sentinel file path for the current stoke-in-progress invocation.
-
-    /consensus 427 round 3 (MT + CISO concern): replaces the inheritable
-    FORGE_COPIER_POST_TASK env-var back-channel with a PID-stamped sentinel
-    file. The env-var was a true back-channel — any descendant process that
-    exported it could disarm the dirty-tree guard. The sentinel approach
-    binds the disarm to the specific stoke PID; misconfigured CI or wrapper
-    scripts cannot accidentally enable it.
-    """
-    state_dir = Path(".forge") / "state"
-    return state_dir / f"stoke-in-progress-{os.getpid()}"
 
 
 # Spec 430 — sentinel TTL reduced from 300s (Spec 427) to 60s.
@@ -565,144 +408,12 @@ def _stoke_sentinel_path() -> Path:
 SENTINEL_TTL_SECONDS = 60
 
 
-def _pid_is_alive(pid: int) -> bool:
-    """Liveness check. Returns False if the named PID is not a running process.
-
-    Spec 430 AC 5 + AC 7: cross-platform. POSIX uses `os.kill(pid, 0)`; Windows
-    uses `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, ...)` via ctypes.
-    """
-    if pid <= 0:
-        return False
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            handle = ctypes.windll.kernel32.OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION, False, pid
-            )
-            if not handle:
-                return False
-            # Check exit code: STILL_ACTIVE = 259 means running
-            exit_code = ctypes.c_ulong()
-            ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
-            ctypes.windll.kernel32.CloseHandle(handle)
-            return exit_code.value == 259
-        except (OSError, AttributeError, ImportError):
-            # Fallback: can't determine — assume not alive (fail-closed)
-            return False
-    else:
-        try:
-            os.kill(pid, 0)
-            return True
-        except (ProcessLookupError, PermissionError):
-            return False
-        except OSError:
-            return False
 
 
-def _pid_ancestors_linux(start_pid: int, max_depth: int = 16) -> list[int]:
-    """Linux-only PID ancestry chain via /proc/<pid>/status PPid lines.
-
-    Spec 430 AC 7: Linux uses /proc/<pid>/status. macOS has no /proc (uses
-    libproc/sysctl) — macOS callers MUST NOT use this function; the caller
-    routes macOS through the TTL-only fallback in _detect_copier_post_task.
-
-    Returns a list of ancestor PIDs walking upward from start_pid (exclusive)
-    until PID 0/1 or depth limit.
-    """
-    ancestors: list[int] = []
-    pid = start_pid
-    for _ in range(max_depth):
-        status_path = Path(f"/proc/{pid}/status")
-        if not status_path.is_file():
-            break
-        try:
-            text = status_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            break
-        m = re.search(r"^PPid:\s*(\d+)", text, re.MULTILINE)
-        if not m:
-            break
-        ppid = int(m.group(1))
-        if ppid <= 1 or ppid == pid:
-            break
-        ancestors.append(ppid)
-        pid = ppid
-    return ancestors
 
 
-def _stoke_sentinel_path() -> Path:
-    """Sentinel file path for the current stoke-in-progress invocation.
-
-    /consensus 427 round 3 (MT + CISO concern): replaces the inheritable
-    FORGE_COPIER_POST_TASK env-var back-channel with a PID-stamped sentinel
-    file. The env-var was a true back-channel — any descendant process that
-    exported it could disarm the dirty-tree guard. The sentinel approach
-    binds the disarm to the specific stoke PID; misconfigured CI or wrapper
-    scripts cannot accidentally enable it.
-
-    Spec 430 (Linux ancestry): on Linux, _detect_copier_post_task additionally
-    verifies the sentinel PID is an ancestor of the current process. On
-    Windows + macOS, ancestry is degraded to TTL-only (60s).
-    """
-    state_dir = Path(".forge") / "state"
-    return state_dir / f"stoke-in-progress-{os.getpid()}"
 
 
-def _detect_copier_post_task() -> bool:
-    """Detect when running inside the current stoke invocation's copier task.
-
-    Spec 430 AC 5 + AC 7 hardening of Spec 427 round-3 sentinel:
-      - Liveness: sentinel PID MUST be alive (os.kill on POSIX, OpenProcess
-        on Windows). A dead PID (stoke crashed) does NOT disarm the guard.
-      - Ancestry (Linux only): sentinel PID MUST be an ancestor of the
-        current process. A live PID from a concurrent unrelated process
-        does NOT disarm the guard.
-      - TTL: 60s upper bound (down from Spec 427's 5min). A sentinel older
-        than 60s is treated as stale regardless of PID state.
-
-    Windows + macOS degrade to TTL+liveness without ancestry. Future hardening:
-    NtQueryInformationProcess (Windows) + libproc/sysctl (macOS) named as
-    follow-up triggers if the race becomes operationally material.
-
-    Returns True iff at least one sentinel passes all checks.
-    """
-    state_dir = Path(".forge") / "state"
-    if not state_dir.is_dir():
-        return False
-
-    # Compute ancestry chain once on Linux for the ancestor check
-    if sys.platform.startswith("linux"):
-        my_ancestors = set(_pid_ancestors_linux(os.getpid()))
-    else:
-        my_ancestors = None  # signal "ancestry-not-available"
-
-    for sentinel in state_dir.glob("stoke-in-progress-*"):
-        try:
-            pid_str = sentinel.name.removeprefix("stoke-in-progress-")
-            sentinel_pid = int(pid_str)
-        except ValueError:
-            continue
-
-        # TTL check
-        try:
-            sentinel_age = time.time() - sentinel.stat().st_mtime
-        except OSError:
-            continue
-        if sentinel_age >= SENTINEL_TTL_SECONDS:
-            continue  # stale — skip
-
-        # Liveness check
-        if not _pid_is_alive(sentinel_pid):
-            continue  # crashed stoke; sentinel is forensic, not authoritative
-
-        # Ancestry check (Linux only; Windows/macOS degrade to liveness+TTL)
-        if my_ancestors is not None:
-            if sentinel_pid not in my_ancestors and sentinel_pid != os.getpid():
-                continue  # live PID but not in our ancestor chain — forged
-
-        return True
-    return False
 
 
 def _read_copier_answers(live_root: Path) -> dict | None:
@@ -845,7 +556,7 @@ def _live_consent_check(key: str, state_file: Path, cli_value: bool, live_root: 
 
 def _live_gate_six_keys(live_root: Path, answers: dict | None, consent_kv: list[str]) -> list[str]:
     """Spec 591 Req 1 / AC1 — the single shared live-gate call site invoked by
-    `cmd_apply` ahead of BOTH the classic and merge-native backends (exhaustive
+    `cmd_apply` ahead of the merge-native apply (exhaustive
     call-site audit: this is the only place in stoke.py that resolves the six
     named keys' consent state at apply time; see Spec 591 Evidence for the
     full audit table including copier.yml/forge_consent_gate.py, which remain
@@ -888,148 +599,6 @@ def _live_gate_six_keys(live_root: Path, answers: dict | None, consent_kv: list[
     return refused
 
 
-def cmd_direct_apply(args: argparse.Namespace) -> int:
-    """Full orchestration of the new copier-direct apply mechanism.
-
-    Order matters: integrity preflight → dirty-tree guard → cleanup-old →
-    backup snapshot → copier update → conflict scan → emit results.
-    """
-    live_root = Path(args.live_root) if args.live_root else Path.cwd()
-    copier_yml = Path(args.copier_yml) if args.copier_yml else (live_root / "copier.yml")
-
-    # Step 1: AC 17 integrity preflight (raises SystemExit on failure)
-    patterns = _exclude_integrity_preflight(copier_yml)
-    print(f"GATE [_exclude-integrity]: PASS — {len(patterns)} patterns loaded", file=sys.stderr)
-
-    # Step 2: Req 4 / AC 1 dirty-tree guard
-    if not args.allow_dirty and not _detect_copier_post_task():
-        dirty, status = _check_dirty_tree(live_root)
-        if dirty:
-            print(
-                "GATE [dirty-tree-guard]: FAIL — working tree has uncommitted changes.\n"
-                "Commit or stash before stoke. To override at your own risk: --allow-dirty\n"
-                f"\n{status}",
-                file=sys.stderr,
-            )
-            return 2
-    print("GATE [dirty-tree-guard]: PASS — clean working tree (or override active)", file=sys.stderr)
-
-    # Step 3: Req 7 / AC 11 cleanup old backups (best-effort)
-    if not args.no_cleanup_old_backups:
-        cleanup_args = argparse.Namespace(max_age_days=DEFAULT_MAX_BACKUP_AGE_DAYS)
-        cmd_cleanup_old_backups(cleanup_args)
-
-    # Step 4: pre-apply backup snapshot
-    backup = _create_backup_snapshot(live_root, copier_yml)
-    print(f"Backup snapshot: {backup}", file=sys.stderr)
-
-    # Step 5: determine the target VCS ref.
-    # Spec 567 (D9): the old default read the answers-file `_commit` — updating the
-    # consumer TO THE VERSION IT IS ALREADY ON (guaranteed no-op), with `_src_path`
-    # (a filesystem path!) as the git-ref fallback. New default: HEAD — the template's
-    # latest content, uniform across tagged (e.g. forge-public) and untagged consumer
-    # templates (documented asymmetry: omitting --vcs-ref would mean latest-TAG on
-    # tagged templates but HEAD on untagged ones; HEAD keeps stoke's "update to latest
-    # content" semantics identical everywhere). Explicit --vcs-ref remains
-    # pin-on-purpose and passes through verbatim.
-    answers = _read_copier_answers(live_root)
-    vcs_ref = args.vcs_ref or "HEAD"
-
-    # Step 5b: Spec 434 Req 4 — fresh-clone-detection warning for security overrides.
-    # Partial mitigation of the bootstrap-path consent gap (CISO round-1 finding).
-    # See docs/process-kit/copier-gotchas.md § Bootstrap-path consent surface.
-    consent_warn_keys = _detect_fresh_clone_consent_state(live_root, answers)
-    if consent_warn_keys is not None:
-        print(
-            "GATE [security-override-consent]: WARN — .copier-answers.yml has "
-            f"accept_security_overrides: true plus non-default values for "
-            f"{', '.join(consent_warn_keys)}, and the answers file shows no in-session "
-            "operator edit. Bootstrap-path consent gap (Spec 434 follow-up) — confirm "
-            "you intend to honor these overrides. Pass --confirm-security-overrides to "
-            "proceed; otherwise stoke aborts cleanly.",
-            file=sys.stderr,
-        )
-        if not getattr(args, "confirm_security_overrides", False):
-            print("GATE [security-override-consent]: ABORT — operator confirmation required", file=sys.stderr)
-            return 2
-        print("GATE [security-override-consent]: PASS — operator confirmed (--confirm-security-overrides)", file=sys.stderr)
-
-    # Step 6: invoke copier update.
-    # /consensus 427 round 3 fix (CISO hard finding on AC 7 / Req 1 / Constraint):
-    # --trust is OPERATOR-EXPLICIT per invocation. The helper does NOT bake it in
-    # by default. The /forge stoke command body MUST prompt the operator and
-    # pass --trust to this helper only after explicit consent.
-    cmd = ["copier", "update", "--skip-answered", "--defaults"]
-    if vcs_ref:
-        cmd.extend(["--vcs-ref", vcs_ref])
-    if args.trust:
-        cmd.append("--trust")
-        print("--trust: enabled (operator-explicit per-invocation)", file=sys.stderr)
-    else:
-        print("--trust: NOT passed (operator did not consent — copier tasks will be refused)", file=sys.stderr)
-
-    # Spec 444: --data K=V pass-through for chat-mediated security-override
-    # consent. The /forge stoke command body's preflight-gates flow constructs
-    # K=V strings from FORGE-controlled gate definitions
-    # (stoke.gates.detect_gates) only after explicit operator yes-answers.
-    # NEVER set --data from env vars, config files, or non-operator sources
-    # (Spec 444 Constraint: "NEVER construct --data flags from any source
-    # other than operator yes/no answers in the current chat turn").
-    for kv in (args.data or []):
-        if "=" not in kv:
-            print(f"ERROR: --data argument must be KEY=VALUE (got: {kv!r})", file=sys.stderr)
-            return 2
-        cmd.extend(["--data", kv])
-
-    print(f"Invoking: {' '.join(cmd)}", file=sys.stderr)
-    # /consensus 427 round 3 fix (MT + CISO concern on env-var back-channel):
-    # write a PID-stamped sentinel file (NOT an inheritable env-var) so the
-    # copier.yml _tasks dirty-tree guard knows to skip ONLY for this specific
-    # stoke invocation. Sentinel is cleaned up on exit (success or failure).
-    sentinel = live_root / ".forge" / "state" / f"stoke-in-progress-{os.getpid()}"
-    sentinel.parent.mkdir(parents=True, exist_ok=True)
-    sentinel.write_text(
-        f"stoke-pid:{os.getpid()}\nstarted:{datetime.datetime.now(datetime.timezone.utc).isoformat()}\n",
-        encoding="utf-8",
-    )
-    try:
-        result = subprocess.run(cmd, cwd=live_root, check=False)
-        copier_exit = result.returncode
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        try:
-            sentinel.unlink(missing_ok=True)
-        except OSError:
-            pass
-        _emit_recovery_output(backup, [], error_msg=f"copier invocation failed: {e}")
-        return 3
-    finally:
-        try:
-            sentinel.unlink(missing_ok=True)
-        except OSError:
-            pass
-
-    # Step 7: conflict-marker scan + recovery output
-    conflicts = _scan_for_conflict_markers(live_root, patterns)
-    if copier_exit != 0 or conflicts:
-        _emit_recovery_output(
-            backup,
-            conflicts,
-            error_msg=f"copier exited {copier_exit}" if copier_exit != 0 else "conflict markers detected",
-        )
-        return 4
-
-    # Success
-    print(
-        json.dumps(
-            {
-                "status": "ok",
-                "backup": str(backup),
-                "vcs_ref": vcs_ref,
-                "exclude_patterns": len(patterns),
-            }
-        )
-    )
-    return 0
 
 
 # ---- Spec 591 Req 2: content-merge default apply path -----------------------
@@ -1041,8 +610,8 @@ def _resolve_merge_files(
 
     `--files` (explicit_files) wins when given. Otherwise walk `upstream_root`
     (the new template content -- "theirs") and merge every file NOT matching
-    `copier.yml::_exclude` (the same project-data exclusion set the classic
-    backup/apply path already uses) -- i.e. every FORGE-owned template file.
+    an optional consumer-side `copier.yml::_exclude` if one exists (tolerant
+    absence -- post-558 no such file normally exists) -- i.e. every upstream file.
     """
     if explicit_files:
         return [f.replace("\\", "/") for f in explicit_files]
@@ -1132,27 +701,41 @@ def cmd_merge_native_apply(args: argparse.Namespace) -> int:
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
-    """Spec 591 Req 1/2/3 — the new `apply` subcommand: content-merge is the
-    DEFAULT backend; `--classic` reaches the EXISTING `cmd_direct_apply` body
-    UNCHANGED (Req 2); `--merge-native` is an accepted no-op alias (it is
-    already the default). Live consent-gate wiring (Req 1) runs ONCE here,
-    ahead of BOTH backends -- the single shared call site the Evidence audit
-    table documents. No invocation may raise an unhandled exception (Req 2).
+    """Spec 591/558 — the `apply` subcommand: content-merge is the ONLY
+    backend (Spec 558 removed the `--classic` copier-update path with the
+    Copier machinery; v4.0.0). `--merge-native` remains an accepted no-op
+    alias. Live consent-gate wiring (Req 1) runs once, ahead of the apply.
+    No invocation may raise an unhandled exception.
     """
     try:
         live_root = Path(args.live_root) if args.live_root else Path.cwd()
         answers = _read_copier_answers(live_root)
+
+        # Spec 558 Req 3 — classic-mode project detection: a project still on
+        # Copier-embedded classic consumption (.copier-answers.yml present, no
+        # plugin runtime resolvable) gets the documented converter pointer,
+        # never a stack trace. This is the post-558 detection convention /now
+        # Step 0h references.
+        plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or args.upstream
+        if answers is not None and not plugin_root:
+            print(
+                "stoke apply: this project is on classic (Copier-embedded) FORGE consumption "
+                "(.copier-answers.yml present, no plugin runtime detected). The copier-update "
+                "path was removed in v4.0.0. Migrate with the opt-in converter:\n"
+                "    forge stoke --to-plugin\n"
+                "(classic consumers remain supported in place on <=v3.x releases; see "
+                "docs/process-kit/migration-decision-guide.md)",
+                file=sys.stderr,
+            )
+            return 2
+
         try:
             _live_gate_six_keys(live_root, answers, getattr(args, "consent_key", None) or [])
         except Exception as e:  # defensive: gate plumbing must never abort the apply
             print(f"WARNING: live consent-gate check failed non-fatally: {e}", file=sys.stderr)
 
-        if args.classic:
-            # Req 3/6/8: exactly one warning line, stderr only, stdout untouched.
-            print(DEPRECATION_WARNING, file=sys.stderr)
-            return cmd_direct_apply(args)
         return cmd_merge_native_apply(args)
-    except Exception as e:  # Req 2: no invocation may raise an unhandled exception
+    except Exception as e:  # no invocation may raise an unhandled exception
         print(f"stoke apply: unexpected error: {e}", file=sys.stderr)
         return 3
 
@@ -1916,38 +1499,6 @@ def _append_to_gitignore(live_root: Path, audit: dict, today: str) -> dict:
     }
 
 
-def cmd_list_tasks(args: argparse.Namespace) -> int:
-    """Spec 428 — emit one human-readable name per `_tasks` entry in copier.yml.
-
-    Resolution order for source: --src-path arg; else .copier-answers.yml::_src_path
-    in the live root. Empty output + exit 0 when no `_tasks` declared. Non-zero
-    exit only on YAML parse failure or unreachable source.
-
-    The Step 0pre.1 consent prompt in /forge stoke calls this to dynamically
-    enumerate the tasks that will run if the operator passes --trust. Replaces
-    the pre-Spec-428 hardcoded example list.
-    """
-    src_path = args.src_path
-    if not src_path:
-        live_root = Path(args.live_root) if args.live_root else Path.cwd()
-        answers = _read_copier_answers(live_root)
-        if answers:
-            src_path = answers.get("_src_path")
-    if not src_path:
-        print("ERROR: no _src_path resolved; pass --src-path or run in a project with .copier-answers.yml", file=sys.stderr)
-        return 2
-    copier_yml = Path(src_path) / "copier.yml"
-    if not copier_yml.is_file():
-        print(f"ERROR: copier.yml not found at {copier_yml}", file=sys.stderr)
-        return 2
-    try:
-        names = _read_copier_tasks(copier_yml)
-    except ValueError as e:
-        print(f"ERROR: copier.yml parse failure: {e}", file=sys.stderr)
-        return 3
-    for name in names:
-        print(name)
-    return 0
 
 
 def cmd_audit_gitignore(args: argparse.Namespace) -> int:
@@ -2117,21 +1668,6 @@ def _is_lane_b(project_root: Path) -> bool:
     return (project_root / "docs" / "compliance" / "profile.yaml").is_file()
 
 
-def _expand_dir_patterns(patterns: list[str]) -> list[str]:
-    """update-manifest.yaml writes bare directory prefixes (e.g. `.forge/`)
-    that `_path_matches_patterns` (an fnmatch-based, `**`-aware matcher) does
-    NOT treat as a recursive prefix on its own — real `copier.yml::_exclude`
-    entries spell that out explicitly (`.forge/bin/**`). Expand any pattern
-    ending in `/` into both the bare directory match and its recursive form
-    so update-manifest.yaml's existing bucket shape is usable as-is."""
-    expanded: list[str] = []
-    for p in patterns:
-        expanded.append(p)
-        if p.endswith("/"):
-            expanded.append(p + "**")
-    return expanded
-
-
 def _classify_framework_files(
     project_root: Path,
     plugin_root: Path,
@@ -2145,8 +1681,8 @@ def _classify_framework_files(
     merge buckets are handled separately — Req 4b), then diffs each against
     its counterpart at the same relative path under `plugin_root`.
     """
-    framework_patterns = _expand_dir_patterns(framework_patterns)
-    non_framework_patterns = _expand_dir_patterns(non_framework_patterns)
+    # Bare `dir/` prefixes (update-manifest.yaml bucket shape) are handled by
+    # _path_matches_patterns itself since Spec 589 — no call-site expansion.
     tracked = _list_tracked_files(project_root)
     pristine: list[str] = []
     forked: list[str] = []
@@ -2454,37 +1990,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="stoke.py", description="Spec 427 copier-direct stoke helper")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("direct-apply")
-    p.add_argument("--live-root", default=None)
-    p.add_argument("--copier-yml", default=None)
-    p.add_argument("--allow-dirty", action="store_true", help="Override dirty-tree guard (operator-explicit per Req 4)")
-    p.add_argument("--no-cleanup-old-backups", action="store_true")
-    p.add_argument("--vcs-ref", default=None, help="Pin the update target ref (default: HEAD — the template's latest content; Spec 567 D9)")
-    p.add_argument("--trust", action="store_true", help="Pass --trust to copier update. OPERATOR-EXPLICIT per invocation per Req 1 / AC 7 / CISO Constraint — never baked into defaults, never from env, never from config. The /forge stoke command body prompts the operator and passes this flag only after explicit consent.")
-    p.add_argument("--confirm-security-overrides", action="store_true", help="Spec 434 Req 4: confirm honoring accept_security_overrides when .copier-answers.yml shows no in-session operator edit (fresh-clone state). Required to proceed when the security-override-consent gate WARNs.")
-    p.add_argument("--data", action="append", default=[], help="Spec 444: pass KEY=VALUE through to `copier update --data`. Used by the /forge stoke chat-mediation flow to supply `accept_security_overrides=true` and `accept_security_overrides_confirmed=true` after explicit operator yes-answers via Step 0pre.05. Repeatable. MUST originate from operator yes-answers in the current chat turn — never from env vars, config files, or implicit context (Spec 444 Constraint).")
-    p.set_defaults(func=cmd_direct_apply)
 
-    # Spec 591 — the live, documented apply entry point. Content-merge (Spec
-    # 559 upgrade_merge.py) is the DEFAULT backend; --classic reaches the
-    # unchanged `direct-apply` (cmd_direct_apply) body; --merge-native is an
-    # accepted no-op alias (already the default). Carries the same
-    # direct-apply flags (for --classic pass-through) plus merge-native-only
-    # flags (--upstream/--files/--state-dir) and the live consent-gate
-    # --consent-key flag (Req 1), shared by both backends.
+    # Spec 591/558 — the live apply entry point: content-merge is the ONLY backend
+    # (Spec 558 deleted the copier-update classic path). --merge-native stays a no-op
+    # alias; --consent-key is the Spec 591 live consent gate.
     p = sub.add_parser(
         "apply",
-        help="Spec 591 default apply path: content-merge (default) or --classic (copier update, deprecated, removal in v4.0.0).",
+        help="Apply upstream changes via the content-merge engine (the only backend since v4.0.0).",
     )
     p.add_argument("--live-root", default=None)
     p.add_argument("--copier-yml", default=None)
-    p.add_argument("--allow-dirty", action="store_true", help="Override dirty-tree guard (--classic only; operator-explicit per Req 4)")
-    p.add_argument("--no-cleanup-old-backups", action="store_true", help="--classic only")
-    p.add_argument("--vcs-ref", default=None, help="--classic only: pin the update target ref (default: HEAD)")
-    p.add_argument("--trust", action="store_true", help="--classic only: pass --trust to copier update (operator-explicit consent)")
-    p.add_argument("--confirm-security-overrides", action="store_true", help="--classic only: Spec 434 Req 4 fresh-clone confirmation")
-    p.add_argument("--data", action="append", default=[], help="--classic only: KEY=VALUE pass-through to `copier update --data` (Spec 444)")
-    p.add_argument("--classic", action="store_true", help="Spec 591 Req 2: opt into the deprecated copier-update apply path (removal targeted v4.0.0). Prints one deprecation warning to stderr per run.")
     p.add_argument("--merge-native", action="store_true", help="Spec 591: accepted no-op alias -- content-merge is already the default. Exists for consumers' explicit scripts/muscle memory.")
     p.add_argument("--upstream", default=None, help="Merge-native only: new template content tree ('theirs'). Default: $CLAUDE_PLUGIN_ROOT.")
     p.add_argument("--files", nargs="*", default=None, help="Merge-native only: explicit repo-relative file list to merge. Default: every file under --upstream not matching copier.yml::_exclude.")
@@ -2492,14 +2007,7 @@ def main() -> int:
     p.add_argument("--consent-key", action="append", default=[], help="Spec 591 Req 1: repeatable KEY=true|false -- CLI-supplied consent for one of the six named consent-gated keys, honored ONLY from this invocation (never persisted, never env/config).")
     p.set_defaults(func=cmd_apply)
 
-    p = sub.add_parser("backup-create")
-    p.add_argument("--live-root", default=None)
-    p.add_argument("--copier-yml", default=None)
-    p.set_defaults(func=cmd_backup_create)
 
-    p = sub.add_parser("cleanup-old-backups")
-    p.add_argument("--max-age-days", type=int, default=DEFAULT_MAX_BACKUP_AGE_DAYS)
-    p.set_defaults(func=cmd_cleanup_old_backups)
 
     p = sub.add_parser("audit")
     p.add_argument("backup_dir")
@@ -2575,14 +2083,7 @@ def main() -> int:
     p.set_defaults(func=cmd_audit_gitignore)
 
     # Spec 428 — dynamic _tasks enumeration for Step 0pre.1 consent prompt.
-    p = sub.add_parser(
-        "list-tasks",
-        help="Emit copier.yml::_tasks names from the resolved source, one per line. "
-             "Powers the Step 0pre.1 --trust consent prompt (Spec 428).",
-    )
-    p.add_argument("--src-path", default=None, help="Override source path (default: read _src_path from .copier-answers.yml).")
-    p.add_argument("--live-root", default=None, help="Project root for resolving .copier-answers.yml (default: cwd).")
-    p.set_defaults(func=cmd_list_tasks)
+
 
     # Spec 560 — opt-in embedded-project -> plugin-consumption converter.
     p = sub.add_parser(

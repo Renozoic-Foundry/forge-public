@@ -2,6 +2,7 @@
 name: parallel
 description: "Run multiple specs in parallel using git worktrees"
 workflow_stage: implementation
+argument-hint: "[spec-number spec-number ...] [--batch first-last] [--dry-run]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -14,7 +15,7 @@ workflow_stage: implementation
 <!-- multi-block mode: serialized — choice blocks fire at distinct mechanical steps (merge confirmation, conflict resolution, post-merge action). Each block waits for operator response before the next is presented. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
 Run multiple specs in parallel using git worktrees and isolated Claude Code agents.
 
-If $ARGUMENTS is `?` or `help`:
+If $ARGUMENTS is empty, `?`, or `help`:
   Print:
   ```
   /parallel — Execute 2+ independent specs in parallel via git worktrees.
@@ -155,6 +156,73 @@ For each spec number:
 
 If any spec fails validation, stop and report all failures at once — do not proceed with a partial set.
 
+### [mechanical] Step 2c — Consensus-Review pre-dispatch gate (Spec 590)
+
+`Consensus-Review: true` was a prose convention: `/parallel` dispatched such specs with no check
+that a `/consensus` run was ever recorded. Spec 560 was implemented and merged un-vetted under
+autopilot; the retroactive consensus then surfaced a real security finding (guard-critical hook
+stripping) a pre-implement vet would have caught pre-merge (SIG-560-01). This gate makes the
+check mechanical. It is the `/parallel` analog of `/implement` Step 0d — same escape hatches,
+same fail-closed posture.
+
+**Scope note**: this gate keys on `Consensus-Review: true` specifically. It does NOT re-implement
+`/implement` Step 0d's `BV >= 4 AND (R >= 3 OR E >= 3)` classifier — a spec that Step 0d would
+classify as consensus-required still meets Step 0d when its lane agent runs `/implement`. This
+gate closes the narrower hole: an explicit `Consensus-Review: true` declaration being dispatched
+with nothing recorded against it.
+
+For each spec that survived step 2 above, read its frontmatter:
+
+1. **Trigger check** — if `Consensus-Review:` is absent, or is any value other than the literal
+   `true`, this gate does not apply to that spec. Skip it silently and dispatch as today
+   (Requirement 3 — zero added friction on the common path). **This is the common case.**
+
+2. **Consensus-recorded predicate** — for a `Consensus-Review: true` spec, the predicate is
+   satisfied when ANY of the following holds, in precedence order:
+   a. `Consensus-Close-SHA:` frontmatter present and non-empty (written only by `/consensus` at
+      convergent-round close; `/parallel` reads it, never writes it).
+   b. `Consensus-Exempt: <reason>` frontmatter present with a reason of **>= 30 characters**
+      (the existing Spec 395 escape hatch — reused, not reinvented).
+   c. A dated `/consensus` outcome recorded in the spec's frontmatter (`Consensus-Status:` with a
+      value other than `vet-pending`) or a Revision Log line naming a dated `/consensus` run.
+
+   **Waiver-record exclusion (Requirement 5 — load-bearing).** A Revision Log entry written by
+   this gate's own waiver path (step 4 below) is an audit RECORD, never consensus evidence.
+   Predicate branch (c) MUST exclude any Revision Log line containing the marker
+   `[consensus-waiver]`. Without this exclusion the gate reads the waiver it wrote on the previous
+   run and self-satisfies — Requirement 1 would hold exactly once per spec, which is the same
+   silent-bypass class the gate exists to close.
+
+3. **Halt on predicate failure** — a `Consensus-Review: true` spec failing the predicate is NOT
+   dispatched. Emit one line naming the spec, the reason, and both operator paths:
+   ```
+   ⛔ CONSENSUS GATE — Spec NNN declares Consensus-Review: true with no recorded consensus.
+      Not dispatched. Either: (a) run `/consensus NNN` first, or (b) set
+      `Consensus-Exempt: <reason >= 30 chars>` in its frontmatter, or (c) give an explicit
+      in-session waiver (see below).
+   ```
+   **Per-spec, not batch-fatal (Requirement 6).** Unlike the validation failures above — which
+   stop the whole batch — a consensus halt removes ONLY the offending spec. Remaining specs in
+   the bundle proceed. Removal happens here, so the halted spec is absent from the
+   `planned_specs` list Step 6 builds from Step 2 survivors. If every spec in a bundle is halted,
+   report `Bundle <N> empty after consensus gate — skipping.` and move to the next bundle.
+
+4. **Waiver path (Requirement 2)** — an operator may waive the gate for a named spec, but ONLY
+   via an explicit statement in the CURRENT session. A prior session summary, a "pending tasks"
+   list, a Revision Log entry from an earlier run, or a "logical next step" inference is NOT a
+   waiver (EA-025/026/027 family rule). On a valid in-session waiver:
+   a. Dispatch the spec.
+   b. Append to that spec's Revision Log, verbatim:
+      `- YYYY-MM-DD: [consensus-waiver] Consensus-Review gate waived at /parallel dispatch by explicit operator authorization: "<operator's words, verbatim>".`
+      The `[consensus-waiver]` marker is what step 2c excludes — it is required, not decorative.
+   c. Record the waiver verbatim in the batch narration.
+
+5. **Gate outcome** — emit once per bundle:
+   - No `Consensus-Review: true` specs in the bundle → say nothing (silent; common path).
+   - All triggering specs satisfied the predicate → `GATE [consensus-review-dispatch]: PASS — <N> spec(s) with Consensus-Review: true, all with recorded consensus.`
+   - One or more halted → `GATE [consensus-review-dispatch]: HALT — <N> spec(s) not dispatched: <ids>. Bundle continues with <M> remaining.`
+   - One or more waived → `GATE [consensus-review-dispatch]: WAIVED — <ids> dispatched under explicit in-session operator waiver (recorded in Revision Log).`
+
 ## [mechanical] Step 3 — Pre-flight conflict scan (Spec 041)
 
 Load conflict resolution config from `docs/sessions/scheduler-config.yaml` (skip if absent — use default: `conflict_resolution: worktree`).
@@ -215,8 +283,15 @@ Specs: NNN (<title>), MMM (<title>)
 Branches: spec-NNN, spec-MMM
 Worktree paths: .worktrees/spec-NNN, .worktrees/spec-MMM
 Conflict scan: <clean | overlapping files listed>
+Consensus gate: <clean | HALT: <ids> not dispatched (no recorded consensus) | WAIVED: <ids>>
 Merge order: NNN → MMM (sequential by spec number)
 ```
+
+The `Consensus gate:` line (Spec 590) reports Step 2c's outcome. It reads `clean` when no spec in
+the bundle declares `Consensus-Review: true`, or when every such spec satisfied the predicate.
+Specs listed as HALT are absent from `Specs:` above — the dry run shows exactly what a real run
+would dispatch.
+
 Stop — do not execute.
 
 ## [mechanical] Step 5 — Inline-approve draft specs
@@ -259,9 +334,23 @@ d. Initialize `docs/sessions/swarm-budget-state.md` with: start time, N agents, 
    The list is fixed before any worktree creation or agent/tab dispatch. Inline-cheaper-filtered (Step 1b) and failed-validation (Step 2) specs are NOT in `planned_specs`.
 
 2. **Create worktrees** — for each spec in `planned_specs` (in spec-number order):
+   0. **(once, before the first creation) Create the run-scoped worktree allowlist
+      (Spec 622)**: write `.forge/state/parallel-created-worktrees-<batch-id>.json` with
+      the `preexisting` set captured in the same act — the `git worktree list` paths
+      present at this moment (harness worktrees, unrelated long-lived worktrees):
+      ```json
+      {"batch_id": "<batch-id>", "created_at": "<ISO 8601>",
+       "preexisting": ["<paths from git worktree list right now>"],
+       "worktrees": [], "preserved": false}
+      ```
+      Allowlist-at-creation + preexisting-at-start means no snapshot-ordering dependence:
+      both sets exist before any dispatch. The file is run-scoped by batch-id — a stale
+      file from another batch is warned about and never merged into this run's sets.
    1. Create a branch: `spec-NNN` from the current HEAD.
    2. Create a git worktree: `git worktree add .worktrees/spec-NNN spec-NNN`
    3. Report: "Worktree created: .worktrees/spec-NNN on branch spec-NNN"
+   3b. **Append the path to the allowlist (Spec 622)**: add `.worktrees/spec-NNN` (absolute
+      path) to the allowlist file's `worktrees` array.
    4. **Write the batch-lane contract marker (Spec 475)** into the worktree — this artifact, not the launch prose, is what binds the lane session (ADR-451 corollary; SIG-BATCH-A/B):
       ```bash
       mkdir -p .worktrees/spec-NNN/.forge/state
@@ -298,6 +387,13 @@ For each worktree:
      made, and issues encountered. Report estimated token usage.
   6. /tab close
 
+Isolation prohibitions (Spec 622 — SIG-OVN-06; these lines are part of the dispatch
+contract for every lane):
+  - Do NOT create worktrees or branches beyond the one assigned to you.
+  - Do NOT run any `git worktree` subcommand.
+  - Do NOT run `git restore` or `git checkout --` against paths outside your assigned
+    spec's file scope.
+
 Lanes stop at `implemented` — do NOT run /close, promote deferred scope, or
 create new specs in a lane. The batch-lane contract marker in each worktree
 (Spec 475) enforces this; /close runs here in the orchestrator after merge.
@@ -307,7 +403,7 @@ When all tabs report "done", return to this tab and type 'all done' to proceed t
 
 Wait for the operator's "all done" signal. At L0–L2 `/parallel` does NOT auto-spawn sub-agents — the multi-tab pattern is operator-launched (see § Choose dispatch mode above).
 
-**L3+ (canonical: native `Agent` + `isolation: "worktree"`)**: The parent session spawns one `Agent` sub-agent per spec, each with `isolation: "worktree"` and `worktree.baseRef: head` (branch from local HEAD; use `fresh` to branch from `origin/<default>`). **Required permission posture**: the operator's settings must allow Edit/Write scoped to the worktree path (e.g. `.worktrees/spec-NNN/**`) only — do NOT globally auto-allow writes or disable permission prompts. Requires Claude Code >= 2.1.154 (reinforced subagent-isolation guard). Each sub-agent implements ONLY its assigned spec; the parent runs the conflict pre-flight before dispatch, inspects each worktree's diff before merge, and emits `GATE [name]: PASS/FAIL` per spec — identical governance to the multi-tab path. The native `isolation: "worktree"` worktree supersedes the manual `git worktree add` in steps 1–2 above for the L3+ path — do not double-create; pass `worktree.baseRef` instead. **Batch-lane contract at L3+ (Spec 475)**: as soon as each native worktree path exists, the parent session writes the same `batch-lane.json` marker (step 2.4 above) into it before the sub-agent begins lifecycle work — sub-agents are bound by the same artifact contract as multi-tab lanes.
+**L3+ (canonical: native `Agent` + `isolation: "worktree"`)**: The parent session spawns one `Agent` sub-agent per spec, each with `isolation: "worktree"` and `worktree.baseRef: head` (branch from local HEAD; use `fresh` to branch from `origin/<default>`). **Required permission posture**: the operator's settings must allow Edit/Write scoped to the worktree path (e.g. `.worktrees/spec-NNN/**`) only — do NOT globally auto-allow writes or disable permission prompts. Requires Claude Code >= 2.1.154 (reinforced subagent-isolation guard). Each sub-agent implements ONLY its assigned spec; the parent runs the conflict pre-flight before dispatch, inspects each worktree's diff before merge, and emits `GATE [name]: PASS/FAIL` per spec — identical governance to the multi-tab path. The native `isolation: "worktree"` worktree supersedes the manual `git worktree add` in steps 1–2 above for the L3+ path — do not double-create; pass `worktree.baseRef` instead. **Batch-lane contract at L3+ (Spec 475)**: as soon as each native worktree path exists, the parent session writes the same `batch-lane.json` marker (step 2.4 above) into it before the sub-agent begins lifecycle work — sub-agents are bound by the same artifact contract as multi-tab lanes. **Allowlist append at L3+ (Spec 622)**: in the same as-soon-as-the-path-exists moment, the parent appends the native worktree path to the run's allowlist file (step 2.0/2.3b above) — the native path supersedes the manual `git worktree add`, so without this clause the append would never fire on the canonical L3+ path and every orchestrator worktree would false-positive as foreign at merge audit. **Dispatch-prompt prohibitions at L3+ (Spec 622)**: every sub-agent prompt carries the three isolation prohibitions verbatim (no worktree/branch creation beyond the assignment; no `git worktree` subcommands; no `git restore`/`git checkout --` outside the assigned spec's file scope).
 
 **Solo-session alternative (`EnterWorktree`, any level)**: A solo operator may use `EnterWorktree` to enter each worktree one at a time, run `/implement NNN`, then `ExitWorktree`. This **serializes** execution — not parallel. Use only when the canonical mode for the level is unavailable.
 
@@ -401,9 +497,90 @@ For each completed spec (in spec-number order):
    - If `resolve`: pause for human resolution, then continue.
 3. If merge succeeds and a test command is configured:
    - Run the harness gate (test + lint).
-   - If gate fails: report failure, ask whether to revert this merge or continue.
+   - If gate fails: report failure, ask whether to revert this merge or continue. Either
+     way the worktree is preserved at .worktrees/spec-NNN for debugging (Spec 622 — this
+     preserve branch was previously implicit).
    - If gate passes: report "Spec NNN merged and gate passed."
 4. Report merge status before proceeding to the next spec.
+
+## [mechanical] Step 9b — Merge-time overlap reconciliation gate (Spec 602)
+
+After Step 9 has processed every spec in `planned_specs` for this bundle (all merges attempted,
+skips/conflicts recorded) and before Step 10 (shared-file consolidation), run this gate. It closes
+the gap where declared-file overlap between two specs in the same batch is only ever caught later,
+by a human or the independent validator at `/close` — this step catches it mechanically at the
+point the merge lands.
+
+1. **Compute declared-file overlap — reuse, do not duplicate.** Use the IDENTICAL declared-file
+   intersection predicate `/now` already computes at `.forge/commands/now.md` § Step 1b, point 3
+   ("File-overlap surfacing"): for each pair of specs in `planned_specs` that merged successfully
+   in Step 9, read each spec's `## Implementation Summary` `Changed files` list and intersect the
+   declared paths. This step does NOT re-derive or restate that algorithm — `/now` Step 1b is the
+   single source; here the only difference is the input set (`planned_specs` merged in this
+   bundle, vs. `/now`'s implemented-but-unclosed set) and the consequence (test re-run + halt, vs.
+   an advisory line).
+
+2. **No overlap (AC3 — zero overhead on the common path)**: if no pair intersects, this step is
+   silent — no gate output, no test re-run, no swarm-budget advisory. Proceed directly to Step 10.
+
+3. **Overlap detected** — for each overlapping pair (Spec A, Spec B) sharing file(s) `F`:
+   a. Re-run Spec A's own `## Test Plan` commands against the merged tree (current HEAD, after
+      Step 9 has merged both A and B).
+   b. Re-run Spec B's own `## Test Plan` commands against the same merged tree.
+   c. **True-negative path (AC2)**: when both re-runs pass — the expected outcome whenever the
+      changed line ranges within `F` are disjoint — report one pass line per pair and continue; no
+      operator intervention, no choice block. The batch proceeds to the next pair, then to Step 10.
+   d. **Conflict path (AC1)**: if either re-run fails, halt this bundle's finalization — mirrors the
+      existing "security-gate FAIL halts the chain" behavior from Spec 498:
+      ```
+      ⛔ MERGE RECONCILIATION GATE — Spec <A> and Spec <B> both declare <file(s)>; re-run of
+         <A|B>'s Test Plan failed against the merged tree:
+         <failing command + output summary>
+      Batch finalization halted (mirrors Spec 498 "security-gate FAIL halts the chain").
+      Resolve the conflict in <file(s)>, then re-run from Step 9b before Step 10 proceeds.
+      ```
+      Do NOT proceed to Step 10 or Step 13 for this bundle. In `--batch` mode this is a mid-batch
+      halt condition (see Step 1 "Mid-batch halt conditions"): report which bundles completed,
+      which is in-progress, which are queued, and stop — no auto-retry.
+
+4. **Swarm-budget advisory (Requirement 5)** — emit exactly one line, and ONLY when step 3 actually
+   re-ran tests (at least one overlapping pair existed in this bundle):
+   ```
+   Reconciliation gate: re-ran Test Plan for <N> overlapping pair(s) — incremental cost against
+   swarm ceiling (docs/sessions/swarm-budget.yaml, Spec 042). See docs/sessions/swarm-budget-state.md.
+   ```
+   Never emitted when step 2 (no overlap) applied — silence on the no-overlap path is the AC3
+   contract, not just "no gate output" but "no advisory either."
+
+This gate runs once per bundle, in the same per-bundle scope as Steps 2–13 (Step 1 "Bundle
+execution semantics"). It must NOT redesign `/parallel`'s worktree isolation model, and it targets
+only the declared-file-overlap case `/now` Step 1b already detects — not a general merge-conflict
+framework.
+
+## [mechanical] Step 9c — Worktree anti-forking audit (Spec 622)
+
+After Step 9b and before Step 10, run the advisory audit and fold its output verbatim into
+the merge summary:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/parallel-worktree-audit.sh <batch-id>
+```
+(PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/parallel-worktree-audit.ps1 <batch-id>`.)
+
+- The audit is ADVISORY ONLY — it always exits 0 and never blocks or halts the merge path.
+  Output lines: `ADVISORY: foreign worktree <path> … inspect for out-of-scope changes, then
+  remove with 'git worktree remove <path>'` (a dispatch-contract violation — SIG-OVN-06
+  class); `attributed: <path> — declared by batch <id> (…)` (sibling-batch worktrees —
+  always printed, never silently excluded); `unexplained pre-existing worktree: <path> …`
+  (persistent until explained or removed); one aggregate `note:` line for worktrees outside
+  /parallel's namespace; `warning:` lines for surviving sibling allowlist files.
+- **Allowlist lifecycle (preservation-aware — Spec 622)**: after the audit, remove
+  `.forge/state/parallel-created-worktrees-<batch-id>.json` ONLY if every worktree in its
+  `worktrees` array was actually removed during merge cleanup. If ANY batch worktree was
+  preserved (agent failure, operator abort, merge-conflict skip, or the gate-fail branch in
+  Step 9.3), instead set `"preserved": true` in the file and leave it in place — the next
+  run's audit then ATTRIBUTES the leftover worktrees to this batch instead of reporting
+  unexplained foreign noise.
 
 ## [mechanical] Step 10 — Shared-file consolidation
 

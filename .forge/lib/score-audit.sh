@@ -176,12 +176,13 @@ cmd_record_observed() {
     revise_rounds=$(awk '/^## Revision Log/{flag=1;next} /^## /{flag=0} flag && /\/revise/{c++} END{print c+0}' "$spec_file")
   fi
 
-  local validator_outcome="SKIP" da_outcome="SKIP"
+  # validator_outcome DELETED (Spec 619 Req 4): its grep target — GATE [validator]: PASS
+  # lines inside spec-file bodies — is essentially never persisted there (SKIP on 146/147
+  # live records), and no genuinely independent durable source exists at this write site's
+  # trust boundary, so wiring it would reproduce the vacuous-signal class this spec kills.
+  # Residual gap documented in docs/process-kit/score-calibration-loop.md § validator_outcome.
+  local da_outcome="SKIP"
   if [ -n "$spec_file" ]; then
-    if grep -qE 'GATE \[validator(-coverage)?\]: PASS' "$spec_file"; then validator_outcome="PASS"
-    elif grep -qE 'GATE \[validator(-coverage)?\]: PARTIAL' "$spec_file"; then validator_outcome="PARTIAL"
-    elif grep -qE 'GATE \[validator(-coverage)?\]: FAIL' "$spec_file"; then validator_outcome="FAIL"
-    fi
     if grep -qE 'DA-Decision:[[:space:]]+PASS' "$spec_file"; then da_outcome="PASS"
     elif grep -qE 'DA-Decision:[[:space:]]+CONDITIONAL_PASS' "$spec_file"; then da_outcome="CONDITIONAL_PASS"
     elif grep -qE 'DA-Decision:[[:space:]]+FAIL' "$spec_file"; then da_outcome="FAIL"
@@ -212,11 +213,11 @@ cmd_record_observed() {
 
   local git_sha rec
   git_sha="$(_git_sha_or_unknown)"
-  rec=$(printf '{"schema_version":1,"kind":"observed","spec_id":"%s","git_sha":"%s","iso_ts":"%s","creation_iso_ts":"%s","close_iso_ts":"%s","wallclock_days":%s,"session_count":%s,"revise_rounds":%s,"validator_outcome":"%s","da_outcome":"%s","tc_overrun_derived":%s,"kind_tag":"%s","creation_ts_source":"%s"}' \
+  rec=$(printf '{"schema_version":1,"kind":"observed","spec_id":"%s","git_sha":"%s","iso_ts":"%s","creation_iso_ts":"%s","close_iso_ts":"%s","wallclock_days":%s,"session_count":%s,"revise_rounds":%s,"da_outcome":"%s","tc_overrun_derived":%s,"kind_tag":"%s","creation_ts_source":"%s"}' \
     "$(_json_escape "$spec_id")" "$(_json_escape "$git_sha")" "$(_json_escape "$close_iso_ts")" \
     "$(_json_escape "$creation_iso_ts")" "$(_json_escape "$close_iso_ts")" \
     "$wallclock_days" "$session_count" "$revise_rounds" \
-    "$validator_outcome" "$da_outcome" "$tc_overrun_derived" \
+    "$da_outcome" "$tc_overrun_derived" \
     "$(_json_escape "$last_predicted_kind_tag")" "$creation_ts_source")
   _atomic_append "$rec"
 }
@@ -257,8 +258,11 @@ cmd_read_records() {
 
 cmd_bias_report() {
   local mode="${1:-lean}"
+  # Spec 619: three distinguishable report states, rendered in EVERY mode (lean and
+  # verbose alike — never gated on verbosity). The empty-log state is the ONLY state
+  # allowed to say "no data"; the literal string "0 records" never prints.
   if [ ! -f "$SCORE_AUDIT_FILE" ]; then
-    printf '0 records — calibration deferred until data accumulates\n'
+    printf 'score-audit: no calibration records yet (0 predicted / 0 observed) — calibration begins once /spec, /implement, and /close write records\n'
     return 0
   fi
   python3 - "$SCORE_AUDIT_FILE" "$mode" << 'PY'
@@ -281,7 +285,39 @@ try:
             elif r.get('kind') == 'observed':
                 observed.append(r)
 except OSError:
-    print('0 records — calibration deferred until data accumulates')
+    print('WARN: score-audit log unreadable — bias report unavailable this run')
+    sys.exit(0)
+
+# --- Spec 619 report-state + pairing computation (all modes) ---
+pred_specs = set(predicted)
+obs_specs = {o['spec_id'] for o in observed}
+both = pred_specs & obs_specs
+either = pred_specs | obs_specs
+n_pred = sum(1 for _ in predicted)
+n_obs = len(observed)
+n_cal = n_pred + n_obs
+
+if n_cal == 0:
+    # State 1 — empty log (role-dispatch/acceptance records alone carry no calibration data).
+    print('score-audit: no calibration records yet (0 predicted / 0 observed) — calibration begins once /spec, /implement, and /close write records')
+    sys.exit(0)
+
+backfilled_pairs = sum(1 for s in both if predicted[s].get('predicted_by') == 'backfill')
+pairing_pct = 100.0 * len(both) / len(either) if either else 0.0
+pairing_line = f"pairing rate: {pairing_pct:.0f}% ({len(both)} specs with both kinds / {len(either)} specs with either kind)"
+if backfilled_pairs:
+    pairing_line += f" — {backfilled_pairs} pair(s) via backfilled predictions"
+print(pairing_line)
+if pairing_pct < 50.0:
+    miss_pred = len(obs_specs - pred_specs)
+    miss_obs = len(pred_specs - obs_specs)
+    dominant, count = ('predicted', miss_pred) if miss_pred >= miss_obs else ('observed', miss_obs)
+    other = 'observed' if dominant == 'predicted' else 'predicted'
+    print(f"advisory: pairing below 50% — dominant missing kind: {dominant} ({count} specs carry only {other} records)")
+
+if not both:
+    # State 2 — records without pairs: bias analysis has nothing to compare yet.
+    print(f"score-audit: {n_cal} calibration record(s) ({n_pred} predicted / {n_obs} observed) — no spec carries both kinds yet; bias analysis needs matched pairs")
     sys.exit(0)
 
 cells = collections.defaultdict(lambda: collections.defaultdict(list))
@@ -300,8 +336,9 @@ for o in observed:
         cells[(lane, kind_tag)]['E'].append('under')
     psr = int(p.get('sr', 3))
     rr = int(o.get('revise_rounds', 0) or 0)
-    vo = o.get('validator_outcome', 'SKIP')
-    if psr >= 4 and (rr >= 2 or vo in ('FAIL', 'PARTIAL')):
+    # validator_outcome removed (Spec 619 Req 4) — the SR-over rule keys on revise
+    # rounds alone; the old field was structurally always-SKIP (dead input).
+    if psr >= 4 and rr >= 2:
         cells[(lane, kind_tag)]['SR'].append('over')
 
 emitted = False
@@ -323,8 +360,10 @@ for (lane, kt), dims in cells.items():
         emitted = True
         print(f"{dim} {direction}-prediction in lane={lane} kind_tag={kt} (based on N={majority} closed specs since first record) (direction-only; magnitude not measured)")
 
-if not emitted and mode == 'verbose' and not cells:
-    print("0 records — calibration deferred until data accumulates")
+if not emitted:
+    # State 3 — pairs without deviations: calibration RAN and found no bias. A result,
+    # never a warm-up message.
+    print(f"score-audit: {len(both)} matched pair(s) — no deviation cell crosses the N>=3 threshold. Calibration result: no bias detected")
 PY
 }
 

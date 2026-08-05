@@ -87,6 +87,11 @@ never model-invoked; \`skill (auto)\` — a skill Claude may invoke opportunisti
 additive / reversible); \`skill (explicit)\` — a skill invoked only when you name it. Every entry is
 also invocable outside Claude Code as \`bin/forge <name>\` (Windows: \`bin\\forge.ps1 <name>\`).
 Model tier is operator-advisory only (ADR-316) — Claude Code's model picker is the real selector.
+
+**\`/forge configure\` is the primary configuration surface** (Spec 607); \`/configure\` and
+\`/config-change\` remain valid direct dispatch names for it and \`/forge config-change\`
+respectively — both keep working unchanged, the \`/forge <sub>\` spelling below is simply
+what's advertised (Spec 580 lifecycle fold).
 HEADER
 
   for stage in "${STAGES[@]}"; do

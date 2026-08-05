@@ -2,6 +2,7 @@
 name: tab
 description: "Initialize or close a multi-tab session for parallel development"
 workflow_stage: implementation
+argument-hint: "[label lane [spec-number] | close]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -13,7 +14,7 @@ workflow_stage: implementation
 # Framework: FORGE
 Initialize or close a multi-tab session for coordinated parallel development.
 
-If $ARGUMENTS is `?` or `help`:
+If $ARGUMENTS is empty, `?`, or `help`:
   Print:
   ```
   /tab — Initialize or close a multi-tab coordination session.

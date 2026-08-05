@@ -191,24 +191,6 @@ check_git_bash() {
   fi
 }
 
-check_copier() {
-  local py_cmd="python3"
-  command -v python3 &>/dev/null || py_cmd="python"
-  if $py_cmd -m copier --version &>/dev/null 2>&1; then
-    local version
-    version=$($py_cmd -m copier --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
-    local major
-    major=$(echo "$version" | cut -d. -f1)
-    if [[ "$major" -ge 9 ]]; then
-      echo "ok:$version"
-    else
-      echo "old:$version"
-    fi
-  else
-    echo "missing"
-  fi
-}
-
 check_shellcheck() {
   if command -v shellcheck &>/dev/null; then
     echo "ok"
@@ -242,9 +224,6 @@ offer_install() {
         dnf)    install_cmd="sudo dnf install -y git" ;;
         pacman) install_cmd="sudo pacman -S --noconfirm git" ;;
       esac
-      ;;
-    copier)
-      install_cmd="pip install copier"
       ;;
     shellcheck)
       install_cmd="pip install shellcheck-py"
@@ -327,22 +306,7 @@ run_prereq_checks() {
     n/a)   ;;  # not Windows
   esac
 
-  # Copier
-  local copier_status
-  copier_status=$(check_copier)
-  case "$copier_status" in
-    ok:*)
-      _log_info "Copier: ${copier_status#ok:} ✓"
-      ;;
-    old:*)
-      _log_warn "Copier: ${copier_status#old:} (need 9.0+)"
-      offer_install copier "$pkg_mgr" || missing=$((missing + 1))
-      ;;
-    missing)
-      _log_error "Copier: not found (need 9.0+)"
-      offer_install copier "$pkg_mgr" || missing=$((missing + 1))
-      ;;
-  esac
+  # (Copier prereq check removed by Spec 558 — the render path was deleted in v4.0.0.)
 
   # Shellcheck (advisory)
   local sc_status
@@ -423,15 +387,13 @@ resolve_source() {
     return
   fi
 
-  # Alternative: walk up looking for copier.yml (indicates we're in a FORGE repo)
+  # Alternative: walk up looking for a FORGE repo root (AGENTS.md + .forge/ pair;
+  # the pre-558 copier.yml marker was deleted with the Copier surface)
   local dir="${SCRIPT_DIR}"
   while [[ "$dir" != "/" && "$dir" != "." ]]; do
-    if [[ -f "${dir}/copier.yml" || -f "${dir}/copier.yaml" || -f "${dir}/cookiecutter.json" ]]; then
-      # Check for .forge directory under this root
-      if [[ -d "${dir}/.forge" ]]; then
-        echo "${dir}/.forge"
-        return
-      fi
+    if [[ -f "${dir}/AGENTS.md" && -d "${dir}/.forge" ]]; then
+      echo "${dir}/.forge"
+      return
     fi
     dir="$(dirname "$dir")"
   done

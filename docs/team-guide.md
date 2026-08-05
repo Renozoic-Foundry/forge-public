@@ -82,10 +82,10 @@ question is just *who writes it and when*:
 **Is your change a bug fix?**
 - One-file fix with an obvious cause: commit and PR with a clear message — `/reconcile` picks it
   up as above.
-- If it touches multiple files or changes behavior, write the spec yourself. Copy the [spec template](../template/docs/specs/_template.md), fill in the Objective and Acceptance Criteria, and reference it in your PR. The other sections can stay as placeholders.
+- If it touches multiple files or changes behavior, write the spec yourself. Copy the spec template (`docs/specs/_template.md` in your project), fill in the Objective and Acceptance Criteria, and reference it in your PR. The other sections can stay as placeholders.
 
 **Is your change a new feature or significant refactor?**
-- Create a spec from the [spec template](../template/docs/specs/_template.md). This isn't bureaucracy — it's a context anchor that helps reviewers understand what you're doing and why. Fill in at minimum: Objective, Scope (what's in and out), and Acceptance Criteria (how to verify it's done).
+- Create a spec from the spec template (`docs/specs/_template.md` in your project). This isn't bureaucracy — it's a context anchor that helps reviewers understand what you're doing and why. Fill in at minimum: Objective, Scope (what's in and out), and Acceptance Criteria (how to verify it's done).
 - If you use Claude Code, run `/spec` to generate one from a brief description. If you don't, copy the template manually.
 
 **Not sure?**

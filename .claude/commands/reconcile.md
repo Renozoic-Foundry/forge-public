@@ -2,6 +2,7 @@
 name: reconcile
 description: "Reconcile git history into the spec corpus — draft stub specs / memory notes for work committed outside FORGE"
 workflow_stage: discovery
+argument-hint: "[--since ref] [--dry-run]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,

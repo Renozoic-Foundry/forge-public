@@ -1,5 +1,0 @@
-# FORGE container build — exclude runtime artifacts
-handoffs/
-audit/
-worktrees/
-*.log

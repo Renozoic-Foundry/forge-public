@@ -2,6 +2,7 @@
 name: implement
 description: "Build a spec end-to-end with evidence gates"
 workflow_stage: implementation
+argument-hint: "[spec-number|next] [--goal-mode] [--abort]"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -16,7 +17,7 @@ workflow_stage: implementation
 <!-- multi-block mode: serialized — each choice block waits for operator response before the next mechanical step proceeds. See docs/process-kit/implementation-patterns.md § Multi-block disambiguation rule. -->
 Implement the specified spec. Usage: /implement <spec-number|next>
 
-If $ARGUMENTS is `?` or `help`:
+If $ARGUMENTS is empty, `?`, or `help`:
   Print:
   ```
   /implement — Implements a spec (FORGE Solve Loop). Auto-approves draft specs inline.
@@ -204,11 +205,28 @@ Before reading the full spec body in Step 1, this gate verifies the spec has eit
    - If spec is `consensus-required` AND `BV ≥ 4` AND `R ≥ 3`: the `Consensus-Exempt: <reason>` value MUST contain a `[reviewed-by: <second-operator-identity>]` token. If absent, FAIL with: "Lane B Consensus-Exempt requires [reviewed-by: <identity>] counter-sign for BV≥4 + R≥3 specs (forensic anchor; prevents audit-laundering composition with vet-pending + Spec 052 sealing)."
    - Lane A: single 30-char operator-authored reason remains the trust root; counter-sign rule does NOT apply.
 
-5. **Verify presence**: if `consensus-required` and no exemption applies, verify either `Consensus-Close-SHA:` (40-char hex) OR `Consensus-Exempt:` (≥ 30 chars; Lane B counter-sign per step 4) is present.
+5. **Verify presence (evidence-presence check — Spec 623)**: if `consensus-required` and no
+   exemption applies, verify ONE of:
+   - `Consensus-Close-SHA:` (40-char hex) — convergent-close evidence (Spec 389, unchanged); or
+   - `Consensus-Exempt:` (≥ 30 chars; Lane B counter-sign per step 4); or
+   - `Consensus-Rounds: <N>` — the universal review-evidence marker, written by `/consensus`
+     Step 4c+ at every completed round, convergent or not. A rounds marker is accepted ONLY
+     after the cross-check passes:
+     ```bash
+     bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/consensus-evidence-check.sh docs/specs/NNN-<slug>.md
+     ```
+     The checker compares the marker against the Spec 258 session consensus records — max
+     parseable round for this spec across ALL `consensus_reviews[]` records in ALL
+     `docs/sessions/*.json` sidecars (round parse bounded to standalone integers 1–9).
+     Convergence state stays data, never gate input: a 3-round non-convergent review is
+     review EVIDENCE; it is not, and never claims to be, convergence.
 
 6. **Gate outcome**:
    - PASS via SHA: `GATE [final-draft-consensus]: PASS — Consensus-Close-SHA <8-char prefix> present.` Proceed.
    - PASS via exemption: `GATE [final-draft-consensus]: PASS — Consensus-Exempt: <reason snippet>.` Proceed.
+   - PASS via rounds (Spec 623 — checker exit 0): `GATE [final-draft-consensus]: PASS — Consensus-Rounds N cross-checked against the session consensus record (recorded max M ≥ N).` Proceed.
+   - FAIL inflated marker (Spec 623 — checker exit 1): `GATE [final-draft-consensus]: FAIL — Consensus-Rounds N contradicted by the session consensus record (recorded max M < N — inflated claim; /consensus flushes the sidecar BEFORE the marker, so this is tamper-evidence, not crash residue). The spec evaluates as un-reviewed. Remediation: re-run /consensus NNN (writes both artifacts in order), or remove the marker.` HALT.
+   - COULD-NOT-CHECK (Spec 623 — checker exit 2): the marker is present but cannot be cross-checked — no session record at all, no parseable round field, a malformed marker, or the checker helper absent/degraded (partially-synced consumer; shared-script-presence precedent). NOT the forgery FAIL and NOT a pass: emit `GATE [final-draft-consensus]: COULD-NOT-CHECK — Consensus-Rounds present but <checker reason>; routing to the Spec 395 exemption/operator-adjudication path.` The operator resolves by setting `Consensus-Exempt: <reason ≥ 30 chars>` or re-running `/consensus NNN`. HALT until resolved — never a silent pass.
    - SKIP not-qualifying (low-priority spec): `GATE [final-draft-consensus]: SKIP — spec does not require consensus (lane=<lane>, BV=<n>, E=<n>, R=<n>).` Proceed silently.
    - SKIP hotfix: `GATE [final-draft-consensus]: SKIP — hotfix lane.` Proceed.
    - FAIL (no SHA, no Exempt): `GATE [final-draft-consensus]: FAIL — Spec NNN requires final-draft consensus before /implement. Run /consensus NNN, or set Consensus-Exempt: <reason ≥ 30 chars> in frontmatter.` HALT — do not proceed to Step 1.
@@ -217,7 +235,7 @@ Before reading the full spec body in Step 1, this gate verifies the spec has eit
 7. **Activity log (Req 3)** — append a single JSONL line to `docs/sessions/activity-log.jsonl` (the canonical activity-log path established by Spec 134; Spec 052 immutability sealing reads from this file):
    - Lane A (no compliance profile):
      ```json
-     {"timestamp":"<ISO 8601>","event_type":"consensus-gate-check","spec_id":"NNN","decision":"PASS|FAIL|SKIP","gate_path":"SHA|exempt|exempt-trivial-doc|skip-not-qualifying|skip-hotfix|missing","agent_id":"<id>","consensus_status":"<vet-pending|absent>"}
+     {"timestamp":"<ISO 8601>","event_type":"consensus-gate-check","spec_id":"NNN","decision":"PASS|FAIL|SKIP","gate_path":"SHA|rounds|exempt|exempt-trivial-doc|skip-not-qualifying|skip-hotfix|rounds-inflated|rounds-could-not-check|missing","agent_id":"<id>","consensus_status":"<vet-pending|absent>"}
      ```
      `consensus_status` is `vet-pending` when frontmatter contains `Consensus-Status: vet-pending`, `absent` otherwise (Req 5 + AC 11).
    - Lane B: include the Lane A fields PLUS `operator_identity` (from `forge.identity` config), `spec_file_sha` (sha256 of spec file), and the applicable provenance field — `consensus_close_sha` (gate_path=SHA), or `consensus_exempt_reason` + `reviewed_by_identity` (gate_path=exempt).
@@ -302,6 +320,21 @@ If computed ≠ listed: display "⚠ Score mismatch: listed=X, computed=Y — wi
      SENTINEL
      ```
      This signals to the edit-gate hook that an active `/implement` session is in progress.
+   - **Predicted-record safety net (Spec 619)**: specs that never passed through `/spec` or a
+     score-changing `/revise` (splits, promoted stubs, reconcile drafts) reach implementation
+     with no `predicted` record, which starves the Spec 368 calibration loop of matched pairs
+     (measured 26% pairing on FORGE's own log, 2026-08-03). After the sentinel is written,
+     append one guarded `predicted` record — only if none exists yet for this spec — with the
+     frontmatter scores and `predicted_by=implement-approval` (distinguishable from operator
+     predictions at `/spec` time):
+     ```bash
+     if ! bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh read-records "NNN" | grep -q '"kind":"predicted"'; then
+       bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.sh record-predicted "NNN" "$bv" "$e" "$r" "$sr" "$tc" "$lane" "$kind_tag" 0 implement-approval
+     fi
+     ```
+     (PowerShell: same two subcommands via `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1`.)
+     BV/E/R/SR/TC come from the `Priority-Score:`/`Token-Cost:` frontmatter already parsed at
+     Step 1b; `kind_tag` per the `/spec` inference table. Advisory — failures never block.
 
 ### [mechanical] Step 1c — Container/host parity check (Spec 541)
 
@@ -323,6 +356,10 @@ auto-remediates and never blocks the pipeline. Surface its stdout verbatim to th
   command (e.g. `docker exec <container> sh -c 'cd /app && npm install'`, or "container
   `<name>` not found in `docker ps`"), then proceed to Step 2a regardless — the gate never
   halts implementation.
+- Any other exit (Spec 624 — e.g. 127 helper-not-found on a consumer mid-template-sync):
+  emit one operator-visible warning line — `container-parity helper unavailable (exit N) —
+  check skipped` — and proceed to Step 2a. Never a silent fall-through: the gate stays
+  advisory, but its absence is always said out loud.
 
 ### [mechanical] Step 2a — Spec integrity signature (Spec 089)
 
@@ -669,31 +706,9 @@ Scan the spec's `## Implementation Summary` `Changed files` list for any new com
   - If `add`: prompt for which existing commands should reference this one and add ACs.
   - If `skip`: append to the spec's Revision Log: `YYYY-MM-DD: Command integration check: skipped — no integration ACs added.`
 
-### [mechanical] Step 4e — Update-Manifest Classification Check (Spec 180)
-
-Scan the spec's `## Implementation Summary` `Changed files` list for any path starting with `template/`.
-
-- If **no template/ paths found**: mark `[x] Update-manifest classification verified — no template files in scope`. Proceed silently.
-- If **template/ paths found**: read `.forge/modules/update-manifest.yaml` (or `update-manifest.yaml` at the project root if the former does not exist).
-  - For each template file in the spec's changed files list, check if it appears in the manifest with a classification (`merge`, `overwrite`, `skip`, etc.).
-  - If **all template files are classified**: mark `[x] Update-manifest classification verified`. Proceed silently.
-  - If **any template file is missing from the manifest**:
-
-    Present:
-    ```
-    UPDATE-MANIFEST GAP — The following template files are not classified in update-manifest.yaml:
-    <list of unclassified files>
-
-    Each file needs a classification to control how /forge stoke handles updates.
-    ```
-    > **Choose** — type a number or keyword:
-    > | # | Rank | Action | Rationale | What happens |
-    > |---|------|--------|-----------|--------------|
-    > | **1** | 1 | `add` | Required for /forge stoke to handle updates correctly | Add missing entries to update-manifest.yaml now |
-    > | **2** | — | `skip` | Skip recorded in revision log; downstream stoke risk | Proceed — skip recorded in revision log |
-
-    - If `add`: for each missing file, prompt for the classification. Add to `update-manifest.yaml`.
-    - If `skip`: append to the spec's Revision Log: `YYYY-MM-DD: Update-manifest classification check: skipped for <files>.`
+<!-- Step 4e (update-manifest classification, Spec 180) retired by Spec 558: it fired only
+     on template/ paths in the changed-files list; that surface and update-manifest.yaml were
+     deleted with the Copier cutover. Step number retired, not reused. -->
 
 5. State: "Beginning implementation of Spec NNN — <title> (Lane: <lane>)." List the files that will be changed.
 
@@ -755,7 +770,7 @@ After implementation, check for dependency manifest changes introduced by this s
    ```
    If no manifest files changed: skip this step silently.
 
-2. **Run dependency audit**: If manifest changes are detected, run the `/dependency-audit` logic inline (Steps 3-5 from that command) to produce the structured report.
+2. **Assess the changes**: for each changed manifest, extract per-package old/new versions and assign a risk flag — `new-dependency` (absent at the spec baseline), `major-version-bump`, `minor-bump`, or `patch-bump` — producing the structured rows items 3–5 consume. (This assessment runs inline; the standalone dependency-audit command was a Spec 587 deprecation stub, physically removed in v4.0.0. Review criteria: `docs/process-kit/dependency-vetting-checklist.md`.)
 
 3. **Emit signal**: If any dependency has a `new-dependency` or `major-version-bump` risk flag:
    - Emit: `DEPENDENCY_REVIEW_REQUIRED — <count> dependencies need review (<count> new, <count> major bumps).`
@@ -894,6 +909,117 @@ After all implementation (Step 6) and any DA-disposition application that may ha
 
 **Why end-of-Step-6**: by this point implementation and any inline DA-disposition edits have landed, so Step 7 and `/close` Step 2 both read the recomputed hash. /close's spec-integrity gate (Spec 089) is unchanged; only the write-side timing moves.
 
+### [mechanical] Step 6d — Inline validator promotion (Spec 608, optional)
+
+Runs the SAME fortified validator `/close` Step 2d uses ("existing validator" branch — redaction,
+scanner pre-check, orchestrator-run execution evidence, evidence injection, post-check), via the
+single-sourced `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh` script and the shared
+`${CLAUDE_PLUGIN_ROOT:-.}/.forge/templates/validator-dispatch-prompt.md` template, immediately
+after the SHA-anchored state from Step 6c — so a regression surfaces in the same session as the
+implementation instead of at a later, disconnected `/close`.
+
+**This step never lets `/close`'s own Step 2d validator pass skip or lighten** — it always runs
+unconditionally afterward too, regardless of this step's outcome (Spec 608 Constraints). No
+skip-detection, caching, or "already validated" short-circuit exists here or in `/close`.
+
+1. **Config check (Spec 609 — three-state)**: read `forge.implement.inline_validation` from
+   `AGENTS.md`. Accepted values: `false` | `true` | `auto` (default). An explicit `true`/`false`
+   is absolute and always wins — `auto`'s trigger conditions below apply ONLY when the value is
+   `auto` or the key is absent.
+   - `true` → always run this step (skip straight to step 2).
+   - `false` → skip this step silently. Mark
+     `[x] Inline validator promotion — disabled (forge.implement.inline_validation: false)`.
+   - `auto` (or absent) → evaluate the trigger conditions below; run this step ONLY if at least
+     one matches, otherwise skip silently with the same `[x]` mark as `false` (the spec behaves
+     identically to `false` from the operator's point of view when no trigger fires):
+     - The spec's own `R >= 3` in its `Priority-Score:` frontmatter (mirrors Step 9d's trigger).
+     - The spec's own `Consensus-Review: true` (mirrors Step 9d's trigger).
+     - **Dependency-trigger (direction matters)**: run
+       `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --get-backlog --format=json`
+       and scan every returned row with `status` in `{draft, in-progress}` for a `depends` field
+       referencing the CURRENT spec's ID. If found, the trigger fires — **this is the
+       depended-upon spec being implemented, not the dependent one**: if spec X's `Dependencies:`
+       names spec Y, implementing **Y** (not X) is what auto-enables inline validation, because Y
+       is the foundation X is already counting on.
+       - **Fail-open on scan failure**: if the `derived_state.py` call fails (non-zero exit) or
+         returns malformed JSON, log a one-line warning, treat the dependency condition as
+         not-matched, and continue evaluating the other two trigger conditions normally — never
+         block `/implement` on this failure, and never silently treat a scan failure as a match.
+
+2. **Shared-script presence check**: if `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh`
+   does not exist (e.g. a consumer project mid-template-sync): report
+   "Inline validator promotion: validator-pipeline.sh absent — skipped (will apply once the
+   template sync delivers it)." and proceed to Step 6e. Never hard-error the `/implement` run.
+
+3. **Prepare evidence** (mirrors `/close` Step 2d.a2-a3):
+   ```bash
+   mkdir -p tmp/evidence/SPEC-NNN-YYYYMMDD
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh prepare \
+     docs/specs/NNN-<slug>.md tmp/evidence/SPEC-NNN-YYYYMMDD
+   ```
+   If this call exits non-zero (script execution failure, not a validator verdict): **fail
+   closed** — emit `GATE [inline-validator]: FAIL — validator-pipeline.sh prepare errored (exit
+   <code>). Remediation: investigate the script failure before retrying.` and STOP. Do not
+   proceed to Step 6e as if this step passed.
+
+   **Could-not-check (Spec 618)**: if the freshly-written `flagged-acs.json` carries
+   `"section_found":false`, surface `prepare`'s warning to the operator verbatim — the spec
+   file has no recognized acceptance-criteria heading (`## Acceptance Criteria` /
+   `## Definition of done`, any case), so the Stage-1 browser-verb pre-check read NO ACs.
+   Do NOT read the empty `flagged_acs` as "no browser-verb ACs". Non-blocking here; the
+   blocking enforcement point is `/close` Step 2b2's COULD-NOT-CHECK outcome.
+
+4. **Orchestrator-run execution evidence** (mirrors `/close` Step 2d.a4): if
+   `runnable-acs.json` is non-empty, run each named Test-Plan command fresh, capture
+   exit code + output tagged per AC to `tmp/evidence/SPEC-NNN-YYYYMMDD/orchestrator-run.txt`
+   (same format as `/close`'s a4). A command that fails to run is a blocker — same fail-closed
+   handling as step 3.
+
+5. **Evidence excerpt + dispatch**: build the injection block and spawn the validator sub-agent
+   using the shared template, identically to `/close` Step 2d.a5/b:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh evidence-excerpt \
+     tmp/evidence/SPEC-NNN-YYYYMMDD
+   ```
+   Fill `${CLAUDE_PLUGIN_ROOT:-.}/.forge/templates/validator-dispatch-prompt.md`'s placeholders
+   exactly as `/close` Step 2d.b does, and spawn the validator sub-agent (read-only, no prior
+   conversation context per `forge.roles.separation`, same role-state-file lifecycle as Step 2b).
+
+6. **Post-check**: parse the validator's JSON, write it to
+   `tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json`, then run:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh postcheck \
+     docs/specs/NNN-<slug>.md \
+     tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json \
+     tmp/evidence/SPEC-NNN-YYYYMMDD/runnable-acs.json
+   ```
+   Non-zero exit that is NOT a validator-verdict FAIL (i.e. the script itself errored) is the
+   same fail-closed case as step 3 — halt, do not treat as an implicit PASS.
+
+7. **Outcome**:
+   - **PASS** (validator verdict PASS + post-check exit 0): emit
+     `GATE [inline-validator]: PASS — all <count> acceptance criteria verified independently
+     (inline, pre-/close).` Proceed to Step 6e. `/close`'s Step 2d will still run its own full
+     pass later, unconditionally — this is confirmation, not a substitute.
+   - **FAIL** (validator verdict FAIL, OR post-check flags a runnable-command AC lacking
+     execution evidence): emit `GATE [inline-validator]: FAIL — <count> acceptance criteria
+     failed independent verification (caught inline, before /close).` Print each failed
+     criterion with the validator's notes. Report: "Spec NNN failed inline validation. Fix the
+     failed criteria, then re-run /implement NNN." **Do NOT proceed to Step 6e, Step 7.0, or any
+     later step** — the spec's `Status:` stays at its current in-progress value; it never reaches
+     a state suggesting `/close`-readiness.
+
+8. Log the inline invocation to `docs/sessions/agent-file-registry.md`:
+   ```
+   YYYY-MM-DD HH:MM | validator | spec-NNN | <result> | criteria: <pass>/<total> | mode: inline
+   ```
+
+**Constraint reminder**: this step and `/close`'s Step 2d always both run (when both are enabled)
+— there is no code path anywhere that lets `/close` skip or lighten its own validator pass based
+on this step's outcome. Skip conditions here fail open (proceed to Step 6e without the pass, per
+step 1/2); a validator-level FAIL fails closed (halt); a script-execution error fails closed
+(halt) — never fails open into an implicit PASS.
+
 ### [mechanical] Step 6e — Live-smoke gate (Spec 403)
 
 Synthetic fixtures can pass while real-world variants break (SIG-387-01, SIG-390-01, SIG-401-01). This gate detects when a spec's Test Plan calls for a *live*/*smoke*/*dry-run-against-the-repo* step and requires the operator to actually execute it (or explicitly defer) before `/close` can succeed. Operator-driven and additive — never replaces fixture-based testing, never auto-executes anything.
@@ -908,8 +1034,13 @@ Synthetic fixtures can pass while real-world variants break (SIG-387-01, SIG-390
    ```
    Live-smoke step detected: "<matched step text>"
    Execute now and capture output? (yes/no/defer)
+   Route the execution through `forge run NNN -- <command…>` so it is captured as
+   reproduction provenance (Spec 620) — the /close repro-provenance gate then verifies
+   the spec's Reproduction Commands block against this capture for free.
    ```
-   - `yes`: run the step. Capture stdout/stderr verbatim.
+   - `yes`: run the step — via `forge run NNN -- <command…>` where the step is a single
+     command (the wrapper executes it unmodified, propagates the exit code, and records
+     the byte-verbatim invocation; Spec 620 Req 15). Capture stdout/stderr verbatim.
    - `no` / `defer`: record the deferral; do NOT block `/implement` (the gate re-fires at `/close`). Operator may proceed.
 
 4. **Capture evidence**: if any step was executed (`yes`), append the captured output to the spec's `## Evidence` section under a `### Live-smoke evidence` subsection:
@@ -953,6 +1084,42 @@ Before rendering the post-implementation checklist below (and before any `## Imp
    - [ ] Authorization-rule lint gate — see Step 7c
    - [ ] AGENTS.md prose↔YAML drift detector — see Step 7d
    - [ ] AC mechanism-existence pass — see Step 7e
+   - [ ] Lane-ceiling check — see Step 7f
+
+### [mechanical] Step 7f — Lane-Ceiling Check (Spec 611)
+
+A spec's `Change-Lane:` sets its token/cost/time budget ceiling (AGENTS.md § Budget ceilings
+per lane), but the lane is **self-classified by the authoring agent** and was never compared
+against what the implementation actually did. Spec 528's consensus round raised this as a CISO
+blocking finding: an unsupervised loop could declare `hotfix` and stay under a lighter
+budget/review bar than its diff warrants. This step closes that gap with an objective check.
+
+Run the check against the active spec:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/lane-ceiling-check.sh docs/specs/NNN-*.md
+```
+
+(PowerShell: `pwsh ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/lane-ceiling-check.ps1 docs/specs/NNN-*.md`.)
+
+It compares the declared lane against objective diff signals — files touched, LOC delta, and
+dependency-manifest changes — and reports one of:
+
+- `GATE [lane-ceiling]: PASS` — declared lane is consistent with the diff. Proceed.
+- `GATE [lane-ceiling]: FLAG` — mismatch. Surface the full output to the operator. **Advisory:
+  it does NOT block `/implement`** (the helper exits 0 in its default posture). Remediation is
+  either to widen `Change-Lane` via `/revise` (an operator decision) or to record why the
+  declared lane is still correct.
+
+**FLAG-ONLY — load-bearing (Spec 611 Constraints).** The check MUST NOT reclassify the lane and
+MUST NOT write to the spec file. Auto-correcting the lane would recreate precisely the
+self-authorization surface the check exists to close: an agent that can rewrite its own budget
+ceiling is not constrained by it. Spec 611 AC7 asserts the no-write property mechanically by
+comparing the spec's bytes before and after a run — it is verified, not merely promised.
+
+**Skip conditions**: helper absent (e.g. a consumer project mid-template-sync) → emit
+`Lane-ceiling check: lane-ceiling-check.sh absent — skipped.` and mark `[x]` with the note.
+Never hard-error `/implement` on the helper's absence.
 
 ### [mechanical] Step 7a — README Update Detection (Spec 180)
 
@@ -985,45 +1152,19 @@ Also scan the changed files list for files matching: `*.md` in root (README.md),
 
 - If **README.md is already in the changed files list**: mark `[x] README.md update check — already updated`. Proceed silently.
 
-### [mechanical] Step 7b — Template/Own-Copy Sync Verification (Spec 180)
-
-Scan the changed files list (from `git diff --name-only` against the spec baseline) for files that exist in both `template/` and the project root (own-copies).
-
-**Detection logic**:
-- For each changed file under `template/.claude/commands/`, check if a corresponding file exists at `.claude/commands/` (same filename).
-- For each changed file under `template/.forge/commands/`, check if a corresponding file exists at `.forge/commands/` (same filename).
-- For each changed file under `template/bin/`, check if a corresponding file exists at `bin/` (same filename).
-- For each changed file under `template/scripts/`, check if a corresponding file exists at `scripts/` (same filename).
-- For each changed own-copy file at `.claude/commands/`, `.forge/commands/`, `bin/`, or `scripts/`, check if a corresponding file exists under `template/`.
-- Exclude files with `.jinja` suffix from exact-match comparison (template files may have `.jinja` suffix while own-copies do not).
-
-- If **no dual files found in the changed set**: mark `[x] Template/own-copy sync verified — no dual files changed`. Proceed silently.
-- If **dual files found but both sides were changed**: mark `[x] Template/own-copy sync verified — both sides updated`. Proceed silently.
-- If **only one side was changed** (template changed but own-copy not updated, or vice versa):
-
-  Present:
-  ```
-  TEMPLATE/OWN-COPY DRIFT — The following files were changed on one side but not the other:
-  <list of drifted files with which side was changed>
-
-  FORGE requires template and own-copy command files to stay in sync.
-  ```
-  > **Choose** — type a number or keyword:
-  > | # | Rank | Action | Rationale | What happens |
-  > |---|------|--------|-----------|--------------|
-  > | **1** | 1 | `sync` | Restores parity automatically; safest default | Apply the changes to the missing side now |
-  > | **2** | — | `skip` | Drift intentional; reason recorded | Proceed — drift is intentional (reason will be logged) |
-
-  - If `sync`: for each drifted file, copy the changes to the other side.
-  - If `skip`: append to the spec's Revision Log: `YYYY-MM-DD: Template/own-copy sync check: skipped — drift noted as intentional for <files>.`
+<!-- Step 7b (template/own-copy sync verification, Spec 180) retired by Spec 558: the
+     template/ side of every pair it compared was deleted. Step 7b+ below (new-command mirror
+     sync) and the /close single-source parity gate (Step 2d^2) own the remaining mirror
+     surface (.forge/commands <-> .claude/commands). Step number retired, not reused. -->
 
 ### [mechanical] Step 7b+ — New-Command Mirror Sync (Spec 479)
 
-Step 7b above detects drift between an existing template/own-copy *pair*; it cannot
-catch a **brand-new canonical command** since only one side exists. This step closes
-that gap: when `/implement` creates a NEW canonical command, it generates the agent-dir
-mirror in the same lane/commit, so `forge-sync-commands.sh --check` passes on the merged
-tree without a post-merge sync (SIG-PARALLEL-C).
+The `/close` single-source parity gate detects drift between an existing
+canonical/mirror *pair*; it cannot catch a **brand-new canonical command** since only
+one side exists. This step closes that gap: when `/implement` creates a NEW canonical
+command, it generates the agent-dir mirror in the same lane/commit, so
+`forge-sync-commands.sh --check` passes on the merged tree without a post-merge sync
+(SIG-PARALLEL-C).
 
 **Detection (gate — no-op for the common case)**: from the changed-files set
 (`git diff --name-only` against the spec baseline, plus untracked files via
@@ -1064,7 +1205,7 @@ already exist:
 
 ### [mechanical] Step 7c — Authorization-Rule Lint Gate (Spec 327)
 
-If the spec's Implementation Summary `Changed files` list includes any path under `.claude/commands/`, `.forge/commands/`, `template/.claude/commands/`, or `template/.forge/commands/`, run the authorization-rule lint gate against the current command surface.
+If the spec's Implementation Summary `Changed files` list includes any path under `.claude/commands/` or `.forge/commands/`, run the authorization-rule lint gate against the current command surface.
 
 ```bash
 bash scripts/validate-authorization-rules.sh --evidence-dir tmp/evidence/SPEC-NNN-YYYYMMDD/
@@ -1093,7 +1234,7 @@ Default mode at first ship is `advisory`; operator flips to `strict` (via `mode:
 
 Sibling check to Step 7c. Where 7c lints command BODIES against the YAML block, 7d verifies the YAML block stays in sync with the operator-readable PROSE bullets that authorize the same actions — an unsynced bullet is a silent gap in 7c's coverage.
 
-If the spec's Implementation Summary `Changed files` list includes any path under `.claude/commands/`, `.forge/commands/`, `template/.claude/commands/`, `template/.forge/commands/`, **or `AGENTS.md`**, run the drift detector:
+If the spec's Implementation Summary `Changed files` list includes any path under `.claude/commands/`, `.forge/commands/`, **or `AGENTS.md`**, run the drift detector:
 
 ```bash
 bash scripts/validate-agents-md-drift.sh --evidence-dir tmp/evidence/SPEC-NNN-YYYYMMDD/

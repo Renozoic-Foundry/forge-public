@@ -2,6 +2,7 @@
 name: note
 description: "Add a scratchpad note for the next process checkpoint"
 disable-model-invocation: false
+argument-hint: "[signal|bug] text"
 ---
 
 <!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
@@ -13,7 +14,7 @@ disable-model-invocation: false
 # Framework: FORGE
 Add a scratchpad note to be reviewed at the next appropriate process checkpoint.
 
-If $ARGUMENTS is `?` or `help`:
+If $ARGUMENTS is empty, `?`, or `help`:
   Print:
   ```
   /note — Add a scratchpad note for review at the next process checkpoint.

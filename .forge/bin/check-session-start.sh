@@ -29,6 +29,20 @@ if [ -n "${_HOOK_DIR:-}" ] && [ -f "$_HOOK_DIR/../lib/resolve-root.sh" ]; then
 fi
 cd "${FORGE_PROJECT_ROOT:-.}" 2>/dev/null || true
 
+# --- Spec 610 R1: non-FORGE-project gate (silent early exit) ---
+# Plugin activation is USER-WIDE at user scope (verified 2026-07-30 against
+# code.claude.com/docs/en/discover-plugins — "Installation scopes"), so this hook fires in
+# EVERY project the operator opens, including ones that never touched FORGE. Emitting a
+# FORGE state snapshot there is pure noise. If the resolved project root has NONE of the
+# three FORGE markers, exit silently (0, no stdout) — and, critically, do so BEFORE any
+# output and BEFORE the Spec 575 config load below, so a non-FORGE project pays nothing.
+# Any ONE marker present keeps today's behavior exactly (R2) — the check is deliberately
+# a three-way AND, biased toward showing the snapshot: a half-configured or mid-init
+# project still gets its banner rather than being silently skipped.
+if [ ! -f "AGENTS.md" ] && [ ! -d ".forge" ] && [ ! -f ".forge/onboarding.yaml" ]; then
+  exit 0
+fi
+
 # Spec 575 — resolve process-state paths via forge.paths (classic defaults when unset)
 SESSIONS_DIR="docs/sessions"
 _cfg="$(dirname "${BASH_SOURCE[0]:-$0}")/../lib/config.sh"

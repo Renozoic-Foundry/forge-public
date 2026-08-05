@@ -267,6 +267,16 @@ e. BLOCK is advisory — the operator decides whether to adjust the plan.
 
    Skip silently if (a) the `Priority-Score:` comment is missing or unparseable, (b) `Consensus-Review:` is absent or any value other than literal `true`, or (c) both R < 3 AND E < 3. The advisory is non-blocking and prompt-level — it does not gate `/implement`.
 
+   **Dispatch-gate pointer (Spec 590)**: when this advisory fires, append one sentence naming the
+   downstream consequence — `/parallel` Step 2c will not dispatch a `Consensus-Review: true` spec
+   that has no recorded consensus:
+
+   > _Spec NNN will also be **halted at `/parallel` dispatch** by the Step 2c consensus gate until
+   > `/consensus NNN` runs or `Consensus-Exempt:` is set (Spec 590)._
+
+   Pointer only — `/matrix` performs no predicate evaluation of its own and this adds no new
+   logic here. The authoritative check lives in `/parallel` Step 2c and `/implement` Step 0d.
+
 12b. **Hygiene Pass** (Spec 370):
 
 # >>> spec-370 hygiene-pass

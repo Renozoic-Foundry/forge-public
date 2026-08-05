@@ -2,6 +2,7 @@
 name: nanoclaw
 description: "Manage the NanoClaw container — start, stop, status, logs"
 workflow_stage: configuration
+argument-hint: "[start|stop|status|logs [N]]"
 ---
 # Framework: FORGE
 Manage the NanoClaw container — start, stop, status, or view logs.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FORGE Edit-Gate — PreToolUse hook (Spec 457, fixes EA-143; schema migrated Spec 499)
-# Blocks Write/Edit/NotebookEdit to template/, scripts/, or copier.yml when no active
+# Blocks Write/Edit/NotebookEdit to scripts/ when no active
 # /implement session exists (.forge/state/implementing.json absent).
 #
 # Replaces the inert inline edit-gate (EA-143): the old command read a non-existent
@@ -51,7 +51,7 @@ fi
 
 # Only gate the watched paths.
 case "$REL" in
-  template/*|scripts/*|copier.yml)
+  scripts/*)
     if [ ! -f ".forge/state/implementing.json" ]; then
       REASON="EDIT-GATE (Spec 457): No active /implement session. Run /implement <spec-number> before editing ${REL}. "
       REASON+="This is a hard block — if it is a legitimate non-spec edit, run it yourself in the terminal."

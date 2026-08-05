@@ -26,11 +26,17 @@ Recent changes since the last published refresh — split by audience. Each item
 
 ### User-facing changes
 
+- **Argument hints in the command picker + consistent bare-command menus** — every
+  parameterized FORGE command now shows its subcommands/flags in Claude Code's autocomplete
+  as you type (e.g. `/forge` shows `[init|stoke|status|doctor|update|…]`), and invoking a
+  parameterized command with no arguments prints its annotated usage menu and stops instead
+  of guessing. Commands whose bare invocation is the point (`/now`, `/close`, `/spec`, …)
+  keep their inference behavior unchanged (Spec 626).
 - **Install FORGE as a Claude Code plugin** — the FORGE command, agent, skill, and hook payload now installs directly from a checkout with `claude plugin install ./`, alongside the existing Copier project scaffolding. One signing-ready package instead of hand-wired command directories (Specs 463, 487–491).
 - **Hands-off chained delivery with a push safety gate** — `/implement` can flow from one spec to the next without an intervening `/close`, while every `git push` still raises an in-session approval prompt so the human stays the release authority (Specs 494–498).
 - **`/evolve` fires when signals warrant, not on a calendar** — the Evolve Loop is admitted by accumulated signal thresholds (unreviewed signals, error autopsies, deferred scope) instead of a fixed cadence, so process review happens when there is actually something to review (Spec 500).
 - **`/consensus` — structured multi-role review on demand** — gather Devil's Advocate, Maverick Thinker, Competitor, and C-suite perspectives on a contentious spec in one pass before you commit (Spec 179).
-- **`/signal-to-strategy` — turn research into scored advantage hypotheses** — convert external research signals into ranked, testable strategy bets that feed the backlog (Spec 458).
+- **`/brainstorm --strategy` — turn research into scored advantage hypotheses** — convert external research signals into ranked, testable strategy bets that feed the backlog (Spec 458; folded from the retired signal-to-strategy command in v4.0.0 — Specs 587, 627).
 - **`/reconcile` — ingest work done outside FORGE** — scans git history for commits with no matching spec, clusters them by related files, and (routed by size) drafts retroactive stub specs for large clusters or operator memory notes for small ambient changes. Keeps the spec corpus a faithful map of the codebase on shared / mixed-team repos. Purely additive — stubs are `draft` and never auto-advance (Spec 486).
 - **Aging-draft surface in `/now`** — drafts past their `valid-until` date now appear in the daily report so they don't silently rot (Spec 363).
 - **Tab-lane awareness in choice blocks** — when a tab is active, post-action menus filter or annotate options to match lane scope (Spec 351). Single-tab sessions stay quiet — no active-tabs noise (Spec 352).
@@ -55,7 +61,7 @@ Recent changes since the last published refresh — split by audience. Each item
 
 ## Quickstart
 
-FORGE v3 is delivered as a **signed Claude Code plugin**. The plugin is the runtime — it ships
+FORGE is delivered as a **signed Claude Code plugin**. The plugin is the runtime — it ships
 every slash command, agent role, skill, and hook. Your project keeps only its own data (specs,
 sessions, process docs); the framework updates through the plugin, not through file copies.
 
@@ -63,9 +69,9 @@ sessions, process docs); the framework updates through the plugin, not through f
 
 - **Claude Code** (recommended path): [Claude Code](https://claude.ai/code) and Git. That's it —
   no Python, no template engine.
-- **Other AI IDEs** (Cursor, Windsurf, Copilot, …): the legacy Copier scaffold path applies and
-  requires Python and Copier — see [CONTRIBUTING.md](CONTRIBUTING.md#prerequisites) for the
-  pinned versions.
+- **Other AI IDEs** (Cursor, Windsurf, Copilot, …): the pinned-checkout runtime path applies
+  (Git only — clone the framework once at a release tag and point `~/.forge/runtime-root` at it;
+  see the collapsed cross-IDE section below).
 
 ### Install the plugin
 
@@ -131,39 +137,32 @@ AI agents read `AGENTS.md` and invoke `bin/forge <command>`; non-AI developers g
 `bin/forge now|status|list`. Optionally record `forge.runtime.pin: <tag>` in the project's
 AGENTS.md; the launcher warns when a teammate's checkout drifts from the pin.
 
-The legacy full-template Copier render remains a last resort (`/forge init --copier`; requires
-Python and Copier — [pinned versions](CONTRIBUTING.md#prerequisites)) but vendors the framework
-into your repo — prefer the runtime checkout above.
+(The legacy full-template Copier render was removed in v4.0.0 — Spec 558. `/forge init` is the
+scaffolder. Classic Copier-rendered projects remain supported in place on ≤v3.x releases; their
+opt-in on-ramp is `forge stoke --to-plugin` — see the
+[migration decision guide](docs/process-kit/migration-decision-guide.md).)
 
-The legacy `install.sh` / `install.ps1` scripts still work for this path; as of Spec 579 they no
-longer plant the user-level `/forge-bootstrap` command by default (compat: prefer `/forge init` —
-opt back in with `--legacy-bootstrap` / `-LegacyBootstrap`; see
-[forge-bootstrap.md](forge-bootstrap.md), legacy, scaffolding-only). Not sure which path your
-project needs? Run `/forge doctor` — it detects the state and offers the mapped fix
+(The legacy `install.sh` / `install.ps1` bootstrap scripts and their `forge-bootstrap.md` guide
+were unpublished with the Copier surface in v4.0.0 — they rendered the deleted template; ≤v3.x
+tags still carry them.) Not sure which path your project needs? Run `/forge doctor` — it detects
+the state and offers the mapped fix
 ([migration decision guide](docs/process-kit/migration-decision-guide.md)).
 
-**Bootstrapping with security overrides (consent-required):**
+**Security overrides (consent-required):**
 
-If you need to override `test_command`, `lint_command`, `harness_command`, or any `include_*` security toggle at bootstrap time, supply the runtime consent token on the same invocation (Spec 437):
-
-```bash
-copier copy https://github.com/Renozoic-Foundry/forge-public.git my-project \
-  --trust \
-  --data accept_security_overrides=true \
-  --data accept_security_overrides_confirmed=true \
-  --data 'test_command=./mvnw test'
-```
-
-The `--data accept_security_overrides_confirmed=true` flag MUST be on the CLI command line — answers-file-supplied consent tokens are rejected by design. The same shape applies to `copier update`. For the rationale, see the `copier-gotchas.md` guide that ships in your scaffolded project (`docs/process-kit/copier-gotchas.md` after the template render).
+Overrides of `test_command`, `lint_command`, `harness_command`, or any `include_*` security
+toggle resolve through the live consent gate on every `/forge stoke` apply (Spec 591) — the
+gate asks in-session and never persists consent. (The former render-time `copier copy --data`
+consent shape was removed with the Copier surface in v4.0.0 — Spec 558.)
 
 </details>
 
 ### Keeping up to date
 
-| What to update | Claude Code (plugin) | Legacy Copier projects |
+| What to update | Claude Code (plugin) | Legacy Copier projects (≤v3.x) |
 |---|---|---|
-| **FORGE framework** (commands, agents, skills, hooks) | Update the plugin: re-run `/plugin install forge@forge` (marketplace) or `claude plugin install ./` from a refreshed checkout | Re-render via `copier update` |
-| **Your project's scaffold files** (process kit, templates) | `/forge stoke` (pre-plugin projects); plugin-native projects receive doc updates with the plugin | `/forge stoke` or `copier update` |
+| **FORGE framework** (commands, agents, skills, hooks) | Update the plugin: re-run `/plugin install forge@forge` (marketplace) or `claude plugin install ./` from a refreshed checkout | Stay on ≤v3.x tooling, or migrate via `forge stoke --to-plugin` |
+| **Your project's scaffold files** (process kit, templates) | `/forge stoke` (content-merge engine) | ≤v3.x `/forge stoke`; the `copier update` path was removed in v4.0.0 |
 
 Framework behavior always comes from the installed plugin version. Generated reference docs
 (quick reference, command reference) carry a provenance header naming the source version and a
@@ -186,7 +185,7 @@ These capabilities are built into every FORGE project out of the box:
 - **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
 - **Role-separated agents** — 17 roles (Spec Author, Devil's Advocate, Implementer, Validator, Maverick Thinker, Competitor, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **34 slash commands** — Full lifecycle coverage with command chaining. Model tiering is advisory; the IDE model picker is the real selector (Spec 316). See [command reference](docs/command-reference.md) for the full list.
+- **32 slash commands** — Full lifecycle coverage with command chaining. Model tiering is advisory; the IDE model picker is the real selector (Spec 316). See [command reference](docs/command-reference.md) for the full list.
 - **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
 
 ### Enhancing features (opt-in)
@@ -313,7 +312,7 @@ On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they aut
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 594 specs across 160 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 620 specs across 167 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

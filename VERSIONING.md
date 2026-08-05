@@ -28,7 +28,7 @@ The scheme follows:
 | Surface | Versioned by | How updates arrive |
 |---|---|---|
 | **Plugin (the framework runtime)** | `plugin.json` `version` — matches the release tag | Reinstall/update the plugin; commands, agents, skills, and hooks all move together |
-| **Project scaffold (your project's data)** | The release that scaffolded it; legacy Copier projects record the exact synced commit in `.copier-answers.yml` (`_commit`) | Plugin-native scaffolds: nothing to re-render — project files are yours; generated docs refresh with the plugin. Legacy Copier projects: `/forge stoke` / `copier update` |
+| **Project scaffold (your project's data)** | The release that scaffolded it; legacy Copier projects record the exact synced commit in `.copier-answers.yml` (`_commit`) | Plugin-native scaffolds: nothing to re-render — project files are yours; generated docs refresh with the plugin. Legacy Copier projects: supported in place on ≤v3.x; on-ramp to v4+ is `forge stoke --to-plugin` (the `copier update` path was removed in v4.0.0 — Spec 558) |
 
 Generated reference documents (quick reference, command reference, configuration reference) carry
 a provenance header naming the plugin version and source content hash, plus a revision-history
@@ -71,13 +71,13 @@ When a breaking change ships, it is documented here with migration steps.
 
 **Breaking**:
 - **Plugin-primary distribution**: the framework surface (commands, agents, skills, hooks) is delivered by the installed plugin, not by files rendered into your project. Pre-v3 projects keep working, but framework updates arrive via the plugin from here on.
-- **Copier minimum-version pin** (Spec 294): `copier.yml` sets `_min_copier_version` — legacy-path consumers on an older Copier must upgrade before `copier update` runs.
+- **Copier minimum-version pin** (Spec 294, ≤v3.x only): `copier.yml` set `_min_copier_version` on the legacy path; the file and the path were removed in v4.0.0 (Spec 558).
 - **Always-on signal capture** (Spec 340): closing a spec records retro signals automatically.
 
 Migration steps (pre-v3 FORGE project → plugin consumer):
 1. Install the plugin: `claude plugin marketplace add Renozoic-Foundry/forge-public`, then `/plugin install forge@forge`.
 2. Run `/forge init` in the project — it detects the pre-plugin layout and offers the upgrade path (project-local command copies are superseded by the plugin's).
-3. Staying on the legacy Copier path instead? Upgrade Copier (`pip install -U copier`) to satisfy the version pin, then `/forge stoke`.
+3. Staying on the legacy Copier path instead? Stay on a ≤v3.x release — the path was removed in v4.0.0; migrate later with `forge stoke --to-plugin`.
 
 **Erratum (2026-07-17)**: the v3.0.0 release notes initially described `/forge-init` greenfield
 scaffolding as Copier-free before the zero-Copier scaffolder had shipped in the public cut; the

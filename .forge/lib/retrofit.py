@@ -3,7 +3,7 @@
 reorganize → reconcile-seed, as composable, idempotent, dry-run-default phases.
 
 Thin orchestrator by contract (consensus R2/R3): snapshots ride
-migration-snapshot.sh, link verification rides scripts/check-doc-links.py,
+migration-snapshot.sh, link verification rides .forge/lib/check_doc_links.py,
 history seeding rides /reconcile — no forked logic.
 
 Usage:
@@ -313,7 +313,7 @@ def phase_reorganize(root, _plugin_root, apply_):
     if not apply_:
         print("\nDRY-RUN — re-run with --apply (after operator confirmation) to perform the moves, "
               "write the forge.paths block + ownership manifest, then verify links "
-              "(scripts/check-doc-links.py) and doctor (D-PATHS).")
+              "(.forge/lib/check_doc_links.py) and doctor (D-PATHS).")
         return
     validate_paths([s for s, _ in moves] + [d for _, d in moves])
     os.makedirs(os.path.join(root, ".forge", "project"), exist_ok=True)

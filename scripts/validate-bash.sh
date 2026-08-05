@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# validate-bash.sh — Strip Jinja2 tags and run shellcheck on all FORGE template bash scripts.
+# validate-bash.sh — Strip Jinja2 tags and run shellcheck on all FORGE runtime bash scripts.
 # Part of Spec 008 — Shellcheck Validation for FORGE Bash Scripts.
+# Spec 558: re-pointed from the deleted template/.forge mirror tree to the canonical
+# root .forge/ (the plugin payload source — same script set the mirror carried).
 #
 # Usage: scripts/validate-bash.sh [--verbose] [--portability]
 #
@@ -9,7 +11,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TEMPLATE_DIR="${REPO_ROOT}/template/.forge"
+TEMPLATE_DIR="${REPO_ROOT}/.forge"
 VERBOSE=""
 PORTABILITY=""
 for arg in "$@"; do
@@ -57,7 +59,7 @@ if [[ ${#scripts[@]} -eq 0 ]]; then
     exit 1
 fi
 
-echo "Found ${#scripts[@]} bash scripts in template .forge/"
+echo "Found ${#scripts[@]} bash scripts in .forge/"
 echo "shellcheck version: $("$SHELLCHECK" --version | head -2 | tail -1)"
 echo "---"
 

@@ -1,15 +1,18 @@
 # Versioning Policy
+<!-- Last verified: 2026-08-06 -->
 
-FORGE v3 is distributed as a **signed Claude Code plugin** — the plugin version
-(`.claude-plugin/plugin.json`) is the framework version. The legacy Copier template scaffold is
-versioned by the same release tags for projects still on that path. This document defines the
-version scheme, what constitutes a breaking change on each surface, and how updates land.
+FORGE is distributed as a **signed Claude Code plugin** — the plugin version
+(`.claude-plugin/plugin.json`) is the framework version. Projects still on the legacy Copier
+scaffold (retired for new projects in v4.0.0; see below) are versioned by the same release tags.
+This document defines the version scheme, what constitutes a breaking change on each surface, and
+how updates land.
 
 ## Version Scheme
 
-FORGE uses semantic version tags. Released tags to date: **v1.0.0**, **v2.0.0**, **v2.1.0**, and
-**v3.0.0** (released 2026-07-16 — the plugin-primary release). Each tag corresponds to a commit on
-the `main` branch of the upstream source.
+FORGE uses semantic version tags. Released tags to date: **v1.0.0**, **v2.0.0**, **v2.1.0**,
+**v3.0.0** (released 2026-07-16 — the plugin-primary release), and **v4.0.0** (released
+2026-08-05 — the Copier destructive cutover). Each tag corresponds to a commit on the `main`
+branch of the upstream source.
 
 The scheme follows:
 - **MAJOR**: Breaking changes (removed/renamed commands, removed variables, restructured directories, delivery-model changes)
@@ -21,7 +24,8 @@ The scheme follows:
 | v1.0.0 | — | First tagged release of the FORGE template. |
 | v2.0.0 | MAJOR | Template restructure and command-surface changes. |
 | v2.1.0 | MINOR | Additive commands and process refinements. |
-| v3.0.0 | MAJOR | **Plugin-primary distribution** (released 2026-07-16): the framework surface ships as a Claude Code plugin; `/forge init` scaffolds projects with no Copier; Copier retained as the explicit legacy path. Also: Copier `_min_copier_version` pin (Spec 294), always-on signal capture (Spec 340). See migration note below. |
+| v3.0.0 | MAJOR | **Plugin-primary distribution** (released 2026-07-16): the framework surface ships as a Claude Code plugin; `/forge init` scaffolds projects with no Copier; Copier retained as the legacy path for existing projects. Also: Copier `_min_copier_version` pin (Spec 294), always-on signal capture (Spec 340). See migration note below. |
+| v4.0.0 | MAJOR | **Copier destructive cutover** (released 2026-08-05, Spec 558): `copier.yml`, `copier-hooks/`, and the `template/` tree are deleted outright — Copier is no longer a supported path for any project, new or existing. `/forge init` is the only scaffolder. Classic Copier-rendered projects on ≤v3.x remain supported in place; their on-ramp is `forge stoke --to-plugin`. |
 
 ## Two versioned surfaces
 
@@ -66,6 +70,23 @@ them and pauses on merge conflicts for manual resolution.
 ## Migration Notes
 
 When a breaking change ships, it is documented here with migration steps.
+
+### v4.0.0 — Copier destructive cutover (2026-08-05)
+
+**Breaking**:
+- **Copier surface removed outright** (Spec 558): `copier.yml`, `copier-hooks/`, and the
+  `template/` tree are deleted from the source repo. `copier update` no longer works against
+  this codebase for any project — new or existing.
+
+Migration steps (classic Copier project → plugin consumer):
+1. Install the plugin: `claude plugin marketplace add Renozoic-Foundry/forge-public`, then `/plugin install forge@forge`.
+2. Run `forge stoke --to-plugin` in the project — the opt-in converter that replaces the
+   Copier-rendered command surface with the plugin's.
+3. Not sure which state your project is in? Run `/forge doctor` — it detects the state and
+   offers the mapped fix.
+
+Projects that stay on a ≤v3.x tag continue to work unmodified; there is no forced migration
+deadline.
 
 ### v3.0.0 — plugin-primary release (2026-07-16)
 

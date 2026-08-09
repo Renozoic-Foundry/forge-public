@@ -54,6 +54,40 @@ def _parse_ack_list(text: str) -> list[str]:
     return []
 
 
+def seed_bases_from_ours(project_root, state_dir, files) -> int:
+    """Spec 636 R9/AC8 — seed base snapshots from current consumer content, write-STATE-only.
+
+    For each resolved file lacking a recorded base, copy the CONSUMER's current content
+    ("ours") into the base-snapshot store. Writes ONLY under `state_dir` — never a consumer
+    file (AC8 (a): consumer files stay byte-identical). Returns the count seeded.
+
+    This converts the already-onboarded installed base (migration marker present, no bases)
+    OFF the bootstrap-takes-theirs path: the NEXT apply merges base(=ours-at-seed) vs new
+    ours vs theirs — a real 3-way merge — instead of `base==ours → theirs wins everywhere`.
+    Seeding and merging never happen in the same invocation (AC8 (b)); the caller returns
+    immediately after seeding.
+
+    Base snapshots are written with upgrade_merge's own line I/O so the format is identical
+    to what cmd_merge reads and writes (verbatim line endings, utf-8).
+    """
+    from pathlib import Path as _P
+    import upgrade_merge as _um  # sibling lib; import here to keep module import graph flat
+
+    project_root = _P(project_root)
+    state_dir = _P(state_dir)
+    seeded = 0
+    for rel in files:
+        base = state_dir / rel
+        if base.is_file():
+            continue
+        ours = project_root / rel
+        if not ours.is_file():
+            continue  # consumer does not have this file — nothing to seed
+        _um._write_lines(base, _um._read_lines(ours))
+        seeded += 1
+    return seeded
+
+
 def cmd_migrate(args: argparse.Namespace) -> int:
     project_root = Path(args.project_root)
     marker_path = project_root / args.marker

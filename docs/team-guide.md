@@ -120,11 +120,24 @@ Files you **should** be aware of:
 |---|---|
 | **Spec** | A versioned document describing a planned change — objective, scope, acceptance criteria, evidence |
 | **AC (Acceptance Criteria)** | Explicit pass/fail conditions that define "done" for a spec |
+| **Spec gate** | The requirement that a spec exists and is approved before any implementation work starts |
 | **Evidence gate** | A checkpoint that requires proof (test output, verification results) before work advances |
 | **DA (Devil's Advocate)** | An adversarial review role that challenges a spec's assumptions before implementation |
+| **DA gate** | The review checkpoint where the Devil's Advocate role must weigh in before implementation begins |
 | **Change lane** | The risk level of a change: `hotfix`, `small-change`, `standard-feature`, or `process-only` |
 | **Solve Loop** | The per-spec delivery cycle: create spec, implement, verify, close |
 | **Evolve Loop** | The process improvement cycle: capture signals from work, review patterns, improve the process |
+| **EGID** | Evidence-Gated Iterative Delivery — the methodology name for FORGE's Solve Loop + evidence gates |
+| **Signals** | Short, logged observations (what went well, what caused friction) captured during `/close`; they feed the Evolve Loop |
+| **Stoke** (`/forge stoke`) | The command that pulls framework/process-kit updates into your project |
+| **Freshness stamps** | The `Last verified: YYYY-MM-DD` marker on a doc; a stale stamp means the doc may no longer match reality |
+| **Autonomy levels (L0–L4)** | How much a change requires human approval at each step, from L0 (human does everything) to L4 (agent runs the full cycle) |
+| **Lane A / Lane B** | Lane A is standard delivery (chat-based approval); Lane B adds hardware-authenticated approval for regulated/safety-critical work |
+| **Contained vs. classic layout** | Where a project's FORGE files live: `contained` keeps them under `.forge/project/`; `classic` uses the traditional `docs/specs`, `docs/sessions` paths |
+| **Greenfield** | An existing codebase that has no FORGE files yet |
+| **Legacy-upgrade** | A project with FORGE files from before the plugin existed, being upgraded in place |
+| **Stoke-redirect** | A project scaffolded by the old Copier-based installer; `/forge init` hands it off to `/forge stoke` instead of re-initializing |
+| **Command / skill (auto) / skill (explicit)** | How a capability is invoked: a `command` is a plain slash command; a `skill (auto)` may be invoked by the AI on its own when relevant; a `skill (explicit)` only runs when you name it |
 
 ---
 

@@ -1,4 +1,5 @@
 # FORGE Roadmap
+<!-- Last verified: 2026-08-06 -->
 
 What has shipped, what is in progress, what is in preview, and what is deferred — classified
 against actual release data. Every "released" claim cites the release or closed spec that
@@ -23,7 +24,8 @@ The framework currently ships 32 active slash commands — see the generated
 | Command chaining / auto-progression (L2) with decision-point pauses | v2.0.0 phase-1 chaining; Spec 498 (chain contract) |
 | Deferred-close chaining with the `git push` permission-prompt gate (L1–L2 enforced) | Specs 494–498 |
 | **Plugin-primary distribution** — signed Claude Code plugin ships the full framework surface | v3.0.0 (2026-07-16); Specs 463, 487–491; ADR-502 |
-| Plugin-native project scaffold — `/forge init` with zero Copier (Copier retained as explicit legacy path) | Spec 557 (in v3.0.0) |
+| Plugin-native project scaffold — `/forge init` with zero Copier | Spec 557 (in v3.0.0) |
+| **Copier destructive cutover** — `copier.yml`, `copier-hooks/`, and `template/` deleted outright; `/forge init` is the only scaffolder for any project, new or existing | v4.0.0 (2026-08-05); Spec 558 |
 | Structured debugging command (`/debug`, hypothesis-first) | Spec 525 |
 | `/reconcile` — ingest work committed outside FORGE into the spec corpus | Spec 486 |
 | Generated reference docs with provenance + revision history, drift-gated; audience-scoped link-integrity publish gate | Specs 571, 574 |
@@ -32,8 +34,8 @@ The framework currently ships 32 active slash commands — see the generated
 
 ## Current
 
-- **v3 documentation alignment** — plugin-primary rewrite of the consumer journey and conceptual
-  docs (Specs 572, 573 — this cycle).
+- **Post-v4.0.0 doctrine sweep** — closing references to the retired Copier surface left
+  dangling across docs and commands after the Spec 558 cutover (Spec 641 and this cycle).
 - **Consumer-tier hardening** — the plugin payload is minisign-signed as of v3.0.0; further
   distribution-tier provisioning is in progress.
 
@@ -46,8 +48,6 @@ production packaging is not complete:
   L3/L4 push-gate guarantee is *designed, not enforced* until the server-managed settings trust
   root lands (ADR-453 §6.1). Deferred-close chaining is therefore restricted to L1–L2. L4's
   scheduled-trigger envelope is declarative-only (Spec 531 / ADR-531).
-- **Async gate review via NanoClaw messaging** (Telegram/WhatsApp/Slack) — optional integration
-  for L3+; opt-in, packaged separately.
 - **Multi-agent swarms at scale** — parallel spec delivery with conflict detection ships
   (`/parallel`, `/scheduler`); large-swarm operation remains operator-supervised.
 
@@ -59,9 +59,15 @@ Not in the current public release — do not build compliance processes on these
   ISO 13485, IEC 62443), bidirectional traceability, V&V reports, spec sealing. Lane-gate
   scaffolding exists in the command bodies; the engine itself requires additional validation
   before it ships (see FAQ — "Is the compliance engine production-ready?" → No).
-- **Hardware Authentication (PAL)** — YubiKey challenge-response for gate decisions; will be
-  required for Lane B, optional for Lane A. In development; `gate.provider: prompt` is the
-  supported mode today.
+- **Hardware Authentication (PAL)** — YubiKey challenge-response for gate decisions; was slated
+  as required for Lane B, optional for Lane A. Development is paused and retirement of the
+  hardware-gate subsystem has been proposed (Spec 654, draft — a proposal, not a settled
+  decision); `gate.provider: prompt` is the supported mode today.
+- **Async gate review via NanoClaw messaging** (Telegram/WhatsApp/Slack) — previously listed
+  under Preview as an optional L3+ integration. Not part of the supported distribution: the
+  organization deployment excludes it, no autonomy level depends on it, and retirement of the
+  subsystem has been proposed (Spec 654, draft). Listed here so the removal is explicit rather
+  than silent.
 - **Server-managed settings trust root** — the agent-immutable enforcement layer that upgrades
   the L3/L4 push-gate from designed to enforced (ADR-453; unlocks chaining above L2).
 - **Public-repo CI** — the maintainer CI workflow runs on the private canonical repo; a public

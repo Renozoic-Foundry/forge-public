@@ -1,11 +1,15 @@
 # FORGE — Framework for Organized Reliable Gated Engineering
-<!-- Last verified: (unset) | STALE: re-verify — Spec 535 changed an install/distribution surface (/close 2026-07-13, Spec 509) -->
+<!-- Last verified: 2026-08-06 -->
 
 AI coding assistants lose context between sessions, drift from the original goal, and declare work done before it meets acceptance criteria. FORGE fixes that with specs, evidence gates, and a structured delivery process that remains reliable as agent autonomy increases.
 
 ## Mission
 
 FORGE's mission is to make each individual developer the CEO of a continuously-optimizing development company. FORGE provides strategic advisors, executive staff, and auditable process at every step — but the developer decides exactly what happens, when, and why.
+
+**New here?** The [4-command starter set](docs/QUICK-REFERENCE.md#core-commands) covers
+everything you need for a first session, and the [glossary](docs/team-guide.md#glossary)
+defines every FORGE-specific term you'll run into below.
 
 ## Contents
 
@@ -15,49 +19,10 @@ FORGE's mission is to make each individual developer the CEO of a continuously-o
 - [MCP Documentation Servers](#mcp-documentation-servers) — optional doc servers
 - [Architecture Overview](#architecture-overview) — layer model and module system
 - [Key Concepts](#key-concepts) — specs, evidence gates, loops, lanes
-- [Agent Runtime](#agent-runtime) — autonomy levels and NanoClaw integration
+- [Agent Runtime](#agent-runtime) — autonomy levels and the multi-agent pipeline
 - [Contributing](#contributing) — how to contribute
 - [Compliance Disclaimer](#compliance-disclaimer) — what FORGE is not
 - [License](#license) — MIT
-
-## What's new
-
-Recent changes since the last published refresh — split by audience. Each item cites the closed spec for traceability.
-
-### User-facing changes
-
-- **Argument hints in the command picker + consistent bare-command menus** — every
-  parameterized FORGE command now shows its subcommands/flags in Claude Code's autocomplete
-  as you type (e.g. `/forge` shows `[init|stoke|status|doctor|update|…]`), and invoking a
-  parameterized command with no arguments prints its annotated usage menu and stops instead
-  of guessing. Commands whose bare invocation is the point (`/now`, `/close`, `/spec`, …)
-  keep their inference behavior unchanged (Spec 626).
-- **Install FORGE as a Claude Code plugin** — the FORGE command, agent, skill, and hook payload now installs directly from a checkout with `claude plugin install ./`, alongside the existing Copier project scaffolding. One signing-ready package instead of hand-wired command directories (Specs 463, 487–491).
-- **Hands-off chained delivery with a push safety gate** — `/implement` can flow from one spec to the next without an intervening `/close`, while every `git push` still raises an in-session approval prompt so the human stays the release authority (Specs 494–498).
-- **`/evolve` fires when signals warrant, not on a calendar** — the Evolve Loop is admitted by accumulated signal thresholds (unreviewed signals, error autopsies, deferred scope) instead of a fixed cadence, so process review happens when there is actually something to review (Spec 500).
-- **`/consensus` — structured multi-role review on demand** — gather Devil's Advocate, Maverick Thinker, Competitor, and C-suite perspectives on a contentious spec in one pass before you commit (Spec 179).
-- **`/brainstorm --strategy` — turn research into scored advantage hypotheses** — convert external research signals into ranked, testable strategy bets that feed the backlog (Spec 458; folded from the retired signal-to-strategy command in v4.0.0 — Specs 587, 627).
-- **`/reconcile` — ingest work done outside FORGE** — scans git history for commits with no matching spec, clusters them by related files, and (routed by size) drafts retroactive stub specs for large clusters or operator memory notes for small ambient changes. Keeps the spec corpus a faithful map of the codebase on shared / mixed-team repos. Purely additive — stubs are `draft` and never auto-advance (Spec 486).
-- **Aging-draft surface in `/now`** — drafts past their `valid-until` date now appear in the daily report so they don't silently rot (Spec 363).
-- **Tab-lane awareness in choice blocks** — when a tab is active, post-action menus filter or annotate options to match lane scope (Spec 351). Single-tab sessions stay quiet — no active-tabs noise (Spec 352).
-- **Active-tab marker** — lifecycle commands (`/implement`, `/close`, `/session`) now self-identify their registry row from `.forge/state/active-tab-*.json`, eliminating ambiguous "which tab am I?" prompts (Spec 353).
-- **Post-implementation value demo** — high-risk and consensus-reviewed specs get an optional before/after demonstration to aid `/close` review (Spec 261).
-- **Parallel-batch suggestion in `/implement next`** — when adjacent backlog items are independent, the command surfaces a `/parallel` recommendation instead of serializing silently (Spec 087).
-- **Checkpoint resume for `/implement`** — interrupted runs can resume from the last completed step instead of restarting from scratch (Spec 123).
-- **Choice-block format standardized** — every lifecycle action ends with a numbered table of next moves, ranks, and rationales (Spec 025).
-- **Cost-framework scope reduction** — operator-advisory model tiering replaces brittle frontmatter routing; the IDE picker is the only real selector (Spec 316).
-
-### Backend & process changes
-
-- **Forge-public publish scrub** — build-time exclusion list, genericization transforms, and forbidden-token validator harden the public-facing sync (Spec 374).
-- **`/matrix` backlog hygiene pass** — recomputes scores, surfaces drift, and ships byte-identical guide mirrors across template surfaces (Spec 370).
-- **Score-prediction audit loop** — every `/matrix` run logs predicted-vs-recomputed deltas to `.forge/state/score-audit.jsonl` for cross-session calibration (Spec 368).
-- **CI parity gate for spec-integrity sentinels** — the `lane-gate` block in `/implement` and `/close` is now hash-checked at PR time so silent drift between mirrors becomes impossible (Spec 367).
-- **Approved-SHA recompute step** — `/implement` Step 6c rewrites the spec-integrity hash after DA dispositions edit protected sections, closing the recurring SHA-pingpong defect class (Spec 365).
-- **DA-Encoded-Via convention** — when a spec converges through `/consensus` rounds 1+2 with aligned-approve, `/implement` Step 2b can verify the encoded path (round value + SHA reachability + drift check) and skip a fresh DA subagent spawn, saving one role invocation per qualifying spec (Spec 389).
-- **AGENTS.md prose↔YAML drift detector** — sibling check to the auth-rule lint gate that catches prose bullets not yet reflected in the structured authorization block (Spec 330).
-- **Authorization-rule lint gate** — `/implement` Step 7c scans command bodies for sensitive actions (`git push`, `gh pr create`, `rm -rf`) that lack a confirmation token within proximity (Spec 327).
-- **Two-pass adversarial DA review** — when the first DA pass finds zero issues, a deeper second pass confirms or surfaces hidden risk (Spec 181).
 
 ## Quickstart
 
@@ -168,6 +133,30 @@ Framework behavior always comes from the installed plugin version. Generated ref
 (quick reference, command reference) carry a provenance header naming the source version and a
 revision-history section, so you can always tell what you're running.
 
+## What's new
+
+Recent changes since the last published refresh — split by audience. Each item cites the closed spec for traceability.
+
+### User-facing changes
+
+- **The public install route works end-to-end** — the shipped `/forge init` front door is fully plugin-native; the stale Copier-era scaffolder that v4.0.0 left in the public artifact was replaced, and overlay staleness is now gated at release time (Spec 635).
+- **`/forge stoke` merges only FORGE-owned files** — the update path consults the ownership manifest and never sweeps your project's own files into a framework merge (Spec 636).
+- **Versioned doctrine delivery** — consumer `AGENTS.md`/`CLAUDE.md` files carry a delimited, version-stamped authorization-core block generated from the framework's own doctrine; `/forge doctor` reports drift and hand-edit conflicts read-only (Spec 640).
+- **Honest autonomy levels** — L3/L4 descriptions now state exactly what they buy (chain continuation while gates pass); `/close` and `git push` remain operator actions at every level (Spec 649).
+- **`/test` runs your configured test command** — the project's configured `test_command` is honored instead of assuming Python (Spec 651).
+- **`bin/forge` launcher correctness** — status crash fixed, doctor path corrected, PowerShell doctor added, exit codes aligned across shells (Spec 645).
+- **Argument hints in the command picker + consistent bare-command menus** — every parameterized FORGE command shows its subcommands/flags in Claude Code's autocomplete (e.g. `/forge` shows `[init|stoke|status|doctor|update|…]`), and bare invocations print an annotated usage menu instead of guessing (Spec 626).
+- **Install FORGE as a Claude Code plugin** — the command, agent, skill, and hook payload installs from the marketplace or directly from a checkout with `claude plugin install ./`. Plugin-primary distribution replaced the Copier template surface in v4.0.0 (Specs 463, 487–491, 558).
+
+### Backend & process changes
+
+- **Release machinery hardened** — content-sync preflight on the cutter (Spec 628), payload EOL pinning and working-tree renormalization (Specs 629, 634), release-safety gates added to the PowerShell cutter (Spec 638), CI acceptance tests that exercise the final artifact rather than the source tree (Specs 639, 653).
+- **Payload verifier integrity** — the plugin payload verifier no longer loads its verification algorithm from the payload it verifies (Spec 631).
+- **Commit hygiene on brownfield repos** — `/forge onboarding` and `/configure` no longer sweep unrelated work into their commits (Specs 647, 668).
+- **Model & effort policy** — effort-before-model guidance codified; role/model consistency is checked mechanically (Spec 648).
+- **Consensus proportionality** — review depth scales with a spec's risk and novelty instead of running full-depth for every spec (Spec 666).
+- **Guard-family apply flow restored** — protected-file specs are implementable again via a uniform patch handoff with a fail-closed authority guard (Spec 667).
+
 ## What is FORGE?
 
 FORGE is an opinionated development framework that synthesizes five foundational standards into a coherent workflow for human-AI collaborative software delivery. The underlying methodology — Evidence-Gated Iterative Delivery (EGID) — ensures every lifecycle transition requires demonstrable proof.
@@ -192,16 +181,15 @@ These capabilities are built into every FORGE project out of the box:
 
 Optional capabilities activated per-project based on needs. The core framework operates fully without any of these.
 
-- **NanoClaw Messaging Bridge** — Async gate approvals via Telegram, WhatsApp, Slack. Agents work while you're away; you review on your phone. *For L3+ autonomy.*
 - **Multi-agent swarms** — Parallel spec delivery with conflict detection and swarm budgets. *For high-throughput projects.*
 - **OCI container isolation** — Role-scoped volume mounts for filesystem permission enforcement. *Alternative to default git worktree isolation.*
 
 ### Roadmap
 
-These features are under active development and will be available in future releases:
+Planned or deferred — not part of the supported feature set in this release. See [docs/roadmap.md](docs/roadmap.md) for the full shipped/preview/deferred classification.
 
-- **Lane B Compliance Engine** — Pluggable compliance profiles for regulated industries (IEC 61508, EU 2023/1230, ISO 13485, IEC 62443). Bidirectional traceability, V&V reports, spec sealing. Designed for safety-critical firmware and medical device teams.
-- **Hardware Authentication (PAL)** — YubiKey HMAC-SHA1 challenge-response for gate decisions. Cryptographic proof of human approval. Will be required for Lane B; optional for Lane A.
+- **Lane B Compliance Engine** — Pluggable compliance profiles for regulated industries (IEC 61508, EU 2023/1230, ISO 13485, IEC 62443). Bidirectional traceability, V&V reports, spec sealing. Lane-gate scaffolding exists in the command bodies; the engine itself requires additional validation before it ships.
+- **Hardware Authentication (PAL)** — YubiKey challenge-response for gate decisions. Development is paused and retirement of the hardware-gate subsystem has been proposed (Spec 654); `gate.provider: prompt` is the supported approval mode today.
 
 ### Foundations
 
@@ -214,15 +202,15 @@ and how they interlock) lives in
 
 ### Autonomy levels
 
-FORGE defines five autonomy levels (L0–L4), all supported. The default is L1 (human-gated). At L2+, the agent chains `/implement` → `/close` → `/implement next` cycles with the human watching at the terminal, intervening only on gate failures or decision points. L3–L4 enable fully async operation via NanoClaw messaging (enhancing feature, opt-in).
+FORGE defines five autonomy levels (L0–L4), all supported. The default is L1 (human-gated). At L2+, the agent chains `/implement` → `/close` → `/implement next` cycles, pausing at decision points; at L3+ it keeps chaining without a per-gate "continue?" pause while gates pass. What no level changes: authorization gates apply at every level — `/close` is operator-invoked and every `git push` raises an in-session approval prompt, at L0 and L4 alike.
 
 | Level | Name | Human role | Status |
 |-------|------|-----------|--------|
 | L0 | Full Manual | Human drives everything; agent advises only | Supported |
 | L1 | Human-Gated | AI implements, human gates every transition | Supported (default) |
 | L2 | Supervised Autonomy | Commands auto-chain on success, human watches at decision points | **Supported** |
-| L3 | Trusted Autonomy | Agent completes full spec cycles; human reviews async via `/close` | Available (NanoClaw messaging opt-in) |
-| L4 | Full Autonomy | Kill switch and budget ceilings are the only hard stops | Preview — requires NanoClaw |
+| L3 | Trusted Autonomy | Agent chains while gates pass, without per-gate pauses; the operator still invokes `/close` and approves every push | Supported |
+| L4 | Full Autonomy | Adds spec-creation chaining; kill switch and budget ceilings are hard stops; `/close` stays operator-invoked | Supported (scheduled execution off by default) |
 
 ## MCP Documentation Servers
 
@@ -235,30 +223,26 @@ MCP servers are declared in `.mcp.json` at the project root.
 
 ## Architecture Overview
 
+The framework runtime lives in the installed plugin; your repository keeps only its own data. `/forge init` scaffolds the project files below, and `claude plugin update` refreshes the framework without touching your repo.
+
 ```
-your-project/
-  .claude/
-    commands/           # FORGE workflow commands (slash commands)
-    settings.json       # IDE hooks (auto-test on edit)
-  .forge/
-    bin/                # Agent runtime scripts + PowerShell wrappers
-      forge-orchestrate.sh/.ps1   # Multi-agent pipeline orchestrator
-      forge-kill.sh/.ps1          # Kill switch — halt all agents
-      forge-status.sh/.ps1        # Agent status query
-    lib/                # Shared libraries (config, adapters, handoff, audit, budget)
-    adapters/           # Runtime adapters (native, OCI) and agent adapters (generic, claude-code)
-    templates/          # Handoff schema + role instruction templates
-    Dockerfile          # Base image for OCI mode (extend for your stack)
-    handoffs/           # Runtime: inter-agent handoff artifacts (gitignored)
-    audit/              # Runtime: audit logs and PID registry (gitignored)
-  CLAUDE.md             # Operating contract (framework + project-specific)
-  AGENTS.md             # AAIF agent configuration + runtime config
+your-project/                       # everything here is yours — scaffolded by /forge init
+  AGENTS.md                         # AAIF agent operating contract + runtime config
+  CLAUDE.md                         # Claude-specific addenda (imports AGENTS.md)
+  bin/forge, bin/forge.ps1          # thin launchers — resolve the installed runtime for non-Claude agents and CI
   docs/
-    process-kit/        # Runbooks, rubrics, checklists, templates
-    specs/              # Versioned spec files
-    sessions/           # Session logs, signals, scratchpad
-    decisions/          # ADR-style architecture decisions
-    backlog.md          # Scored and ranked spec backlog
+    specs/                          # versioned spec files (+ README index, CHANGELOG)
+    sessions/                       # session logs, signals, scratchpad
+    process-kit/                    # runbooks, rubrics, checklists
+    QUICK-REFERENCE.md              # generated command quick reference
+    backlog.md                      # scored and ranked spec backlog
+  .forge/
+    ownership.yaml                  # FORGE-owned vs project-owned partition (drives /forge stoke merges)
+    state/                          # runtime state markers (gitignored)
+
+<plugin install>/forge/<version>/   # the framework — delivered and updated as a signed plugin
+  .claude/commands|agents|skills|hooks   # slash commands, role definitions, skills, session hooks
+  .forge/bin|lib|templates               # runtime scripts, shared libraries, role + handoff templates
 ```
 
 ## Key Concepts
@@ -271,7 +255,7 @@ your-project/
 - **Change lanes**: `hotfix`, `small-change`, `standard-feature`, `process-only`
 - **Signal capture**: Errors, insights, and retro findings are logged and inform priority scoring
 - **Command chaining**: `/implement` → `/close` → `/implement next` auto-chains on gate success (L2+)
-- **Core vs enhancing**: Core framework (specs, gates, learning, commands) works standalone; enhancing features (compliance, NanoClaw, hardware auth) are opt-in
+- **Core vs enhancing**: Core framework (specs, gates, learning, commands) works standalone; enhancing features (multi-agent swarms, OCI isolation, compliance profiles) are opt-in
 
 ### Why structure?
 
@@ -288,31 +272,23 @@ FORGE's structures aren't process overhead — they're the harness that makes au
 
 ## Agent Runtime
 
-FORGE includes a multi-agent pipeline for L2+ autonomy levels. The orchestrator manages role-separated agents (Spec Author → Devil's Advocate → Implementer → Validator) with handoff artifacts and audit logging.
+FORGE includes a multi-agent pipeline for L2+ autonomy levels. The orchestrator manages role-separated agents (Spec Author → Devil's Advocate → Implementer → Validator) with handoff artifacts and audit logging. You drive it through commands — the pipeline's orchestration, status, and kill-switch scripts ship inside the installed plugin's payload, not in your repository:
 
-```bash
-# Dry run — see the pipeline plan without executing
-.forge/bin/forge-orchestrate.sh --spec 001 --dry-run
-
-# Run the full pipeline
-.forge/bin/forge-orchestrate.sh --spec 001
-
-# Check agent status
-.forge/bin/forge-status.sh
-
-# Emergency halt — stop all agents
-.forge/bin/forge-kill.sh
+```
+/parallel 101 102        # deliver independent specs in parallel git worktrees
+/scheduler               # dependency-aware multi-agent scheduling
+/forge status            # pipeline/project status (bin/forge status outside Claude Code)
 ```
 
 **Runtime modes:**
 - **Native** (default) — git worktree isolation. No container runtime required. Note: no filesystem permission enforcement.
 - **OCI** (opt-in) — container isolation with role-scoped volume mounts (`:ro`/`:rw`). Works with any OCI-compatible runtime: Rancher Desktop (dockerd), Podman, nerdctl, Docker Engine. Set `runtime.adapter: oci` in AGENTS.md.
 
-On Windows, use the `.ps1` wrappers (e.g., `forge-orchestrate.ps1`) — they auto-detect Git Bash and delegate.
+On Windows, `bin\forge.ps1` mirrors `bin/forge` — it auto-detects Git Bash and delegates.
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 620 specs across 167 sessions (2026-03-13 through 2026-07-06), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 666 specs across 176 sessions (2026-03-13 through 2026-08-08), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

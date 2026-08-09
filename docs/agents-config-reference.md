@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: .forge/bin/forge-py scripts/gen-agents-config-reference.py
      Sources: AGENTS.md (live defaults) + scripts/lib/agents-config-reference-content.yaml (descriptions)
-     Source content hash: be9beb9811db | FORGE plugin version: 4.0.0
+     Source content hash: 467a90c9b25e | FORGE plugin version: 4.1.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 
 # AGENTS.md configuration reference
@@ -45,7 +45,7 @@ These fields appear in the `forge:` YAML block under the **Runtime Configuration
 | `forge.roles.devils_advocate.model` | enum | `sonnet` | Model tier for the DA subagent (when separation is not `none`). | Controls cost and capability of the DA review agent. |
 | `forge.roles.validator.enabled` | boolean | `true` | Enables or disables the validator gate globally. | When `false`, the independent validation step is skipped. |
 | `forge.roles.validator.skip_lanes` | list of strings | `[]` | Lanes that bypass validator review. | Specs in listed lanes skip the validator gate. |
-| `forge.roles.validator.model` | enum | `sonnet` | Model tier for the validator subagent. | Controls cost and capability of the validator agent. |
+| `forge.roles.validator.model` | enum | `haiku` | Model tier for the validator subagent. | Controls cost and capability of the validator agent. |
 | `forge.roles.implementer.use_worktree` | enum | `auto` | Worktree isolation for implementer agents. Valid values: `auto`, `always`, `never`. | `auto`: uses worktree when running parallel specs. `always`: every implementation runs in a worktree. `never`: all work in the main tree. |
 | `forge.roles.implementer.max_parallel` | integer | `3` | Maximum concurrent implementer agents. | Caps the number of parallel `/implement` sessions to prevent resource exhaustion. |
 | `forge.roles.implementer.max_retries` | integer | `2` | Retry count on test failure before escalating to the operator. | After this many failed attempts, the implementer stops and reports the failure. |
@@ -70,7 +70,6 @@ These fields appear in the `forge:` YAML block under the **Runtime Configuration
 | `forge.dispatch_rules.roles` | YAML block | YAML block — see AGENTS.md | Maps CxO roles to trigger conditions. | Defines which conditions (e.g., `cross_cutting`, `security`, `high_risk`) invoke which advisory roles. |
 | `forge.dispatch_rules.evolve_loop` | YAML block | YAML block — see AGENTS.md | Roles invoked during `/evolve --full`. | Controls which CxO roles participate in Evolve Loop steps (signal analysis, trust calibration, etc.). |
 | `forge.dispatch_rules.touchpoints` | list of strings | `[spec_review, da_gate, close_review, evolve_loop]` | Lifecycle points where dispatch fires. | Determines when in the spec lifecycle advisory roles are consulted. |
-| `forge.agents.model_tier_override` | enum or null | `null` | Single-knob global model-tier override for subagent frontmatter. Valid values: `null`, `haiku`, `sonnet`, `opus`, `inherit` (Spec 462). | Operator policy, not enforcement — see the agent-roles guide. `null` keeps each agent file’s own tier. |
 
 ### Runtime and agent adapters
 
@@ -137,8 +136,8 @@ FORGE defines five autonomy levels that govern how much latitude the AI agent ha
 | L0 | Full Manual | Human performs all work | Agent advises only: answers questions, suggests approaches, reviews code. Does not edit files, run commands, or create specs. | None |
 | L1 | Human-Gated | Human approves every gate transition | Agent writes specs, implements code, runs tests. Every state transition, push, PR, and deploy requires explicit human confirmation. | None (default) |
 | L2 | Supervised Autonomy | Human approves at decision points only | Agent auto-chains mechanical steps (update index, run tests, update changelog). Pauses at decision points (spec approval, validation, priority selection). | None |
-| L3 | Trusted Autonomy | Human reviews asynchronously | Agent completes full spec cycles without waiting at each gate. Human reviews async via `/close`. Devil's Advocate gate is mandatory. Budget ceilings enforced. | NanoClaw (for async gate delivery) |
-| L4 | Full Autonomy | Human intervenes on exception only | Agent creates specs, implements, validates, and closes end-to-end. Kill switch and budget ceilings are the only hard stops. | NanoClaw, mature signal history, high test coverage, established trust |
+| L3 | Trusted Autonomy | Human invokes `/close` and approves pushes | Agent keeps chaining without a per-gate "continue?" pause while gates pass. `/close` stays operator-invoked. Devil's Advocate gate is mandatory. Budget ceilings enforced. | Consistent evidence-gate pass record at L2 |
+| L4 | Full Autonomy | Human sets objectives; intervenes on exception | Agent creates specs, implements, and validates end-to-end. Kill switch and budget ceilings are the only hard stops; `/close` remains operator-invoked at every level. | Mature signal history, high test coverage, established trust |
 
 ### Claude Code permission mode mapping
 
@@ -220,9 +219,9 @@ Three enforcement modes determine how gate approval happens:
 
 | Mode | When used | Approval mechanism |
 |------|-----------|-------------------|
-| Delegated | L3/L4, all ACs machine-verifiable, no human-judgment checks | Agent validates and closes autonomously with three-layer evidence trail |
+| Delegated | L3/L4, all ACs machine-verifiable, no human-judgment checks | Operator-invoked `/close` skips the Review Brief prompt; a three-layer evidence trail is still recorded |
 | Chat | Default; human judgment needed, no regulatory burden of proof | Human reviews Review Brief in conversation |
-| PAL | High-trust workflows requiring hardware-authenticated approval | Review Brief via NanoClaw, hardware key tap, cryptographic signature (roadmap) |
+| PAL | High-trust workflows requiring hardware-authenticated approval | Hardware key tap + cryptographic signature (deferred — development paused; subsystem retirement proposed, Spec 654) |
 
 ## Next steps
 
@@ -247,15 +246,15 @@ them into the tables above.
 
 This document is **generated** by `scripts/gen-agents-config-reference.py` — defaults are read live from `AGENTS.md`
 (descriptions from `scripts/lib/agents-config-reference-content.yaml`; source content hash
-`be9beb9811db`, FORGE plugin v4.0.0). Do not edit it by hand — changes belong in the
+`467a90c9b25e`, FORGE plugin v4.1.0). Do not edit it by hand — changes belong in the
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to AGENTS.md:
 
 <!-- forge:gen:volatile:start -->
-- 2026-07-30 `8a3ad66f` Spec 610 implemented — /forge:ahead alias + /now housekeeping synthesis + non-FORGE hook gate
-- 2026-07-30 `8457e55d` Spec 621 implemented — dormant in-progress detector in /now
-- 2026-07-29 `323a9897` Spec 615: push-gate auto-mode coverage + managed-settings doc/config true-up
+- 2026-08-07 `d21a8dd0` Close Spec 649 — autonomy promise conformance: reachable goal-mode exit, honest L3, worktree reconciliation
+- 2026-08-07 `432923b4` Close Spec 671 — managed-settings scope correction: the trust root bound paths that do not exist
+- 2026-08-07 `9aa46488` Wave-4 consolidation — Spec 659 AC7 (AGENTS.md bash-safety row), CHANGELOG, session log; add Spec 669 draft
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `git log -- AGENTS.md` and `docs/specs/CHANGELOG.md`.

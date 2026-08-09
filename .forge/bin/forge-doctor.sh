@@ -14,6 +14,9 @@
 #                                  --print-public-set — single source; this script never
 #                                  parses the publish manifest DSL itself)
 #   D-PUBLIC-CHECKOUT            — sibling ../forge-public branch/currency (best-effort)
+#   D-DOCTRINE-DRIFT             — consumer authorization-core managed block (Spec 640):
+#                                  version vs. the installed plugin, hand-edit conflicts,
+#                                  and the missing-marker (opted-out) case
 #
 # GRACEFUL DEGRADATION (consumer checkouts): the taxonomy map and the sync script are
 # private dev-repo artifacts that do NOT ship with this script. When either is absent —
@@ -30,8 +33,10 @@
 #   FORGE_DOCTOR_TAXONOMY   — taxonomy file override (fixtures)
 #   FORGE_DOCTOR_STATE_DIR  — coverage state dir override (default: <root>/.forge/state)
 #   FORGE_DOCTOR_NO_FETCH=1 — skip the best-effort `git fetch` in D-CURRENCY
+#   FORGE_DOCTOR_PLUGIN_JSON — installed-plugin plugin.json override for D-DOCTRINE-DRIFT
+#                              test fixtures (bypasses the CLAUDE_PLUGIN_ROOT/ROOT lookup)
 #
-# Spec: 520
+# Spec: 520, 640
 
 set -uo pipefail
 
@@ -295,7 +300,9 @@ elif [[ -z "$PY" ]]; then
 elif ! git ls-files > "${TMPD}/tracked.txt" 2>/dev/null; then
   echo "  note  not a git repository — coverage skipped (advisory)"
 else
-  RULE_COUNT="$(grep -c '^[[:space:]]*- path:' "$TAXONOMY" 2>/dev/null || echo 0)"
+  # Spec 659: `|| true` (not `|| echo 0`) — grep -c prints 0 AND exits 1 when the
+  # file exists with no match, so an echo fallback would make this "0\n0".
+  RULE_COUNT="$(grep -c '^[[:space:]]*- path:' "$TAXONOMY" 2>/dev/null || true)"; RULE_COUNT="${RULE_COUNT:-0}"
   echo "  taxonomy: ${TAXONOMY} (${RULE_COUNT} rules)"
   if classify "$TAXONOMY" "${TMPD}/tracked.txt" > "${TMPD}/classified.txt" 2>"${TMPD}/classify.err"; then
     TOTAL="$(wc -l < "${TMPD}/tracked.txt" | tr -d ' ')"
@@ -458,6 +465,59 @@ PYVER
         INSTALLED_STALE_COUNT=$((INSTALLED_STALE_COUNT + 1))
       fi
     done <<< "$MATCH_LINES"
+  fi
+fi
+echo ""
+
+# ============================ D-DOCTRINE-DRIFT (Spec 640) =======================
+# Consumer authorization-core managed block: version drift vs the installed plugin,
+# hand-edit conflicts, and the missing-marker case (a consumer that deleted its
+# markers opts out silently — Spec 640 Verification Scope (c) requires this be
+# surfaced too, not just true version drift).
+echo "== D-DOCTRINE-DRIFT =="
+# Resolve doctrine_gen.py next to THIS script (SCRIPT_DIR), not under the diagnosed
+# ROOT — a plugin-based consumer's own project root never carries a .forge/ tree
+# (that lives only in the FORGE dev repo and the installed plugin cache); the check
+# must use the copy shipped with whichever forge-doctor.sh is actually running.
+DOCTRINE_GEN="${SCRIPT_DIR}/../lib/doctrine_gen.py"
+if [[ -z "$PY" ]]; then
+  echo "  note  python3 not available — doctrine drift check skipped (advisory)"
+elif [[ ! -f "$DOCTRINE_GEN" ]]; then
+  echo "  note  doctrine_gen.py not present — doctrine drift check not applicable (pre-Spec-640 checkout)"
+else
+  DOCTRINE_PJ="${FORGE_DOCTOR_PLUGIN_JSON:-}"
+  if [[ -z "$DOCTRINE_PJ" && -n "${CLAUDE_PLUGIN_ROOT:-}" && -f "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" ]]; then
+    DOCTRINE_PJ="${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json"
+  fi
+  if [[ -z "$DOCTRINE_PJ" && -f "${ROOT}/.claude-plugin/plugin.json" ]]; then
+    DOCTRINE_PJ="${ROOT}/.claude-plugin/plugin.json"
+  fi
+  INSTALLED_DOCTRINE_VERSION=""
+  if [[ -n "$DOCTRINE_PJ" && -f "$DOCTRINE_PJ" ]]; then
+    INSTALLED_DOCTRINE_VERSION="$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1])).get('version',''))" "$DOCTRINE_PJ" 2>/dev/null)"
+  fi
+  if [[ -z "$INSTALLED_DOCTRINE_VERSION" ]]; then
+    echo "  note  cannot determine installed plugin version (no plugin.json reachable via CLAUDE_PLUGIN_ROOT or this checkout) — doctrine drift check skipped"
+  else
+    DOCTRINE_TARGET=""
+    for cand in "AGENTS.md" "CLAUDE.md"; do
+      if [[ -f "$cand" ]] && grep -q 'FORGE:DOCTRINE-BEGIN id=authorization-core' "$cand" 2>/dev/null; then
+        DOCTRINE_TARGET="$cand"
+        break
+      fi
+    done
+    if [[ -z "$DOCTRINE_TARGET" ]]; then
+      echo "  note  no managed doctrine block found in AGENTS.md or CLAUDE.md — this checkout predates Spec 640, or markers were removed (silent opt-out); doctrine delivery not verifiable"
+    else
+      DOCTRINE_STATUS_LINE="$("$PY" "$DOCTRINE_GEN" check --target "$DOCTRINE_TARGET" --id authorization-core --installed-version "$INSTALLED_DOCTRINE_VERSION" 2>/dev/null)"
+      DOCTRINE_STATUS="${DOCTRINE_STATUS_LINE%% *}"
+      case "$DOCTRINE_STATUS" in
+        OK) echo "  OK    ${DOCTRINE_STATUS_LINE#OK }" ;;
+        DRIFT) echo "  WARN  ${DOCTRINE_STATUS_LINE#DRIFT }" ;;
+        CONFLICT) echo "  WARN  ${DOCTRINE_STATUS_LINE#CONFLICT }" ;;
+        *) echo "  note  doctrine check produced no result (advisory)" ;;
+      esac
+    fi
   fi
 fi
 echo ""

@@ -25,9 +25,15 @@ Exit codes: 0 scaffolded; 2 guardrail abort (pre-existing project files);
 Stdlib only (ADR-359).
 """
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
+
+try:
+    import doctrine_gen  # sibling module under .forge/lib/ (Spec 640)
+except ImportError:
+    doctrine_gen = None
 
 # Guardrail checks BOTH layouts' spec locations regardless of the requested
 # layout (Spec 575) — scaffolding over either shape is refused.
@@ -133,6 +139,10 @@ checkout mismatch.
 1. Every change has a matching spec.
 2. Every session ends with a session log.
 
+## Boundaries (authorization, safety)
+
+<!-- FORGE:DOCTRINE-ANCHOR id=authorization-core -->
+
 ## Spec lifecycle
 
 `draft -> in-progress -> implemented -> closed | deprecated`
@@ -166,6 +176,24 @@ Last updated: (never — run /forge:matrix after your first spec)
 
 | Rank | Spec | Title | BV | E | R | SR | Score | Depends | Status |
 |------|------|-------|----|---|---|----|-------|---------|--------|
+"""
+
+# Spec 670 — the project's own front door. A scaffolded project shipped with no
+# README at all, so its repository root said nothing about what the project was.
+# Deliberately the PROJECT's README, not FORGE's onboarding text: {name} and
+# {description} are the operator's own answers, and the FORGE mention is one line
+# pointing at the quick reference that ships in the same render ({qr_path} is
+# layout-resolved so the link always resolves — Spec 670 AC4).
+PROJECT_README = """# {name}
+
+{description}
+
+## Getting started
+
+This project uses [FORGE](https://github.com/Renozoic-Foundry/forge-public) for
+spec-driven, evidence-gated development. Command reference: [{qr_path}]({qr_path}).
+
+Run `/now` to see current project state and the recommended next action.
 """
 
 SESSION_TEMPLATE = """# Session Log — YYYY-MM-DD-NNN
@@ -256,6 +284,25 @@ def main() -> int:
         print(f"scaffold: write failed: {e}", file=sys.stderr)
         return 3
 
+    # Spec 670 — project README, written ONLY when absent. Kept out of the `files`
+    # dict above because every entry there is written unconditionally: a brownfield
+    # target with a hand-authored README must never have it overwritten.
+    readme_written = 0
+    readme_path = target / "README.md"
+    if not readme_path.exists():
+        try:
+            readme_path.write_text(
+                PROJECT_README.format(
+                    name=name,
+                    description=args.description or "A project managed with FORGE.",
+                    qr_path=qr_path,
+                ),
+                encoding="utf-8", newline="\n")
+            readme_written = 1
+        except OSError as e:
+            print(f"scaffold: README write failed: {e}", file=sys.stderr)
+            return 3
+
     # Spec 571 — ship the generated quick reference with the scaffold. The plugin
     # payload root (this script's ../../ — CLAUDE_PLUGIN_ROOT at runtime) carries
     # docs/QUICK-REFERENCE.md with its provenance/revision-history block; copy it
@@ -284,8 +331,39 @@ def main() -> int:
         except OSError:
             pass
 
+    # Spec 640 — deliver the condensed authorization-core managed block (Priority
+    # ordering, Requires Confirmation, Authorization-required commands, Prohibited)
+    # into the freshly scaffolded AGENTS.md at the anchor above, generated LIVE from
+    # the plugin's own canonical AGENTS.md — never a second hand-maintained copy
+    # (Req 5). Best-effort: a trimmed payload missing doctrine_gen.py or its own
+    # AGENTS.md leaves the anchor comment in place (a future /forge stoke or manual
+    # generate run can still fill it) and never fails the scaffold.
+    if doctrine_gen is not None:
+        canonical_agents_md = plugin_root / "AGENTS.md"
+        if canonical_agents_md.is_file():
+            fv = "0.0.0"
+            plugin_json = plugin_root / ".claude-plugin" / "plugin.json"
+            if plugin_json.is_file():
+                try:
+                    fv = json.loads(plugin_json.read_text(encoding="utf-8")).get("version", fv)
+                except (OSError, ValueError):
+                    pass
+            # Two managed blocks, same engine (Spec 649 Requirement 6). `authorization-core`
+            # carries what an agent may not do; `autonomy-config` carries the L0-L4 ladder and
+            # the auto_progression chain table that /implement Step 9f reads. Before Spec 649 a
+            # scaffolded project got the first and not the second, so Step 9f matched against an
+            # absent block in every consumer — fail-safe by accident, at a measured cost of three
+            # manual prompts per lifecycle traverse in a project declaring L3 (audit ISSUE-019).
+            # Each is generated independently: one raising DoctrineError must not suppress the
+            # other, so they get separate try blocks rather than one shared handler.
+            for block_id in ("authorization-core", doctrine_gen.AUTONOMY_ID):
+                try:
+                    doctrine_gen.generate(canonical_agents_md, target / "AGENTS.md", block_id, fv, force=False)
+                except doctrine_gen.DoctrineError:
+                    pass
+
     print(f"scaffolded FORGE project '{name}' at {target} "
-          f"({len(files) + copied} files, zero copier)")
+          f"({len(files) + copied + readme_written} files, zero copier)")
     return 0
 
 

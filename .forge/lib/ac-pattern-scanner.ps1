@@ -62,6 +62,16 @@ $WeakPatterns = @(
   '\b(display|displays|displaying)\b'
 )
 
+# Spec 658 — backtick-sensitive patterns: a THIRD class, between strong and
+# weak. Must stay identical to ac-pattern-scanner.sh's BACKTICK_SENSITIVE_PATTERNS
+# array. Sole member is the slash-command pattern; members get the backtick-strip
+# re-test ONLY, never the whole-AC $Exclusions list (adding them to $WeakPatterns
+# would inherit '\bfixture(s)?\b' and silently stop flagging a genuine
+# "run /close in a fresh fixture" AC — see Spec 658 Requirement 2).
+$BacktickSensitivePatterns = @(
+  '(running|run|invoke|execute) /[a-z-]+'
+)
+
 $Exclusions = @(
   '\bcopier\b',
   '\brender(s|ed|ing)?[ -]test',
@@ -169,6 +179,14 @@ function Invoke-Flush {
           if (-not ($stripped -match "(?i)$pat")) { continue }
           # ...and outside its token-scoped exclusion contexts.
           if (Test-TokenExclusion $pat $stripped) { continue }
+        }
+        elseif ($script:BacktickSensitivePatterns -contains $pat) {
+          # Spec 658: the backtick-strip re-test ONLY — no whole-AC exclusions,
+          # no token-scoped exclusions. A backtick-ONLY match is the
+          # quoted-command-as-data false positive and falls through to later
+          # patterns; a match surviving the strip still flags.
+          $stripped = Remove-BacktickSpans $script:acText
+          if (-not ($stripped -match "(?i)$pat")) { continue }
         }
         $escapedText = ConvertTo-JsonEscape $script:acText
         $escapedPat = ConvertTo-JsonEscape $pat

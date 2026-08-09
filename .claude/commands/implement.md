@@ -26,7 +26,7 @@ If $ARGUMENTS is empty, `?`, or `help`:
     spec-number — e.g. /implement 021
     next        — auto-picks the highest-ranked draft spec from the backlog and starts immediately
     --goal-mode — wrap the pass in a /goal block with an evidence-derived exit (Spec 464);
-                  hard cap 20 turns; exit on validator-exit-0 + Status: closed + gate-emissions log.
+                  hard cap 20 turns; exit on validator-exit-0 + Status: implemented + gate-emissions log.
     --abort     — short-circuit an active --goal-mode run immediately.
   Behavior:
     - draft → auto-approved inline (evidence gate: completeness), then in-progress → implemented
@@ -59,8 +59,15 @@ three** of these structured signals hold:
 
 1. **validator exit code** — the validator subprocess (per `forge.implement.validator`, e.g.
    `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/validate.sh`) returns **exit code 0** when invoked at the goal-evaluation point.
-2. **spec frontmatter `Status: closed`** — the spec file's frontmatter `Status:` field, **re-read from
-   disk** at goal-evaluation time, equals `closed`. (Not a cached value; not a prose mention.)
+2. **spec frontmatter `Status: implemented`** — the spec file's frontmatter `Status:` field, **re-read
+   from disk** at goal-evaluation time, equals `implemented`. (Not a cached value; not a prose mention.)
+   **`implemented` is goal mode's terminal state, and this is deliberate (Spec 649 / ADR-649).** The
+   signal previously required `closed`, which `/implement` never writes — Step 7.0 writes `implemented`
+   and nothing else, and auto-close is forbidden by Priority 1, by `forge.autopilot.terminal_state`,
+   and by EA-025/026/027. The predicate was unreachable by the command itself from the day it shipped,
+   so every unattended run burned to the 20-turn cap. Closing remains operator-invoked; goal mode
+   completes autonomous work up to `implemented`, which is what it always actually delivered. Do NOT
+   "fix" this back to `closed` — that reads as a reachable predicate and is not one.
 3. **gate-emission log** — the **filesystem gate-emissions log** at
    `tmp/evidence/SPEC-NNN-YYYYMMDD/gate-emissions.log` (written by `/implement` as it emits each gate)
    contains all expected `GATE [<name>]: PASS` lines for the spec's `Change-Lane`. The source is this
@@ -86,7 +93,7 @@ and exit non-zero:
 GOAL-MODE FAILED — Spec NNN (cap=20 turns reached | aborted)
   evidence signals NOT satisfied:
     - validator exit code: <0 | non-zero (value)>
-    - spec Status: closed: <yes | no (current: <value>)>
+    - spec Status: implemented: <yes | no (current: <value>)>
     - gate-emission log complete: <yes | no>
   ACs lacking PASS markers: <list, or "none">
   gate emissions missing: <list of GATE [name] not found in the filesystem log, or "none">
@@ -335,6 +342,33 @@ If computed ≠ listed: display "⚠ Score mismatch: listed=X, computed=Y — wi
      (PowerShell: same two subcommands via `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/score-audit.ps1`.)
      BV/E/R/SR/TC come from the `Priority-Score:`/`Token-Cost:` frontmatter already parsed at
      Step 1b; `kind_tag` per the `/spec` inference table. Advisory — failures never block.
+
+### [mechanical] Step 1b-wt — Unreconciled-worktree pre-gate check (Spec 649 AC3)
+
+Runs BEFORE the evidence gates below, because every one of them runs against the **main tree**:
+work sitting in an unreconciled implementer worktree is invisible to all of them
+(`agent-roles-guide.md` has documented this hazard; nothing checked it until now).
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/worktree-reconcile.sh check
+```
+
+The SAME script is invoked by `/close` — one shared library, not the same logic embedded in two
+command bodies (Spec 649 Requirement 6; the `validator-pipeline.sh` precedent).
+
+- **Exit 0** — no unreconciled worktrees. Emit `GATE [worktree-reconcile]: PASS`. Proceed.
+- **Exit 1** — one or more unreconciled. Surface the script's per-worktree report verbatim
+  (each is labelled `LOCKED`, `DIRTY`, `UNIQUE`, or `STALE`) and emit
+  `GATE [worktree-reconcile]: WARN`. **Advisory — does not block `/implement`.** The operator
+  decides: reconcile now (`worktree-reconcile.sh reconcile`, which removes only provably-safe
+  worktrees), or proceed knowing the gates read the main tree only.
+- **Helper absent** (consumer mid-template-sync) → emit
+  `Worktree pre-gate check: worktree-reconcile.sh absent — skipped.` and proceed. Never
+  hard-error over a missing helper.
+
+**Never removes a `locked` worktree** (AC3b), one with uncommitted edits, or one with unique
+unmerged commits — the reconcile path refuses all three by rule, not by relying on
+`git worktree remove`'s own refusal.
 
 ### [mechanical] Step 1c — Container/host parity check (Spec 541)
 
@@ -979,8 +1013,12 @@ skip-detection, caching, or "already validated" short-circuit exists here or in 
    using the shared template, identically to `/close` Step 2d.a5/b:
    ```bash
    ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh evidence-excerpt \
-     tmp/evidence/SPEC-NNN-YYYYMMDD
+     tmp/evidence/SPEC-NNN-YYYYMMDD \
+     docs/specs/NNN-<slug>.md
    ```
+   The spec-file argument is what makes evidence-KIND enforcement live (Spec 663): an AC that
+   explicitly excludes a source has that source withheld from its own excerpt segment, with a
+   visible notice. Omit the argument and the block is the unfiltered pre-663 output.
    Fill `${CLAUDE_PLUGIN_ROOT:-.}/.forge/templates/validator-dispatch-prompt.md`'s placeholders
    exactly as `/close` Step 2d.b does, and spawn the validator sub-agent (read-only, no prior
    conversation context per `forge.roles.separation`, same role-state-file lifecycle as Step 2b).

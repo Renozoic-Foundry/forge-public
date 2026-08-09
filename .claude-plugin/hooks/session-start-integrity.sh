@@ -29,6 +29,125 @@ log()    { echo "[forge:plugin-integrity] $*" >&2; }
 # Machine-parseable signal line for monitoring/alerting (CISO/AC8).
 signal() { echo "[forge:plugin-integrity] SIGNAL=$1 severity=$2" >&2; }
 
+# ==================== INLINED MANIFEST ALGORITHM (Spec 631) ====================
+# TRUST BOUNDARY — read this before "de-duplicating" the block below.
+#
+# This is a deliberate copy of the manifest algorithm from .forge/lib/payload-manifest.sh.
+# It is inlined because the verifier MUST NOT obtain its verification algorithm from the
+# payload it is verifying. This hook previously sourced
+# "$ASSET_ROOT/.forge/lib/payload-manifest.sh" — a file inside the payload under
+# verification — which let an attacker who could write the plugin cache alter a payload
+# file AND redefine forge_build_manifest() to echo the signed manifest back. minisign still
+# verified the untouched manifest, the recompute-diff compared the manifest against itself,
+# and the hook returned PASS with malicious bytes live on disk.
+#
+# The trust ROOT (pubkey/floor/tier) was already externalized correctly; only the
+# ALGORITHM was not. Restoring `source` here re-opens the hole — do not do it.
+#
+# Drift posture: if this copy ever diverges from the builder's library, the recompute-diff
+# stops matching and the hook FAILS CLOSED. Divergence degrades toward refusal, never
+# toward a false PASS. test-spec-631-manifest-algorithm-parity.sh pins the two in lockstep
+# so drift surfaces at validation time rather than as a mystery failure for a consumer.
+#
+# Functions are `_fpi_`-prefixed (forge plugin integrity) so they cannot be shadowed by, or
+# confused with, any same-named definition reachable elsewhere.
+_FPI_PAYLOAD_DIRS=(
+  ".claude/commands"
+  ".claude/agents"
+  ".claude/skills"
+  ".claude-plugin"
+  ".forge/bin"
+  ".forge/lib"
+  ".forge/templates"
+  ".forge/modules"
+  ".forge/adapters"
+)
+_FPI_PAYLOAD_EXCLUDE=(
+  "tests"
+  "autonomy-test"
+  "__pycache__"
+  "*.pyc"
+)
+_FPI_MANIFEST_RELPATH=".claude-plugin/payload-manifest.txt"
+_FPI_MANIFEST_SIG_RELPATH=".claude-plugin/payload-manifest.txt.minisig"
+
+_fpi_checksum_tool() {
+  if command -v sha256sum >/dev/null 2>&1; then echo "sha256sum"
+  elif command -v shasum >/dev/null 2>&1; then echo "shasum -a 256"
+  else echo ""; fi
+}
+
+_fpi_file_hash() {
+  local file="$1" tool="$2"
+  tr -d '\r' < "$file" | $tool | awk '{print $1}'
+}
+
+_fpi_excluded() {
+  local rel="$1" pat
+  for pat in "${_FPI_PAYLOAD_EXCLUDE[@]}"; do
+    case "$pat" in
+      \*.*)
+        # $pat is intentionally an unquoted glob pattern here:
+        # shellcheck disable=SC2254
+        case "${rel##*/}" in
+          $pat) return 0 ;;
+        esac
+        ;;
+      *)
+        case "/$rel/" in
+          */"$pat"/*) return 0 ;;
+        esac
+        ;;
+    esac
+  done
+  return 1
+}
+
+_fpi_build_manifest() {
+  local root="${1:?_fpi_build_manifest: root required}"
+  root="$(printf '%s' "$root" | tr '\\' '/')"
+  local tool; tool="$(_fpi_checksum_tool)"
+  if [ -z "$tool" ]; then echo "payload-manifest: no sha256 tool available" >&2; return 1; fi
+  if [ ! -d "$root" ]; then echo "payload-manifest: root not found: $root" >&2; return 1; fi
+
+  local d f rel; local files=()
+  for d in "${_FPI_PAYLOAD_DIRS[@]}"; do
+    [ -d "$root/$d" ] || continue
+    while IFS= read -r f; do files+=("$f"); done < <(find "$root/$d" -type f 2>/dev/null)
+  done
+  if [ "${#files[@]}" -eq 0 ]; then echo "payload-manifest: no payload files under $root" >&2; return 1; fi
+
+  local kept=()
+  for f in "${files[@]}"; do
+    rel="${f#"$root"/}"
+    [ "$rel" = "$_FPI_MANIFEST_RELPATH" ] && continue
+    [ "$rel" = "$_FPI_MANIFEST_SIG_RELPATH" ] && continue
+    if _fpi_excluded "$rel"; then continue; fi
+    kept+=("$f")
+  done
+  if [ "${#kept[@]}" -eq 0 ]; then
+    echo "payload-manifest: no payload files under $root after exclusions (fail-closed)" >&2
+    return 1
+  fi
+
+  local manifest
+  manifest="$(
+    for f in "${kept[@]}"; do
+      rel="${f#"$root"/}"
+      printf '%s  %s\n' "$(_fpi_file_hash "$f" "$tool")" "$rel"
+    done | LC_ALL=C sort -k2
+  )"
+
+  local lines
+  lines="$(printf '%s\n' "$manifest" | wc -l | tr -d '[:space:]')"
+  if [ "$lines" -ne "${#kept[@]}" ]; then
+    echo "payload-manifest: count invariant violated (emitted $lines != kept ${#kept[@]}) — refusing to emit (fail-closed)" >&2
+    return 1
+  fi
+  printf '%s\n' "$manifest"
+}
+# ================== END INLINED MANIFEST ALGORITHM (Spec 631) ==================
+
 # ---- Mode detection (Spec 487 resolve-root) ------------------------------------------
 # Source/dev mode: CLAUDE_PLUGIN_ROOT unset -> skip verification entirely (AC4).
 if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
@@ -37,7 +156,9 @@ if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
 fi
 
 ASSET_ROOT="$(printf '%s' "$CLAUDE_PLUGIN_ROOT" | tr '\\' '/')"
-MANIFEST_LIB="$ASSET_ROOT/.forge/lib/payload-manifest.sh"
+# NOTE (Spec 631): there is deliberately no MANIFEST_LIB here. The recompute algorithm is
+# inlined above and must never be loaded from under $ASSET_ROOT — see the trust-boundary
+# block at the top of this file.
 MANIFEST="$ASSET_ROOT/.claude-plugin/payload-manifest.txt"
 SIG="$ASSET_ROOT/.claude-plugin/payload-manifest.txt.minisig"
 
@@ -130,10 +251,9 @@ if ! VERIFY_OUT="$(minisign -V -P "$ANCHOR_PUBKEY" -m "$NORM_MANIFEST" -x "$SIG"
 fi
 
 # ---- Recompute the manifest from disk and diff (proves files match the signed manifest)
-if [ ! -f "$MANIFEST_LIB" ]; then log "manifest lib missing — FAIL CLOSED."; exit $EXIT_FAIL; fi
-# shellcheck source=/dev/null
-. "$MANIFEST_LIB" || { log "cannot load manifest lib — FAIL CLOSED."; exit $EXIT_FAIL; }
-if ! forge_build_manifest "$ASSET_ROOT" > "$RECOMPUTED" 2>/dev/null; then
+# The algorithm is the verifier's own (inlined at the top of this file, Spec 631) — NOT
+# sourced from $ASSET_ROOT. Nothing under the payload can redefine what "recompute" means.
+if ! _fpi_build_manifest "$ASSET_ROOT" > "$RECOMPUTED" 2>/dev/null; then
   log "manifest recompute failed — FAIL CLOSED."; exit $EXIT_FAIL
 fi
 # Diff against the SAME canonical (CR-stripped) copy the signature was verified over —

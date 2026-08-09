@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: scripts/gen-quick-reference.sh
      Canonical sources: .forge/commands/*.md + invocation-policy.yaml
-     Source content hash: f456cd321abe | FORGE plugin version: 4.0.0
+     Source content hash: e322073bf9e3 | FORGE plugin version: 4.1.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 # FORGE Quick Reference
 
@@ -176,18 +176,18 @@ value that canonicalizes (symlinks resolved) outside the repo root.
 ## Provenance and revision history
 
 This document is **generated** by `scripts/gen-quick-reference.sh` from the canonical command surface
-(`.forge/commands/` + `invocation-policy.yaml`; source content hash `f456cd321abe`,
-FORGE plugin v4.0.0). Do not edit it by hand — changes belong in the canonical
+(`.forge/commands/` + `invocation-policy.yaml`; source content hash `e322073bf9e3`,
+FORGE plugin v4.1.0). Do not edit it by hand — changes belong in the canonical
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to the canonical command surface:
 
 <!-- forge:gen:volatile:start -->
-- 2026-08-04 `68b9fd6b` Spec 626 — typing-time argument hints + empty-args menus (implement + close, batch 558+626): 19 canonical hints, single-key frontmatter upsert (sh+ps1), skills emission, colon lint, 52-assertion fixture, docs + regenerated references; validator PASS 10/10
-- 2026-08-04 `7c264ce8` Spec 558 D4 — command surfaces: close.md gate retirements (2b6/2d++/2d+++/2d++++), implement.md Steps 4e/7b retired, forge-stoke/forge-init rewritten plugin-only, now/evolve copier surfaces pruned + customer-tier-name genericization; mirrors regenerated
-- 2026-08-03 `a1f5ba01` Spec 620 implemented — repro-provenance capture-and-compare gate: forge run/repro-block wrappers (-- bypass), subprocess-free comparator + gitsha helper, /close Step 2b7 gate, /evolve unverifiable-rate, Step 6e adoption wiring, template/.claude mirror true-up
-- 2026-08-03 `c37a040d` Spec 619 implemented — score-audit three report states + pairing diagnostics; live pairing 26%->92% (103 backfilled); validator_outcome deleted; implement-approval predicted safety net
-- 2026-07-30 `8a3ad66f` Spec 610 implemented — /forge:ahead alias + /now housekeeping synthesis + non-FORGE hook gate
+- 2026-08-07 `42b1478a` Spec 636 implemented — /forge stoke apply gated by the ownership manifest (fail-closed), first-merge safety, installed-base backfill, manifest self-governance
+- 2026-08-07 `9a83f8cd` Spec 635 implemented — stale public forge-init overlay deleted (delete+redirect), legacy-upgrade mode plugin-native, getting-started Python claim corrected
+- 2026-08-07 `d21a8dd0` Close Spec 649 — autonomy promise conformance: reachable goal-mode exit, honest L3, worktree reconciliation
+- 2026-08-07 `ac398932` Close Spec 670 — consumer render hygiene: dead scratchpad path, missing project README
+- 2026-08-07 `75efb008` Spec 668 — exact-path staging for /configure and /forge init create-new
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `docs/specs/CHANGELOG.md` and `git log -- .forge/commands/`.

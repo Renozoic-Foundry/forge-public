@@ -22,10 +22,12 @@
 #   .forge/bin/lib/git-command-detect.sh       (Spec 498 / CISO R2 — shared detection helper)
 #   .forge/bin/check-role-permissions.sh
 #
-# Apply-flow (Spec 503) — this guard is self-protected, so guard-family edits use the
-# operator-mediated apply note: edit the template/ mirror -> operator runs `cp` to the root
-# in the terminal -> re-verify with forge-parity.sh (Surface 3). See
-# docs/process-kit/guard-family-apply-note.md.
+# Apply-flow (Spec 667 / ADR-667) — this guard is self-protected, so guard-family edits
+# use the operator-mediated patch handoff: the agent stages a unified diff under
+# tmp/guard-patches/, the operator reviews it and applies it with git apply from the
+# repo root, then re-verifies (forge-parity.sh --check; validate-bash.sh for scripts).
+# See docs/process-kit/guard-family-apply-note.md. This edit itself was the flow's
+# first self-hosting use (Spec 667 AC3).
 #
 # Behavior:
 #   - jq missing                         -> allow (fail-open — matches the Spec 457 hooks)
@@ -33,6 +35,9 @@
 #     protected path
 #   - Bash command writing a protected    -> block (redirect >, >>, tee, mv, cp, sed -i,
 #     path                                   install, dd of=, truncate, ln)
+#   - agent patch-apply (git apply/patch) -> block, FAIL-CLOSED: denied unless every
+#     referenced patch file is readable and its diff headers name zero protected paths
+#     (Spec 667 AC3b — authorization decision; deliberate exception to fail-open)
 #   - anything else                       -> allow
 #
 # Schema (Spec 499): blocks via the documented PreToolUse
@@ -163,6 +168,47 @@ EOF
         ;;
     esac
   done
+
+  # (3) Patch-apply channel (Spec 667 AC3b): `git apply` / `patch` can write a protected
+  # path that appears ONLY inside the patch FILE, never on the command line — invisible
+  # to branches (1) and (2). This is an AUTHORIZATION decision, not a detection helper,
+  # so it FAILS CLOSED (deliberate exception to the family's fail-open posture): an
+  # agent-invoked apply is denied unless EVERY referenced *.patch/*.diff file is readable
+  # and its diff headers name zero protected paths. Undeterminable input (stdin apply,
+  # no patch-file token, unreadable or header-less file) -> deny. Path-re-rooting options
+  # (--directory, --unsafe-paths) -> deny. Command-position anchoring (start-of-command,
+  # or after one of ; | & or a command substitution) keeps prose mentions of the verbs in
+  # heredocs and log appends from tripping this branch. The operator's own terminal apply
+  # never passes through PreToolUse hooks and is unaffected.
+  if printf '%s' "$NORM" | grep -qE '(^|[;|&]|\$\()[[:space:]]*(git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+|-[^[:space:]]+[[:space:]]+)*apply|patch)([[:space:]]|$)'; then
+    if printf '%s' "$NORM" | grep -qE -- '--directory|--unsafe-paths'; then
+      _block "patch-apply with a path-re-rooting option (fail-closed — Spec 667 AC3b)"
+    fi
+    PATCH_TOKENS=$(printf '%s' "$NORM" | grep -oE '[^[:space:];|&<>]+\.(patch|diff)' || true)
+    if [ -z "$PATCH_TOKENS" ]; then
+      _block "agent patch-apply with no determinable patch file (fail-closed — Spec 667 AC3b)"
+    fi
+    while IFS= read -r pf; do
+      [ -z "$pf" ] && continue
+      pf="${pf#\"}"; pf="${pf%\"}"; pf="${pf#\'}"; pf="${pf%\'}"
+      if [ ! -r "$pf" ]; then
+        _block "agent patch-apply: patch file not readable: $pf (fail-closed — Spec 667 AC3b)"
+      fi
+      HDRS=$(grep -E '^(diff --git|---|\+\+\+|rename to|copy to) ' "$pf" 2>/dev/null | tr '\\' '/' || true)
+      if [ -z "$HDRS" ]; then
+        _block "agent patch-apply: no parseable diff headers in $pf (fail-closed — Spec 667 AC3b)"
+      fi
+      for prot in "${_PROTECTED[@]}"; do
+        case "$HDRS" in
+          *"$prot"*)
+            _block "$prot (via agent patch-apply content — fail-closed, Spec 667 AC3b)"
+            ;;
+        esac
+      done
+    done <<PATCHTOKENS
+$PATCH_TOKENS
+PATCHTOKENS
+  fi
 fi
 
 exit 0

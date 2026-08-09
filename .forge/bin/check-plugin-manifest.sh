@@ -153,7 +153,7 @@ if [ -d "$HOOKS_ROOT" ]; then
   echo "=== check-plugin-manifest: hooks pin, single-sided (Spec 535/558) ==="
   # Pinned: "<basename> <root-sha256>"
   PINNED="hooks.json 9027f6fa7218044fbc56ed3fe47010e54438a829e98c6714a96c54c237ec7c6b
-session-start-integrity.sh 4e3cd42bbc617022f6c778c2d4366cab6d6adce39579cddddf3866f0bbfc75d5"
+session-start-integrity.sh 54af644073fde7a1688875c07450d20821e020378b9ce7ffce600d2641d11ccd"
   for f in "$HOOKS_ROOT"/*; do
     [ -e "$f" ] || continue
     base="$(basename "$f")"

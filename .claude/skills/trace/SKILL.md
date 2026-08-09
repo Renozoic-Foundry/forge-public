@@ -290,7 +290,7 @@ Parse the following artifact sources for cross-references:
 2. **Session logs** (`docs/sessions/*.md`, excluding `_template.md`, `README.md`, `signals.md`, `context-snapshot.md`, `registry.md`): Read each file. Extract references.
 3. **Signals file** (`docs/sessions/signals.md`): Read the file. Extract references in each signal entry.
 4. **ADR files** (`docs/decisions/*.md`, if the directory exists): Read each file. Extract references.
-5. **Scratchpad** (`docs/scratchpad.md`, if it exists): Read the file. Extract references.
+5. **Scratchpad** (`docs/sessions/scratchpad.md`, if it exists): Read the file. Extract references.
 
 ### Reference patterns to detect
 

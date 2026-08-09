@@ -358,7 +358,39 @@ When the user types `done` at the main menu:
    ```
    Commit configuration changes? (yes / no)
    ```
-   - **yes**: `git add -A && git commit -m "FORGE configure: update project settings"`.
+   - **yes**: commit **by exact path** — never the whole working tree (Spec 668, Spec 494
+     convention). `/configure` runs on established projects by definition, so a whole-tree
+     stage here is the SIG-435 defect class (sweeping unrelated brownfield work into a FORGE
+     commit — the same risk Spec 647 fixed for `/onboarding`). The candidate set is exactly
+     the five files this command can write; only the ones that actually changed this session
+     go in:
+     ```bash
+     # forge:spec-668-configure-commit-block:start
+     configure_candidates=(AGENTS.md CLAUDE.md .claude/settings.json .mcp.json .copier-answers.yml)
+     configure_paths=()
+     while IFS= read -r line; do
+       [ -z "$line" ] && continue
+       configure_paths+=("${line:3}")
+     done < <(git status --porcelain -- "${configure_candidates[@]}")
+     if [ ${#configure_paths[@]} -eq 0 ]; then
+       echo "No configuration files changed this session — nothing to commit."
+     else
+       git add -- "${configure_paths[@]}"
+       git commit -m "FORGE configure: update project settings" -- "${configure_paths[@]}"
+     fi
+     # forge:spec-668-configure-commit-block:end
+     ```
+     **PowerShell / Windows equivalent**:
+     ```powershell
+     $candidates = @('AGENTS.md','CLAUDE.md','.claude/settings.json','.mcp.json','.copier-answers.yml')
+     $paths = @(git status --porcelain -- $candidates | ForEach-Object { $_.Substring(3) })
+     if ($paths.Count -eq 0) {
+       'No configuration files changed this session — nothing to commit.'
+     } else {
+       git add -- $paths
+       git commit -m 'FORGE configure: update project settings' -- $paths
+     }
+     ```
    - **no**: leave uncommitted.
 
 3. Report:

@@ -29,12 +29,19 @@ See docs/process-kit/cxo-rubric.md for the shared review rubric.
 
 ## Model & refusal fallback (security-flavored work)
 Benign security review can false-positive on frontier-model cyber safety classifiers
-(`stop_reason: "refusal"`) — Fable 5 most strictly; Sonnet 5 ships with milder cyber
-safeguards on by default. If this role's dispatch refuses or stalls on legitimate review
-content (CVE/dependency analysis, incident work, attack-surface reasoning), re-run on
-Opus 4.8 — it carries no such constraint and is cheaper for advisory work. Any API-level
-integration should pass server-side `fallbacks: [{model: "claude-opus-4-8"}]` (beta) for
-security-flavored calls. Do not instruct this role to "show your thinking" or transcribe
-chain-of-thought into output — that can trip the reasoning-extraction refusal category;
-the rubric's structured rationale fields are the correct channel. (F5-5, research intake
-2026-07-06; see docs/process-kit/agent-roles-guide.md §9.)
+(`stop_reason: "refusal"`) — Fable 5 and Claude Opus 5 enforce these most strictly
+(Opus 5, shipped 2026-07-24, ships with elevated cybersecurity safeguards — the same
+tier as Fable 5's, not a relaxation of them; it is NOT a substitute fallback despite
+being newer, since its own classifiers can decline this exact content); Sonnet 5 ships
+with milder cyber safeguards on by default. If this role's dispatch refuses or stalls
+on legitimate review content (CVE/dependency analysis, incident work, attack-surface
+reasoning), re-run on Opus 4.8 — it carries no such constraint and is cheaper for
+advisory work. Any API-level integration should pass server-side
+`fallbacks: [{model: "claude-opus-4-8"}]` (beta) for security-flavored calls —
+`claude-opus-4-8` is also the only fallback target the server-side array form accepts
+at launch, including for Opus-5-origin refusals. Do not instruct this role to "show
+your thinking" or transcribe chain-of-thought into output — that can trip the
+reasoning-extraction refusal category; the rubric's structured rationale fields are
+the correct channel. (F5-5, research intake 2026-07-06; re-verified 2026-08-06 against
+Claude Opus 5's system card and the current Claude API model-migration guide — Opus 4.8
+still verified correct; see docs/process-kit/agent-roles-guide.md §8.)

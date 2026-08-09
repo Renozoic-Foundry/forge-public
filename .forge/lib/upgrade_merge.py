@@ -158,6 +158,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
     state_dir = Path(args.state_dir)
 
     conflicted: list[str] = []
+    first_adoption: list[str] = []
     for rel in args.files:
         ours_path = project_root / rel
         theirs_path = upstream_root / rel
@@ -167,8 +168,34 @@ def cmd_merge(args: argparse.Namespace) -> int:
         theirs_lines = _read_lines(theirs_path)
 
         bootstrap = not base_path.is_file()
-        base_lines = ours_lines if bootstrap else _read_lines(base_path)
 
+        # Spec 636 R3/AC3 — first-merge safety. On bootstrap (no recorded base) the
+        # old code set base = ours, so merge3 took THEIRS wherever ours == base — i.e.
+        # everywhere — silently overwriting a consumer-diverged file with upstream on
+        # the very first run. Bootstrap now branches on the actual relationship:
+        if bootstrap:
+            if not ours_path.is_file():
+                # Brand-new upstream file the consumer never had: adopting theirs loses
+                # nothing. Write it and record the base.
+                _write_lines(ours_path, theirs_lines)
+                _write_lines(base_path, theirs_lines)
+                print(f"clean: {rel} (bootstrap: new file adopted)")
+                continue
+            if ours_lines == theirs_lines:
+                # Already aligned with upstream — record the base, touch nothing.
+                _write_lines(base_path, theirs_lines)
+                print(f"clean: {rel} (bootstrap: already aligned)")
+                continue
+            # Consumer-diverged file with no recorded base: DO NOT silently substitute
+            # theirs. Keep ours, record NO base (stays flagged, idempotent-safe on re-run),
+            # and report it as requiring explicit first-adoption. The installed base is
+            # routed through stoke's backfill (Spec 636 R9) so it seeds bases before ever
+            # reaching this branch; this branch protects the genuinely-unbacked diverged file.
+            first_adoption.append(rel)
+            print(f"first-adoption-required: {rel} (bootstrap: consumer content diverges; kept ours, not overwritten)")
+            continue
+
+        base_lines = _read_lines(base_path)
         merged_lines, conflict = merge3(base_lines, ours_lines, theirs_lines)
 
         _write_lines(ours_path, merged_lines)
@@ -177,11 +204,16 @@ def cmd_merge(args: argparse.Namespace) -> int:
         _write_lines(base_path, theirs_lines)
 
         tag = "CONFLICT" if conflict else "clean"
-        suffix = " (bootstrap)" if bootstrap else ""
-        print(f"{tag}: {rel}{suffix}")
+        print(f"{tag}: {rel}")
         if conflict:
             conflicted.append(rel)
 
+    if first_adoption:
+        print(
+            f"\n{len(first_adoption)} file(s) require first-adoption (consumer-diverged, no recorded base) — "
+            "kept as-is, not overwritten (Spec 636 AC3): " + ", ".join(first_adoption),
+            file=sys.stderr,
+        )
     if conflicted:
         _emit_recovery(conflicted)
         return 1

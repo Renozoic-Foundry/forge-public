@@ -4,6 +4,14 @@
 
 *Renozoic Foundry — April 2026*
 
+> **Historical article — pre-v3 architecture (banner added 2026-07-17, Spec 574).** This piece
+> describes FORGE as it stood in April 2026: Copier-distributed, with no dedicated debug command.
+> Both have since changed — FORGE v3 (2026-07-16) ships as a Claude Code plugin with Copier as a
+> legacy scaffolding path, and a structured `/debug` command landed with Spec 525. The Copier
+> failure analysis and the debugging-as-signal argument remain accurate as history and rationale;
+> do not read the distribution mechanics here as current guidance. See README § Quickstart for
+> the current architecture.
+
 ---
 
 ## TL;DR

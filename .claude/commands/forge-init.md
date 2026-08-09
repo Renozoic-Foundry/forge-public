@@ -1,3 +1,19 @@
+---
+name: forge-init
+description: "Bootstrap FORGE into a new or existing project, upgrade legacy pre-Copier projects, or create new projects from scratch"
+workflow_stage: lifecycle
+argument-hint: "[path] [--layout contained|classic]"
+---
+
+<!-- forge:paths-note (Spec 575): process-state paths in this command (docs/specs,
+     docs/sessions, docs/decisions, docs/research, docs/process-kit, docs/backlog.md) are the
+     CLASSIC-DEFAULT spellings, not fixed locations. When the project configures forge.paths
+     (e.g. the `contained` layout), resolve each key before use — bash: `forge_path <key>`
+     (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
+     python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
+
+> **(compat: prefer /forge <sub>)** — `/forge init` is the advertised form (Spec 579 single
+> advertised path); this top-level alias remains for compatibility.
 # Framework: FORGE
 ## Subcommand: init
 
@@ -8,25 +24,17 @@
 > - Path exists → operates on that directory
 > - Path does not exist → creates the directory and enters create-new mode
 
-### [mechanical] Step 0 — Prerequisite check (Spec 143)Before any bootstrap logic, verify that required tools are available:1. Check for **Python 3.10+ (Spec 401 raised floor from 3.9)**: run `.forge/bin/forge-py --version` (or directly: `python3 --version` / `python --version` / `py -3 --version`).2. Check for **Git**: run `git --version`.3. Check for **Copier 9.0+**: run `python -m copier --version`.4. Check for **POSIX `sh` shell on PATH** (Spec 401): run `command -v sh` (POSIX) or `where sh` (Windows). On Windows: if `sh` is absent, surface this actionable message — `Windows: 'sh' not found on PATH. FORGE requires either (a) Git for Windows installed with 'Use Git and optional Unix tools from the Command Prompt' option (option 3 of the Git for Windows installer), OR (b) FORGE workflows launched from a Git Bash terminal. Re-run the Git for Windows installer and select option 3, or open Git Bash and re-run.`If all prerequisites are met: proceed silently.If any are missing:- Report what's missing and the install command for the detected platform- Ask: "Install missing prerequisites now? (yes / no)"- If yes: run the install commands, re-verify, then proceed.- If no: stop with a message listing what to install manually.Alternatively, run `bash .forge/bin/forge-install.sh --check-prereqs` which handles detection, platform awareness, and interactive installation offers.Skip this step if the user passed `--skip-prereqs`.
+### [mechanical] Step 0 — Prerequisite check (Spec 143)Before any bootstrap logic, verify that required tools are available:1. Check for **Python 3.10+ (Spec 401 raised floor from 3.9)**: run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py --version` (or directly: `python3 --version` / `python --version` / `py -3 --version`).2. Check for **Git**: run `git --version`.3. Check for **POSIX `sh` shell on PATH** (Spec 401): run `command -v sh` (POSIX) or `where sh` (Windows). On Windows: if `sh` is absent, surface this actionable message — `Windows: 'sh' not found on PATH. FORGE requires either (a) Git for Windows installed with 'Use Git and optional Unix tools from the Command Prompt' option (option 3 of the Git for Windows installer), OR (b) FORGE workflows launched from a Git Bash terminal. Re-run the Git for Windows installer and select option 3, or open Git Bash and re-run.`If all prerequisites are met: proceed silently.If any are missing:- Report what's missing and the install command for the detected platform- Ask: "Install missing prerequisites now? (yes / no)"- If yes: run the install commands, re-verify, then proceed.- If no: stop with a message listing what to install manually.Alternatively, run `bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-install.sh --check-prereqs` which handles detection, platform awareness, and interactive installation offers.Skip this step if the user passed `--skip-prereqs`.
 ### [mechanical] Step 0a — Resolve target path
 
 1. Parse the remainder of `$ARGUMENTS` after `light` to extract the optional path.
    - If a path is provided: set `TARGET` to that path (resolve relative paths against CWD).
    - If no path is provided: set `TARGET` to the current working directory.
 
-2. Detect the FORGE template source:
-   - If the current repo root contains `copier.yml`: local FORGE clone detected. Prompt for the bootstrap source:
-     ```
-     Bootstrap source — determines where /forge stoke pulls future updates:
-     1. gh:Renozoic-Foundry/forge-public  ← recommended (public GitHub — works on any machine)
-     2. <current directory path>  ← local path (only works on this machine)
-
-     Choose (1 or 2, default: 1):
-     ```
-     Set `TEMPLATE_SRC` to the chosen value. **Note**: if the user is a FORGE developer working from a local clone and wants local stoke behavior, they should choose option 2.
-   - Else if `TARGET` has `.copier-answers.yml` with `_src_path`: use that as `TEMPLATE_SRC`.
-   - Else: ask the human for the path to the FORGE repo.
+2. (The pre-4.0 TEMPLATE_SRC resolution — copier.yml clone detection and
+   `.copier-answers.yml` `_src_path` — was retired with the Copier surface, Spec 558.
+   The plugin runtime (`CLAUDE_PLUGIN_ROOT`) is the upstream source for scaffold and
+   stoke alike.)
 
 ### [mechanical] Step 0b — Write-access gate (Spec 066)
 
@@ -56,8 +64,21 @@
    | Check | Mode | Description |
    |-------|------|-------------|
    | `TARGET` path does not exist | **create-new** | Fresh project creation |
-   | `TARGET` has `.copier-answers.yml` | **stoke-redirect** | Already Copier-managed — redirect to `/forge stoke` |
+   | `TARGET` has `.copier-answers.yml` | **stoke-redirect** | Classic (Copier-scaffolded) project — redirect to `/forge stoke` (v4.0.0+: its classic detection prints the `--to-plugin` converter pointer) |
    | `TARGET` has `AGENTS.md` OR `docs/specs/` OR `.claude/commands/` but NO `.copier-answers.yml` | **legacy-upgrade** | Pre-Copier FORGE/EGID project |
+
+   In plain terms: **create-new** = there's nothing here yet, start fresh. **stoke-redirect** =
+   this project was scaffolded by the old Copier-based installer, so hand off to `/forge stoke`
+   instead of re-initializing it. **legacy-upgrade** = FORGE is already here but from before the
+   plugin existed — upgrade it in place. **greenfield** (below) = an existing codebase with no
+   FORGE files at all yet. ("EGID" = Evidence-Gated Iterative Delivery, FORGE's underlying
+   methodology; see the glossary at `docs/team-guide.md#glossary` for this and every other
+   FORGE-specific term.)
+
+   **Legacy-upgrade / pre-plugin consumers (Spec 577)**: after the plugin-consumption upgrade,
+   offer the full retrofit flow (`/forge retrofit` — de-vendor superseded framework files,
+   reorganize to the contained layout, reconcile history). Never auto-run; the offer is a
+   choice block.
    | `TARGET` exists but has none of the above markers | **greenfield** | Existing codebase, no FORGE yet |
 
 5. Report the detected mode:
@@ -79,15 +100,45 @@
 ### Mode: create-new
 
 > Target path does not exist. Create a brand-new FORGE-managed project from scratch.
+> **The plugin-native scaffolder is the only path (Spec 557; the classic Copier render and its
+> `--copier` flag were deleted in v4.0.0 — Spec 558).**
 
 7. Create the target directory: `mkdir -p <TARGET>`
 
-8. Initialize a git repo: `git init <TARGET>`
-
-9. Generate the full FORGE template into the target:
+8. Initialize a git repo, and snapshot the (structurally empty) pre-scaffold state so Step 11
+   can stage by exact path instead of `-A` (Spec 668, Spec 494 convention):
    ```bash
-   python -m copier copy "<TEMPLATE_SRC>" "<TARGET>" --defaults --trust
+   # forge:spec-668-forge-init-baseline:start
+   git init <TARGET>
+   git -C <TARGET> status --porcelain --untracked-files=all > <TARGET>/.git/forge-init-baseline.txt
+   # forge:spec-668-forge-init-baseline:end
    ```
+   `create-new` mode is only entered when `<TARGET>` did not exist before this run (mode-dispatch
+   precondition in Step 0c above), so the baseline is always empty in production — the snapshot
+   is defense-in-depth, not a response to an observed defect: it keeps Step 11's commit scoped to
+   exactly what this run created even if that precondition is ever relaxed or this block reused.
+
+9. Generate the project skeleton into the target — plugin-native scaffold (Spec 557):
+     ```bash
+     ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/scaffold.py "<TARGET>" --name "<project name>" --description "<description>" --author "<author>" --owner "<owner>" --layout <contained|classic>
+     ```
+     **Layout choice (Spec 575)** — ask before scaffolding (greenfield AND brownfield):
+     `contained` (DEFAULT + recommended): all FORGE process data lives under `.forge/project/`,
+     cleanly segregated from the project's own `docs/` tree; writes the `forge.paths` block and
+     `.forge/ownership.yaml`. `classic`: the pre-575 `docs/...` layout. For brownfield targets
+     recommend `contained` (their `docs/` likely already belongs to the solution). Both layouts
+     write the ownership manifest so the Spec 577 retrofit inventory works everywhere.
+     ```bash
+     # (choice already applied via --layout above)
+     ```
+     Writes the project-data skeleton (docs/specs/, docs/sessions/, docs/backlog.md, thin
+     AGENTS.md/CLAUDE.md with the `forge.project:` runtime block) with NO copier invocation —
+     executable surfaces come from the installed FORGE plugin. Non-security identity vars resolve
+     at runtime via `${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/runtime_config.py`. The scaffolder aborts (exit 2, nothing
+     written) if the target already contains `AGENTS.md`, `docs/specs/`, or `.copier-answers.yml`
+     (overwrite guardrail).
+   - If the operator passes `--copier`: explain it was removed in v4.0.0 (Spec 558) — the
+     plugin-native scaffold is the only path; classic Copier projects stay supported on ≤v3.x.
 
 10. Plant the onboarding seed file at `<TARGET>/.forge/onboarding.yaml`:
     ```yaml
@@ -120,9 +171,38 @@
       lint_command: null
     ```
 
-11. Create initial commit:
+11. Create initial commit — by exact path, diffed against the Step 8 baseline, not `-A`. In this
+    mode the result is every file this run created (the target was empty before Step 8), so the
+    effect is deliberately whole-tree; the mechanism stays exact-path so the lint added by Spec 668
+    (below) never has to allowlist this site:
     ```bash
-    cd <TARGET> && git add -A && git commit -m "Initial FORGE project scaffold"
+    # forge:spec-668-forge-init-commit-block:start
+    baseline="<TARGET>/.git/forge-init-baseline.txt"
+    # Compared by PATH (not the full status line) so a pre-existing path that changes
+    # status class between the baseline snapshot and this commit (e.g. untracked ->
+    # modified) is still recognized as pre-existing and excluded.
+    forge_init_existing_paths=()
+    if [ -f "$baseline" ]; then
+      while IFS= read -r line; do
+        [ -n "$line" ] && forge_init_existing_paths+=("${line:3}")
+      done < "$baseline"
+    fi
+    forge_init_paths=()
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      forge_init_path="${line:3}"
+      forge_init_is_new=true
+      for forge_init_prior in "${forge_init_existing_paths[@]}"; do
+        if [ "$forge_init_path" = "$forge_init_prior" ]; then forge_init_is_new=false; break; fi
+      done
+      if [ "$forge_init_is_new" = true ]; then forge_init_paths+=("$forge_init_path"); fi
+    done < <(git -C <TARGET> status --porcelain --untracked-files=all)
+    rm -f "$baseline"
+    if [ ${#forge_init_paths[@]} -gt 0 ]; then
+      git -C <TARGET> add -- "${forge_init_paths[@]}"
+      git -C <TARGET> commit -m "Initial FORGE project scaffold" -- "${forge_init_paths[@]}"
+    fi
+    # forge:spec-668-forge-init-commit-block:end
     ```
 
 12. Print summary:
@@ -161,91 +241,57 @@
 ### Mode: legacy-upgrade
 
 > Target has FORGE-like files (AGENTS.md, docs/specs/, .claude/commands/) but no `.copier-answers.yml`. This is a pre-Copier FORGE/EGID project that needs upgrading.
+>
+> **Plugin-native as of v4.0.1 (Spec 635).** This mode never invokes Copier and never creates
+> `.copier-answers.yml`. Its former shape — render a fresh Copier template and copy framework
+> files into the target — died twice over in v4.0.0: the template was deleted (Spec 558), and
+> under plugin-primary delivery framework surfaces live in the plugin cache, never in the
+> consumer tree. What remains is the genuinely useful half: adopt the v4 project-data skeleton
+> around the project's existing files, and merge the doctrine files with the project's own
+> content preserved.
 
-#### [mechanical] Step L1 — Generate fresh template
+#### [mechanical] Step L1 — Install and verify the FORGE plugin
 
-14. Generate a fresh FORGE template to a temp directory:
+14. Framework surfaces (commands, skills, agents, libraries) come from the installed FORGE
+    plugin — nothing is copied into the target tree. Verify the plugin is installed and
+    registered; if not, walk the operator through the marketplace install first
+    (see `docs/process-kit/single-source-generator-guide.md` and the consumer migration
+    playbook). Do not proceed until `claude` registers the `forge:*` command set.
+
+    Project-specific commands in the target's `.claude/commands/` keep their names and are
+    never touched — plugin commands register under the `forge:` namespace, so file-level
+    collisions cannot occur. (Un-namespaced references inside FORGE prompt text are a known
+    consumer friction, tracked separately — not a conflict this mode must resolve.)
+
+#### [mechanical] Step L2 — Scaffold the v4 reference skeleton and adopt missing pieces
+
+15. Generate the v4 project-data reference skeleton to an empty temp directory via the
+    plugin-native scaffolder (same engine as create-new Step 9; the temp dir is empty, so the
+    scaffolder's overwrite guardrail cannot fire):
     ```bash
     FORGE_TMP="${TMPDIR:-${TEMP:-/tmp}}/forge-legacy-upgrade"
     rm -rf "$FORGE_TMP"
-    python -m copier copy "<TEMPLATE_SRC>" "$FORGE_TMP" --defaults --trust
+    ${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/scaffold.py "$FORGE_TMP" --name "<project name>" --description "<from target's CLAUDE.md or README>" --author "<operator>" --owner "<operator>" --layout <contained|classic>
     ```
+    Ask the layout question exactly as create-new Step 9 does (`contained` recommended for
+    brownfield — the target's `docs/` tree already belongs to the project).
 
-15. Read `.forge/update-manifest.yaml` from the fresh template to classify files.
-
-#### [mechanical] Step L2 — Process files by classification
-
-16. Walk the fresh template directory and classify each file against the manifest:
-
-    **Framework files** (paths matching `framework.paths` in manifest — always overwrite):
-    - **Exception: `.claude/commands/` conflict check** — Before overwriting any command file,
-      check if the target file already exists AND is not a FORGE command (i.e., it was created
-      by the user for project-specific functionality). Detection: read the first 5 lines of the
-      existing file — if it does NOT contain `# Framework: FORGE`, it is a project-specific
-      command. For each conflict found, collect it for the conflict interview (Step L2b below).
-    - For non-conflicting framework files: copy from temp to target, creating directories as needed.
-    - Overwrite existing FORGE-owned files (files that contain `# Framework: FORGE` header).
-    - Report each: `Updated: .forge/lib/logging.sh (framework)`
-
-    **Project files** (paths matching `project.paths` in manifest — never touch):
-    - Skip entirely, do not copy, do not modify.
-    - Report each: `Skipped: docs/specs/001-my-spec.md (project-owned)`
-
-    **Merge files** (paths matching `merge.paths` in manifest — intelligent merge):
-    - For `CLAUDE.md` and `AGENTS.md`: execute the **Section-based merge** (Step L3 below).
-    - For `.gitignore`: append new entries from template that don't exist in project.
-    - For `.mcp.json`: merge server lists (add new servers, keep existing project servers).
-    - For other merge files: present side-by-side diff and ask human to choose.
-
-    **New files** (exist in template but not in target, not matching any project path pattern):
-    - Copy from temp to target.
-    - Report each: `Added: .forge/bin/forge-status.ps1 (new)`
-
-#### [decision] Step L2b — Command name conflict resolution
-
-16b. If any `.claude/commands/` conflicts were detected in Step L2 (existing project-specific
-     commands whose names collide with FORGE commands), present them to the user:
-
-     ```
-     ## Command Name Conflicts
-
-     The following project commands share names with FORGE commands:
-
-     | File | Project command purpose (first line) | FORGE command purpose |
-     |------|-------------------------------------|---------------------|
-     | .claude/commands/test.md | "Run pytest with coverage" | FORGE /test — run spec test plan |
-     | .claude/commands/note.md | "Add meeting notes to wiki" | FORGE /note — append to scratchpad |
-     ```
-
-     For each conflict, ask:
-
-     ```
-     Conflict: .claude/commands/test.md
-     Your version: <first non-empty, non-comment line from existing file>
-     FORGE version: <first non-empty, non-comment line from template file>
-
-     Choose:
-     1. Keep yours — rename FORGE's to /forge-test
-     2. Keep FORGE's — rename yours to /project-test (or a name you choose)
-     3. Merge — I'll combine both into one command (show me a draft)
-     4. Replace — overwrite with FORGE's version (your version will be lost)
-     5. Skip — don't install this FORGE command
-     ```
-
-     Apply the chosen resolution:
-     - **Option 1 (rename FORGE)**: Copy FORGE command as `forge-<name>.md` instead
-     - **Option 2 (rename project)**: Rename existing to the chosen name, then copy FORGE command
-     - **Option 3 (merge)**: Read both files, draft a merged version, show to user for approval
-     - **Option 4 (replace)**: Overwrite with FORGE version
-     - **Option 5 (skip)**: Do not copy this FORGE command
-
-     Record all conflict resolutions in the report.
-
-     If no conflicts: skip this step silently.
+16. Walk the REFERENCE skeleton and adopt into the target only what the target lacks:
+    - **Missing project-data files** (e.g. `docs/specs/README.md` scaffolding, `docs/sessions/`
+      skeleton, `docs/backlog.md`, `.forge/ownership.yaml`, the `forge.paths` block): copy from
+      reference to target. Report each: `Added: docs/sessions/_template.md (project-data)`
+    - **Files the target already has** (its own `docs/specs/`, session logs, backlog): NEVER
+      overwrite. Report each: `Kept: docs/backlog.md (project-owned)`
+    - **`CLAUDE.md` / `AGENTS.md`**: route to the Section-based merge (Step L4) — the reference
+      skeleton's thin doctrine files (with the `forge.project:` runtime block and the Spec 640
+      managed authorization-core block) are the "template side" of that merge.
+    - **`.gitignore`**: append reference entries the target lacks; never remove project entries.
 
 #### [mechanical] Step L3 — Obsolete file detection
 
-17. Check the target for files listed in `obsolete.mappings` from the manifest. For each obsolete file that exists in the target:
+17. Check the target for known-obsolete pre-Copier files (static mapping — inlined here since
+    Spec 635; the manifest that used to carry it is not part of the scaffolded skeleton). For
+    each obsolete file that exists in the target:
 
     ```
     Obsolete files detected (replaced in current FORGE):
@@ -344,16 +390,13 @@
       ```
     - If confirmed: write the merged file. If abort: skip the merge for that file.
 
-#### [mechanical] Step L5 — Generate .copier-answers.yml
+#### [mechanical] Step L5 — No management marker (deliberate)
 
-20. Create `.copier-answers.yml` in the target so future updates use `/forge stoke`:
-    ```yaml
-    # Changes here will be overwritten by Copier
-    _commit: HEAD
-    _src_path: <TEMPLATE_SRC>
-    project_name: <inferred from CLAUDE.md header or directory name>
-    project_slug: <directory name>
-    ```
+20. Do NOT create `.copier-answers.yml` — that file is the Copier-management marker, and
+    planting it would misroute this project to stoke-redirect classic detection on any future
+    `/forge init` run. Plugin-primary projects need no marker: the installed plugin IS the
+    framework linkage, and `/forge stoke` (content-merge engine, Specs 559/591) handles future
+    project-data updates without one.
 
 #### [mechanical] Step L6 — Plant onboarding seed
 
@@ -389,21 +432,20 @@
     ```
     ## /forge init — Complete (legacy-upgrade)
     Target: <TARGET>
-    Framework files updated: <count>
+    Plugin: forge (registered — framework surfaces come from the plugin cache)
+    Project-data files adopted: <count>
     Project files preserved: <count>
-    Merge files processed: <count>
-    New files added: <count>
+    Doctrine files merged: <count> (CLAUDE.md, AGENTS.md)
     Obsolete files removed: <count>
-    .copier-answers.yml: created
     Onboarding seed: .forge/onboarding.yaml (status: pending)
-    Onboarding: .forge/onboarding.yaml planted (status: pending)
     On first agent session, run /onboarding to customize this project.
 
     Next steps:
     - Review merged CLAUDE.md and AGENTS.md
     - The onboarding flow will run automatically on first agent interaction
     - Or run /onboarding to start interactive project configuration
-    - Future updates: use /forge stoke (Copier is now the sync mechanism)
+    - Future project-data updates: /forge stoke (content-merge engine); plugin updates
+      arrive via the marketplace
     ```
 
 ---
@@ -588,3 +630,27 @@
 After light completes:
 - **(Greenfield)**: "Next: run `/interview` to define your project vision and build a PRD."
 - **(Brownfield)**: "Next: run `/now` to see your project state."
+
+
+## [decision] Brownfield/greenfield close-out — bounded /reconcile offer (Spec 577 R4)
+
+After scaffolding into an EXISTING repo (brownfield) — and after onboarding is seeded — end with:
+
+```
+Seed the spec corpus from this repo's git history? /reconcile drafts retroactive stub specs
+for large change clusters and memory notes for small ones (purely additive; stubs never
+auto-advance).
+```
+> **Choose** — type a number or keyword:
+> | # | Rank | Action | Rationale | What happens |
+> |---|------|--------|-----------|--------------|
+> | **1** | 1 | `last-90-days` | Recent history is highest-signal; bounded stub volume | /reconcile bounded to commits since 90 days ago |
+> | **2** | — | `last-200-commits` | Commit-count bound for repos with bursty history | /reconcile bounded to the last 200 commits |
+> | **3** | — | `full-history` | Complete corpus; large repos may draft many stubs | /reconcile over the full history |
+> | **4** | 2 | `later` | Not ready to triage stubs now; marker keeps it un-forgettable | Plant the reconcile-pending marker — /now surfaces it until run or dismissed |
+> | **5** | — | `skip` | History seeding not wanted | No reconcile, no marker |
+
+On `later`: write `.forge/state/reconcile-pending.json` (`{"planted":"init","options":[...]}`).
+On a scope choice: run /reconcile with that bound (its thresholds/doctrine unchanged).
+Recommended ordering: init → /onboarding → /reconcile (classification benefits from onboarding's
+stack/test-command answers) — say so when the operator picks a scope before onboarding ran.

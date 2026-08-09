@@ -66,12 +66,14 @@ check_nonempty() {
   else check_pass=0; check_msg="file is empty"; fi
 }
 check_markdown_wellformed() {
-  local ct; ct=$(grep -c '```' "$1" 2>/dev/null || echo 0); ct=$(echo "$ct" | _num)
+  # Spec 659: `|| true` + ${:-0}; the old echo fallback produced "0\n0", which
+  # _num happened to collapse to "00" (numerically 0) — right by accident.
+  local ct; ct=$(grep -c '```' "$1" 2>/dev/null || true); ct=$(echo "${ct:-0}" | _num)
   if (( ct % 2 == 0 )); then check_pass=1; check_msg="markdown well-formed"
   else check_pass=0; check_msg="unclosed code block (${ct} fences)"; fi
 }
 check_has_heading() {
-  local ct; ct=$(grep -c '^#' "$1" 2>/dev/null || echo 0); ct=$(echo "$ct" | _num)
+  local ct; ct=$(grep -c '^#' "$1" 2>/dev/null || true); ct=$(echo "${ct:-0}" | _num)
   if [[ "$ct" -gt 0 ]]; then check_pass=1; check_msg="has heading (${ct} H2 sections)"
   else check_pass=0; check_msg="no heading found"; fi
 }

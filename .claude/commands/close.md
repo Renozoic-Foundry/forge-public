@@ -59,6 +59,24 @@ If the marker exists and parses as JSON:
 
 If the marker exists but is malformed JSON: REFUSE with the generic pointer `/close is forbidden inside a batch lane worktree — marker present but unreadable. Fix or deliberately delete .forge/state/batch-lane.json to override.` (Malformed still signals lane context; fail closed.)
 
+## [mechanical] Step 0-wt — Unreconciled-worktree pre-gate check (Spec 649 AC3)
+
+Same shared script `/implement` Step 1b-wt calls — ONE library, two call sites (Spec 649
+Requirement 6). It matters more here than there: `/close` runs the validator and every
+close-time gate against the **main tree**, so an unreconciled implementer worktree means the
+validator is verifying a tree that does not contain the implementation it is validating.
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/worktree-reconcile.sh check
+```
+
+- **Exit 0** — emit `GATE [worktree-reconcile]: PASS`. Proceed to Step 0a.
+- **Exit 1** — surface the per-worktree report verbatim and emit
+  `GATE [worktree-reconcile]: WARN`. **Advisory — does not block `/close`.** It is a visibility
+  gate, not an authorization one; the operator decides whether the unreconciled work matters to
+  the spec being closed.
+- **Helper absent** → `Worktree pre-gate check: worktree-reconcile.sh absent — skipped.` Proceed.
+
 ## [mechanical] Step 0a — Evolve Loop Boundary Check (Spec 191)
 Read `docs/sessions/context-snapshot.md`. If `## Active evolve loop` exists with `status: in-progress`: stop and report "Evolve loop in progress (started <started>). Solve-loop commands (/implement, /spec, /close) are blocked until the evolve loop completes. Return to the /evolve session and use the exit gate to choose your next action." Do NOT proceed. If absent or `status: complete`: proceed normally.
 
@@ -575,8 +593,14 @@ property both specs depend on.
        constraint; never widen the pattern set):
        ```bash
        ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/validator-pipeline.sh evidence-excerpt \
-         tmp/evidence/SPEC-NNN-YYYYMMDD
+         tmp/evidence/SPEC-NNN-YYYYMMDD \
+         docs/specs/NNN-<slug>.md
        ```
+       The spec-file argument enables evidence-KIND enforcement (Spec 663): where an AC names an
+       excluded evidence source ("do not rely on X", "not via X", "excluding X"), the orchestrator
+       omits that source from THAT criterion's excerpt segment and states, above the excerpt, that
+       it was withheld and why — so a PASS can no longer be reached by a route the criterion
+       forbids, and a validator cannot mistake the deliberate absence for non-existence.
        The prompt template below tells the validator the paths are gitignored and that targeted
        `Bash cat/ls` of orchestrator-NAMED files works where Read/Glob do not. The Spec 582 batch
        dispatch (Step 0-batch item 4) uses this template by reference — never re-inline it.
@@ -1266,7 +1290,7 @@ Genuine post-close corrections (typos, broken links found later) are a separate 
 
 After Step 3 completes (sub-steps a-f), if `Approved-SHA:` present (Lane B): recompute the SHA-256 over the four protected sections (Scope + Requirements + AC + Test Plan, per Spec 089's extraction rule) and compare to the stored value.
 - Match → emit `GATE [spec-344-guard-3]: PASS — protected sections unchanged post-Step-3.` Continue.
-- Mismatch → emit `GATE [spec-344-guard-3]: FAIL — Step 3 modified protected sections (post-Step-3 SHA mismatch). This indicates a path that bypassed Guard 2.` STOP. Do not push. Investigate the Step 3 sub-step that allowed the protected-section edit.
+- Mismatch → emit `GATE [spec-344-guard-3]: FAIL — the spec's Scope/Requirements/Acceptance-Criteria/Test-Plan sections changed unexpectedly during Step 3.` STOP. Do not push. Restore those sections to the version verified in Step 2, or re-run /close NNN after confirming they weren't edited.
 
 No `Approved-SHA:` (Lane A): skip silently — Guard 3 has no anchor.
 

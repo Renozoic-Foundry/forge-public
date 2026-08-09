@@ -70,6 +70,21 @@ WEAK_PATTERNS=(
   '\b(display|displays|displaying)\b'
 )
 
+# Spec 658 — backtick-sensitive patterns: a THIRD class, between strong and
+# weak. Its sole member is the slash-command pattern, which fires on ACs that
+# merely QUOTE a command string as data (`NEVER run /close, git push, ...`) —
+# twice-observed false positives at the /close browser-evidence gate (Spec 656
+# AC2, Spec 657 AC5). Members are subject to the strip_backticks re-test ONLY.
+#
+# Deliberately NOT added to WEAK_PATTERNS (Spec 658 Requirement 2): that would
+# also inherit the whole-AC EXCLUSIONS list, whose '\bfixture(s)?\b' entry would
+# silently stop flagging a genuine "run /close in a fresh fixture" AC — a false
+# NEGATIVE at a safety gate, the failure mode Spec 550's DA review refused when
+# it declined to add `console` as an exclusion.
+BACKTICK_SENSITIVE_PATTERNS=(
+  '(running|run|invoke|execute) /[a-z-]+'
+)
+
 EXCLUSIONS=(
   '\bcopier\b'
   '\brender(s|ed|ing)?[ -]test'
@@ -97,6 +112,14 @@ is_weak_pattern() {
   local p="$1" w
   for w in "${WEAK_PATTERNS[@]}"; do
     if [[ "$p" == "$w" ]]; then return 0; fi
+  done
+  return 1
+}
+
+is_backtick_sensitive_pattern() {
+  local p="$1" b
+  for b in "${BACKTICK_SENSITIVE_PATTERNS[@]}"; do
+    if [[ "$p" == "$b" ]]; then return 0; fi
   done
   return 1
 }
@@ -199,6 +222,14 @@ flush() {
           if ! printf '%s' "$stripped" | grep -Eiq "$pat"; then continue; fi
           # ...and outside its token-scoped exclusion contexts.
           if has_token_exclusion "$pat" "$stripped"; then continue; fi
+        elif is_backtick_sensitive_pattern "$pat"; then
+          # Spec 658: the strip_backticks re-test ONLY — no whole-AC EXCLUSIONS,
+          # no token-scoped exclusions. A match surviving backtick removal is a
+          # genuine behavioral AC and still flags; a backtick-ONLY match is the
+          # quoted-command-as-data false positive and falls through to later
+          # patterns (a strong verb elsewhere in the same AC still wins).
+          stripped="$(strip_backticks "$ac_text")"
+          if ! printf '%s' "$stripped" | grep -Eiq "$pat"; then continue; fi
         fi
         entries+=("{\"ac_number\":${ac_num},\"text\":\"$(json_escape "$ac_text")\",\"pattern\":\"$(json_escape "$pat")\"}")
         break

@@ -78,8 +78,15 @@ explicit scripts/muscle memory). Run this branch, then go straight to Step 0pre.
 
 2. **Resolve upstream source**: the installed plugin runtime (`$CLAUDE_PLUGIN_ROOT`)
    is the default "theirs" tree; `--upstream <dir>` overrides it (e.g. a fresh
-   checkout at a specific tag). FORGE-owned project-data files are the merge
-   candidates.
+   checkout at a specific tag). **The merge candidates are exactly the paths the
+   consumer's `.forge/update-manifest.yaml` declares FORGE-owned** (its `framework:`
+   bucket, minus anything the `project:`/`merge:` buckets claim — Spec 636). Undeclared
+   upstream paths are NEVER written to the consumer; the default apply **fails closed**
+   (non-zero, no merge) if that manifest is missing or malformed. `--files` overrides
+   the manifest for an operator-directed subset. The manifest governs everything except
+   itself: `.forge/update-manifest.yaml` sits in the `merge:` bucket so an upstream
+   edit can never blind-overwrite it, and an upstream widening of the FORGE-owned set is
+   surfaced as a reviewable `ownership-growth` diff rather than silently applied.
 
 3. **Run the default apply** (content-merge via `stoke.py apply`; `.forge/lib/upgrade_merge.py`
    under the hood):
@@ -91,11 +98,17 @@ explicit scripts/muscle memory). Run this branch, then go straight to Step 0pre.
    ```
    Base-snapshot state lives at `.forge/state/upgrade-base/` — OUTSIDE `.git/`; the
    engine never writes git objects/refs/index directly (closes the git-corruption
-   defect class in `docs/process-kit/stoke-recovery-runbook.md` Sec 1a). On a file with
-   no recorded base yet (first run for that file), the engine bootstraps from the
-   current working-tree content — no synthetic-base guessing. Every invocation also
-   runs the live six-key consent gate (see below) ahead of the merge, and appends one
-   `stoke-merge-apply` soak event to `docs/sessions/activity-log.jsonl`.
+   defect class in `docs/process-kit/stoke-recovery-runbook.md` Sec 1a). **First-merge
+   safety (Spec 636):** a file with no recorded base is handled by its actual state — a
+   brand-new upstream file is adopted, an already-aligned file records its base as a
+   no-op, and a **consumer-diverged file is kept as-is and reported `first-adoption-
+   required`** (never silently overwritten with upstream). **Installed-base backfill
+   (Spec 636):** an already-onboarded consumer (migration marker present, no seeded
+   bases) gets its base snapshots seeded from current content in a write-state-only pass
+   — no consumer file is touched, no merge runs that invocation; re-run apply to perform
+   the real 3-way merge. Every merge invocation also runs the live six-key consent gate
+   (see below) ahead of the merge, and appends one `stoke-merge-apply` soak event to
+   `docs/sessions/activity-log.jsonl`.
 
 4. **Report**: exit 0 (all files merged clean) — confirm success. Exit nonzero (one
    or more conflicts) — surface the helper's own recovery output verbatim; it names
@@ -254,6 +267,40 @@ The reference Python implementation of this parser lives in `.forge/tests/test_s
      consent prompt, Spec 427/428) and 0pre.2 (classic `apply --classic` invocation,
      Spec 427/591) retired by Spec 558: `copier update`, its `_tasks` trust gate, and the
      `--classic` branch were all deleted in v4.0.0. Step numbers retired, not reused. -->
+
+### Step 0pre.2a — Doctrine drift report (Spec 640, advisory)
+
+Report whether this project's authorization-core managed block (the condensed
+Priority-ordering/Requires-Confirmation/Authorization-required/Prohibited block
+delivered into `AGENTS.md` or `CLAUDE.md` by Spec 640) is current against the
+installed plugin. **Report-only** — like the other advisory sub-steps above, this
+never blocks or auto-regenerates anything.
+
+```bash
+DOCTRINE_GEN="${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/doctrine_gen.py"
+if [ -f "$DOCTRINE_GEN" ]; then
+  INSTALLED_V="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('version',''))" "${CLAUDE_PLUGIN_ROOT:-.}/.claude-plugin/plugin.json" 2>/dev/null)"
+  for cand in AGENTS.md CLAUDE.md; do
+    if [ -f "$cand" ] && grep -q 'FORGE:DOCTRINE-BEGIN id=authorization-core' "$cand"; then
+      python3 "$DOCTRINE_GEN" check --target "$cand" --id authorization-core --installed-version "${INSTALLED_V:-0}"
+      break
+    fi
+  done
+fi
+```
+
+Surface the result to the operator:
+- `DRIFT ...` — names both versions; suggest regenerating (`doctrine_gen.py generate`)
+  once the operator confirms. Stoke does not regenerate the managed block
+  automatically — the operator decides, matching the report-only pattern above.
+- `CONFLICT ...` — a hand-edit was made inside the managed block since it was last
+  generated; name the file and let the operator decide (resolve manually, or
+  regenerate with `--force` to discard the hand-edit — never silent).
+- `OK ...` — current, no action needed.
+- `NONE ...` — no managed block found (pre-Spec-640 project, or the markers were
+  removed — a silent opt-out per the ADR-640 residual-risk note); informational only.
+
+Skip silently if `doctrine_gen.py` is absent (pre-Spec-640 plugin version).
 
 ### Step 0pre.2b — Refresh install manifest (Spec 431, Req 1)
 

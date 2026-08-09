@@ -126,6 +126,87 @@ fi
 
 echo "All scripts pass shellcheck."
 
+# --- Spec 659: grep-count fallback idiom (always on, not behind a flag) ---
+#
+# A `-c` count whose failure branch prints a literal is broken in the exact case
+# it looks written for. When the file EXISTS but holds no match, the count is
+# printed as 0 AND the exit status is 1, so the fallback branch appends a SECOND
+# 0 and the variable becomes the two-line string "0\n0" — every later arithmetic
+# use then dies with "integer expression expected" or "syntax error in
+# expression". Only the file-ABSENT case (exit 2, empty stdout) behaves, which is
+# why the shape survives review. Canonical replacement, per Spec 659 Req 2:
+#
+#     count="$(grep -c 'PATTERN' file 2>/dev/null || true)"; count="${count:-0}"
+#
+# `|| true` swallows the no-match exit 1 while keeping the real count on stdout;
+# `${count:-0}` covers the file-absent case. Correct in both branches.
+#
+# The rule is deliberately narrow (Spec 659 Constraint — a lint rule that cries
+# wolf gets switched off within a week): it fires only on a -c count whose `||`
+# branch is echo/printf, never on the corrected `|| true`, never on a `#` comment
+# line, and never inside a heredoc body.
+echo ""
+echo "=== grep-count fallback idiom check (Spec 659) ==="
+
+# Assembled from fragments so this file does not match its own rule — the sweep
+# below is repo-wide and therefore includes scripts/.
+_gc_head="grep[[:space:]]+-[A-Za-z]*c[A-Za-z]*[[:space:]]"
+_gc_tail="\|\|[[:space:]]*(echo|printf)[[:space:]]"
+GREP_COUNT_IDIOM_RE="${_gc_head}.*${_gc_tail}"
+HEREDOC_OPEN_RE='<<-?[[:space:]]*["'"'"']?([A-Za-z_][A-Za-z0-9_]*)'
+
+# Repo-wide per Spec 659 AC3, minus: .git (no shell sources), .claude/worktrees
+# (stale agent worktrees — spec-excluded), node_modules (vendored), and tmp/
+# (gitignored scratch; including it would make a blocking gate's verdict depend
+# on whatever scratch files happen to be lying around).
+mapfile -t all_scripts < <(find "$REPO_ROOT" \
+    \( -path "$REPO_ROOT/.git" \
+       -o -path "$REPO_ROOT/.claude/worktrees" \
+       -o -path "$REPO_ROOT/node_modules" \
+       -o -path "$REPO_ROOT/tmp" \) -prune -o \
+    -name "*.sh" -type f -print | sort)
+
+idiom_hits=0
+idiom_details=""
+for script in "${all_scripts[@]}"; do
+    relative="${script#"$REPO_ROOT"/}"
+    in_heredoc=""
+    lineno=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        (( lineno++ )) || true
+
+        # Heredoc body: prose or data, not code (AC2). Skip to the delimiter.
+        if [[ -n "$in_heredoc" ]]; then
+            trimmed="${line#"${line%%[![:space:]]*}"}"
+            trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+            if [[ "$trimmed" == "$in_heredoc" ]]; then in_heredoc=""; fi
+            continue
+        fi
+
+        # Comment lines are prose (AC2). test-spec-656-control-char-sanitization.sh
+        # explains this very defect in a comment and must not be flagged (Req 5).
+        if [[ "$line" =~ ^[[:space:]]*# ]]; then continue; fi
+
+        if [[ "$line" =~ $GREP_COUNT_IDIOM_RE ]]; then
+            idiom_details+="  FAIL: $relative:$lineno -- grep-count fallback idiom: a -c count whose || branch prints a literal yields the two-line string 0\\n0 when the file exists with no match. Use || true, then \${var:-0}."$'\n'
+            (( idiom_hits++ )) || true
+        fi
+
+        # Heredoc opener. `<<<` is a here-string, not a heredoc — excluded.
+        if [[ "$line" != *"<<<"* ]] && [[ "$line" =~ $HEREDOC_OPEN_RE ]]; then
+            in_heredoc="${BASH_REMATCH[1]}"
+        fi
+    done < "$script"
+done
+
+echo "Scanned ${#all_scripts[@]} scripts repo-wide; found $idiom_hits occurrence(s)."
+if [[ $idiom_hits -gt 0 ]]; then
+    echo ""
+    echo "$idiom_details"
+    exit 1
+fi
+echo "No grep-count fallback idiom occurrences."
+
 # --- Portability checks (--portability flag) ---
 if [[ "$PORTABILITY" == "--portability" ]]; then
     echo ""

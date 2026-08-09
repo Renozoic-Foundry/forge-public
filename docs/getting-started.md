@@ -1,11 +1,13 @@
 # Getting Started with FORGE
-<!-- Last verified: (unset) | STALE: re-verify — Spec 627 changed an install/distribution surface (/close 2026-08-04, Spec 509) -->
+<!-- Last verified: 2026-08-06 -->
 
 This tutorial walks you from zero to your first closed spec in a single short session.
 
 FORGE is a project framework that gives AI-assisted development a structured delivery process — spec-driven, evidence-gated, and designed to remain reliable as agent autonomy increases.
 
-The underlying methodology is Evidence-Gated Iterative Delivery (EGID). You will complete one full Solve Loop cycle: create a spec, implement it, and close it.
+The underlying methodology is Evidence-Gated Iterative Delivery (EGID — see the [glossary](team-guide.md#glossary) for what that and every other FORGE term below means). You will complete one full Solve Loop cycle: create a spec, implement it, and close it.
+
+**In a hurry?** The [4-command starter set](QUICK-REFERENCE.md#core-commands) is the short version of this whole page.
 
 ## Contents
 
@@ -25,8 +27,12 @@ The underlying methodology is Evidence-Gated Iterative Delivery (EGID). You will
 
 - **Claude Code** — [claude.ai/code](https://claude.ai/code) (CLI, desktop app, or IDE extension)
 - **Git** — version control
+- **Python 3.10+** — used by FORGE's helper tooling: the `/forge init` scaffolder and the
+  library scripts behind several commands run through `forge-py` (corrected in v4.0.1 —
+  Spec 635; this list previously said "no Python", which was untrue for the first command
+  this tutorial runs)
 
-That is the whole list for the plugin path — no Python, no template engine. Using a different
+No template engine — the Copier render was removed in v4.0.0. Using a different
 AI IDE (Cursor, Windsurf, Copilot)? The pinned-checkout runtime path applies instead; see the
 [README's collapsed cross-IDE section](../README.md#quickstart) and the pinned tool versions in
 [CONTRIBUTING.md](../CONTRIBUTING.md#prerequisites).
@@ -38,7 +44,7 @@ AI IDE (Cursor, Windsurf, Copilot)? The pinned-checkout runtime path applies ins
 
 ## Step 1 — Install the FORGE plugin
 
-FORGE v3 delivers the entire framework surface — slash commands, agent roles, skills, and hooks —
+FORGE delivers the entire framework surface — slash commands, agent roles, skills, and hooks —
 as a signed Claude Code plugin:
 
 ```bash

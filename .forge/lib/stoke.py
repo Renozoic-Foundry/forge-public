@@ -64,6 +64,7 @@ if sys.version_info < (3, 10):
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import runtime_consent_gate as _rcg  # noqa: E402
 import upgrade_merge as _upgrade_merge  # noqa: E402
+import upgrade_migrate_once as _upgrade_migrate_once  # noqa: E402  (Spec 636 backfill)
 
 TIER3_FILES = ("AGENTS.md", "CLAUDE.md", ".mcp.json")
 DEFAULT_HARD_PCT = 30
@@ -603,22 +604,51 @@ def _live_gate_six_keys(live_root: Path, answers: dict | None, consent_kv: list[
 
 # ---- Spec 591 Req 2: content-merge default apply path -----------------------
 
-def _resolve_merge_files(
-    upstream_root: Path, copier_yml: Path, explicit_files: list[str] | None
-) -> list[str]:
-    """Determine which repo-relative files the merge-native backend merges.
+class ManifestError(ValueError):
+    """update-manifest.yaml is malformed for ownership resolution (Spec 636 R10).
 
-    `--files` (explicit_files) wins when given. Otherwise walk `upstream_root`
-    (the new template content -- "theirs") and merge every file NOT matching
-    an optional consumer-side `copier.yml::_exclude` if one exists (tolerant
-    absence -- post-558 no such file normally exists) -- i.e. every upstream file.
+    Raised only on the stoke-apply ownership path. The caller routes this through the
+    AC4 fail-closed message (non-zero exit + named message) — NEVER the empty-resolution
+    no-op branch. A well-formed manifest with an empty `framework` bucket does NOT raise;
+    it is a distinct, separately-reported state.
+    """
+
+
+def _validate_ownership_manifest(text: str) -> dict[str, list[str]]:
+    """Parse + validate the manifest for stoke-apply ownership resolution (Spec 636 R10).
+
+    Malformed = missing/non-1 `schema:` marker, or no `framework:` bucket at all. These
+    fail closed (ManifestError). This is the validation AC4b's "inherit ownership.py's
+    fail-closed behaviour" presumed but which `_parse_update_manifest` did not have.
+    """
+    m = re.search(r"^schema:\s*(\S+)\s*$", text, re.M)
+    if not m:
+        raise ManifestError("no `schema:` marker (want `schema: 1`)")
+    if m.group(1).strip().strip("\"'") != "1":
+        raise ManifestError(f"unsupported schema (got {m.group(1)!r}, want 1)")
+    buckets = _parse_update_manifest(text)
+    if "framework" not in buckets:
+        raise ManifestError("no `framework:` bucket")
+    return buckets
+
+
+def _resolve_merge_files(
+    upstream_root: Path, buckets: dict[str, list[str]], explicit_files: list[str] | None
+) -> list[str]:
+    """Determine which repo-relative files the merge-native backend merges (Spec 636).
+
+    `--files` (explicit_files) wins when given. Otherwise walk `upstream_root` (the new
+    template content -- "theirs") and merge ONLY files declared FORGE-owned by the
+    ownership manifest: a file matches a `framework:` pattern AND does NOT match a
+    non-framework (`project:` / `merge:`) pattern. The non-framework-overrides-framework
+    precedence (Spec 636 R7, reusing the _classify_framework_files rule) is what carves
+    `.forge/update-manifest.yaml` itself — declared under `merge:` — out of blind
+    overwrite. Undeclared upstream paths are never merged (R1).
     """
     if explicit_files:
         return [f.replace("\\", "/") for f in explicit_files]
-    try:
-        patterns = _read_copier_exclude(copier_yml)
-    except (FileNotFoundError, ValueError):
-        patterns = []
+    framework_patterns = buckets.get("framework", [])
+    non_framework_patterns = buckets.get("project", []) + buckets.get("merge", [])
     files: list[str] = []
     for root, dirs, fnames in os.walk(upstream_root):
         root_path = Path(root)
@@ -633,10 +663,54 @@ def _resolve_merge_files(
         for fname in fnames:
             rel = (root_path / fname).relative_to(upstream_root)
             rel_str = str(rel).replace("\\", "/")
-            if _path_matches_patterns(rel_str, patterns):
-                continue
+            if not _path_matches_patterns(rel_str, framework_patterns):
+                continue  # undeclared — never merged (R1)
+            if _path_matches_patterns(rel_str, non_framework_patterns):
+                continue  # project/merge precedence over framework (R7 carve-out)
             files.append(rel_str)
     return files
+
+
+def _bases_seeded(state_dir: Path, files: list[str]) -> bool:
+    """True if any resolved file already has a recorded base snapshot (Spec 636 AC8).
+
+    False (→ backfill eligible) when state_dir is absent or holds no base for any
+    resolved file — the already-onboarded installed base, which upgrade_migrate_once
+    left with a marker but no bases.
+    """
+    if not state_dir.is_dir():
+        return False
+    return any((state_dir / rel).is_file() for rel in files)
+
+
+def _report_ownership_set_growth(
+    live_root: Path, upstream_root: Path, consumer_buckets: dict[str, list[str]]
+) -> None:
+    """Surface upstream framework-set growth vs the consumer manifest (Spec 636 R11/AC9b).
+
+    Reviewable diff only — NEVER auto-applied (the manifest is merge-bucket, R7). If the
+    upstream manifest is absent or malformed, stay silent: the consumer manifest already
+    gated the apply, and this advisory must never crash it.
+    """
+    upstream_manifest = upstream_root / ".forge" / "update-manifest.yaml"
+    if not upstream_manifest.is_file():
+        return
+    try:
+        upstream_buckets = _validate_ownership_manifest(
+            upstream_manifest.read_text(encoding="utf-8")
+        )
+    except (ManifestError, OSError):
+        return
+    grown = sorted(set(upstream_buckets.get("framework", [])) - set(consumer_buckets.get("framework", [])))
+    if grown:
+        print(
+            "GATE [stoke/ownership-growth]: REVIEW — upstream update-manifest.yaml declares "
+            f"{len(grown)} FORGE-owned path(s) your manifest does not carry: "
+            + ", ".join(grown)
+            + ". NOT auto-applied (the manifest is merge-bucket, Spec 636 R7) — review and merge "
+            ".forge/update-manifest.yaml deliberately if you accept the widening.",
+            file=sys.stderr,
+        )
 
 
 def cmd_merge_native_apply(args: argparse.Namespace) -> int:
@@ -646,7 +720,6 @@ def cmd_merge_native_apply(args: argparse.Namespace) -> int:
     trace (Req 2) -- every path below returns a clean int exit code.
     """
     live_root = Path(args.live_root) if args.live_root else Path.cwd()
-    copier_yml = Path(args.copier_yml) if args.copier_yml else (live_root / "copier.yml")
     upstream_root = Path(args.upstream) if args.upstream else Path(os.environ.get("CLAUDE_PLUGIN_ROOT", "."))
 
     if not upstream_root.is_dir():
@@ -657,13 +730,80 @@ def cmd_merge_native_apply(args: argparse.Namespace) -> int:
         )
         return 2
 
+    state_dir = Path(args.state_dir) if args.state_dir else (live_root / _upgrade_merge.DEFAULT_STATE_DIR)
+
+    # --- Spec 636: ownership-manifest gate (fail-closed) ------------------------
+    # The consumer's own manifest is the authority for what is FORGE-owned. Explicit
+    # --files bypasses the gate (operator-directed scope, backward compat).
+    buckets: dict[str, list[str]] = {}
+    if not args.files:
+        manifest_path = live_root / ".forge" / "update-manifest.yaml"
+        marker_path = live_root / _upgrade_migrate_once.DEFAULT_MARKER
+        if not manifest_path.is_file():
+            # AC4: no ownership manifest — fail closed with the named path. The one
+            # exception is the AC8 backfill population (migration marker present, no
+            # seeded bases): those are handled by the base-seed branch below, which
+            # only fires when the manifest DOES resolve. A missing manifest is never
+            # silently merged.
+            print(
+                f"GATE [stoke/ownership-manifest]: FAIL — no ownership manifest at {manifest_path}. "
+                "Apply refuses without a declared FORGE-owned set (Spec 636). "
+                "Restore .forge/update-manifest.yaml (ships with the plugin/scaffold), then retry.",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            buckets = _validate_ownership_manifest(
+                manifest_path.read_text(encoding="utf-8")
+            )
+        except ManifestError as e:
+            # AC4b: malformed manifest fails closed on the SAME path as the missing
+            # case — never the empty-resolution no-op. This is the R10 validation.
+            print(
+                f"GATE [stoke/ownership-manifest]: FAIL — malformed ownership manifest "
+                f"{manifest_path}: {e}. Apply refuses (Spec 636 R10) — a malformed "
+                "manifest is not treated as 'valid but narrow'.",
+                file=sys.stderr,
+            )
+            return 2
+
     try:
-        files = _resolve_merge_files(upstream_root, copier_yml, args.files)
+        files = _resolve_merge_files(upstream_root, buckets, args.files)
     except OSError as e:
         print(f"GATE [merge-native/resolve-files]: FAIL — {e}", file=sys.stderr)
         return 2
 
-    state_dir = Path(args.state_dir) if args.state_dir else (live_root / _upgrade_merge.DEFAULT_STATE_DIR)
+    # --- Spec 636 R11 / AC9(b): ownership-set-growth detection ------------------
+    # The manifest is in the merge bucket (never blind-overwritten). Independently,
+    # surface when the UPSTREAM manifest declares FORGE-owned prefixes the consumer's
+    # manifest does not yet carry — a reviewable diff, never silently applied.
+    if not args.files and buckets:
+        _report_ownership_set_growth(live_root, upstream_root, buckets)
+
+    # --- Spec 636 R9 / AC8: backfill base snapshots for the installed base -------
+    # An already-onboarded consumer (migration marker present) whose base snapshots
+    # were never seeded (upgrade_migrate_once wrote only a marker) would hit the
+    # bootstrap-takes-theirs path across its whole set. Seed bases from OURS
+    # (write-state-only — no consumer file touched) and stop; the real 3-way merge
+    # runs on a LATER invocation, never the same one (AC8 (b)).
+    if not args.files and files and marker_path.is_file() and not _bases_seeded(state_dir, files):
+        seeded = _upgrade_migrate_once.seed_bases_from_ours(live_root, state_dir, files)
+        print(json.dumps({"status": "backfilled", "bases_seeded": seeded, "merged": 0}))
+        _append_activity_log(
+            {
+                "event_type": "stoke-merge-apply",
+                "outcome": "backfilled",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "spec_id": "636",
+            },
+            live_root,
+        )
+        print(
+            f"GATE [stoke/backfill]: seeded {seeded} base snapshot(s) from current content "
+            "(write-state-only; no consumer file modified). Re-run apply to perform the merge.",
+            file=sys.stderr,
+        )
+        return 0
 
     if not files:
         print(json.dumps({"status": "ok", "merged": 0, "conflicts": 0}))
@@ -1650,10 +1790,26 @@ def _parse_update_manifest(text: str) -> dict[str, list[str]]:
             in_paths = False
             continue
         if in_paths and stripped.startswith("- "):
-            item = stripped[2:].strip().strip('"').strip("'")
+            item = _extract_manifest_path(stripped[2:])
             if item:
                 buckets[current_bucket].append(item)
     return buckets
+
+
+def _extract_manifest_path(raw: str) -> str:
+    """Extract a manifest list-item path, dropping any trailing inline comment.
+
+    Handles both quoted (`"path"  # comment`) and bare (`path  # comment`) entries.
+    Before Spec 636 the parser did `.strip('"').strip("'")`, which kept the comment
+    tail for every commented entry (e.g. the R7 merge-bucket carve-out parsed as
+    `.forge/update-manifest.yaml"  # Spec 636 ...`, silently defeating the carve-out).
+    """
+    raw = raw.strip()
+    if raw[:1] in ('"', "'"):
+        q = raw[0]
+        end = raw.find(q, 1)
+        return raw[1:end] if end != -1 else raw[1:]
+    return raw.split(" #", 1)[0].strip()
 
 
 def _load_update_manifest(manifest_path: Path) -> dict[str, list[str]]:

@@ -1,6 +1,6 @@
 # FORGE Scripts
 
-Validation and build scripts for maintaining a FORGE template repository. These scripts operate on the template source (this repo), not on consumer projects bootstrapped from it.
+Validation and build scripts for maintaining the FORGE framework repository. These scripts operate on this repo, not on consumer projects.
 
 If you are maintaining a private fork of FORGE, these scripts are your QA toolkit.
 
@@ -10,17 +10,15 @@ If you are maintaining a private fork of FORGE, these scripts are your QA toolki
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
-| `validate-bash.sh` | Strip Jinja2 tags, then run shellcheck on all template bash scripts | After modifying any `.sh` file in `template/` |
-| `../.forge/bin/forge-sync-cross-level.sh` | Propagate canonical repo-root sources to `template/` mirrors (supersedes `validate-command-sync.sh` — Spec 270) | After editing `.forge/commands/`, `.claude/agents/`, or `docs/process-kit/`; `--check` in CI/pre-commit |
-| `smoke-test-template.sh` | Run `copier copy --defaults`, verify output renders cleanly (no Jinja2 artifacts, key files present, `.copier-answers.yml` generated) | After any template change |
-| `smoke-test-runtime.sh` | Bootstrap a project, then exercise the agent runtime pipeline in `--dry-run` mode | After modifying runtime scripts in `template/.forge/bin/` or `template/.forge/adapters/` |
+| `validate-bash.sh` | Run shellcheck on all `.forge/` bash scripts | After modifying any `.sh` file in `.forge/` |
+| `smoke-test-runtime.sh` | Bootstrap a project, then exercise the agent runtime pipeline in `--dry-run` mode | After modifying runtime scripts in `.forge/bin/` or `.forge/adapters/` |
 
 ### Build (generated reference docs — Spec 571)
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
 | `gen-command-reference.sh` | Regenerate `docs/command-reference.md` from the canonical command source (`.forge/commands/` + `invocation-policy.yaml`) | After adding or modifying slash commands (`--write` to write in place) |
-| `gen-quick-reference.sh` | Regenerate both `docs/QUICK-REFERENCE.md` and `template/docs/QUICK-REFERENCE.md` from the same canonical source | After adding or modifying slash commands (`--write`) |
+| `gen-quick-reference.sh` | Regenerate `docs/QUICK-REFERENCE.md` from the canonical source | After adding or modifying slash commands (`--write`) |
 | `gen-agents-config-reference.py` | Regenerate `docs/agents-config-reference.md` — defaults read live from `AGENTS.md`, descriptions from `scripts/lib/agents-config-reference-content.yaml` | After changing an AGENTS.md config block (run via `.forge/bin/forge-py`, `--write`) |
 | `compose-modules.sh` | Assemble command files from core + enabled modules based on `onboarding.yaml` | Used by `/onboarding`; run manually with `--check` to inspect module status |
 
@@ -51,8 +49,6 @@ bash scripts/validate-bash.sh --verbose
 # Full generated-surface parity check (mirrors, plugin payload, skills, generated docs)
 bash .forge/bin/forge-parity.sh --check
 
-# Full template smoke test (legacy Copier scaffold path)
-bash scripts/smoke-test-template.sh
 
 # Runtime smoke test
 bash scripts/smoke-test-runtime.sh
@@ -74,7 +70,6 @@ If you are maintaining a private fork of this repository:
    ```bash
    bash scripts/validate-bash.sh
    bash .forge/bin/forge-parity.sh --check
-   bash scripts/smoke-test-template.sh
    ```
 
 2. **After adding new commands**, regenerate the reference docs:
@@ -86,8 +81,7 @@ If you are maintaining a private fork of this repository:
 3. **CI integration**: These scripts exit non-zero on failure, making them suitable for CI pipelines. A minimal GitHub Actions workflow:
    ```yaml
    - run: bash scripts/validate-bash.sh
-   - run: bash .forge/bin/forge-sync-cross-level.sh --check
-   - run: bash scripts/smoke-test-template.sh
+   - run: bash .forge/bin/forge-parity.sh --check
    ```
 
 ## Scripts NOT included in forge-public

@@ -31,6 +31,11 @@
 # deferred-close chaining stays L1/L2-gated. The .claude/settings.json registration is
 # defense-in-depth for L0–L2 / unmanaged machines.
 #
+# MODIFYING THIS FILE (Spec 667 / ADR-667): this guard is in the authority-guard deny
+# set - agents cannot edit it directly. Stage a unified diff to tmp/guard-patches/ and
+# hand it to the operator, who reviews and applies it with git apply from the repo root.
+# Full flow: docs/process-kit/guard-family-apply-note.md.
+#
 # Behavior:
 #   - Bash call is NOT git push at command position → allow (fast exit, defer to normal flow)
 #   - git push at command position                  → ask (operator approves at the prompt)

@@ -8,11 +8,11 @@
 - Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
 
 ### Specs in window
-- Spec 558 — S1=MAJOR S2=MAJOR — Deletes `copier.yml`, `copier-hooks/`, and the `template/` tree — Surface 1 is retired outright (ren
-- Spec 610 — S2=MINOR — Adds the `/forge:ahead` momentum-framed alias dispatching to `/now` (add command, old path preserved
-- Spec 620 — S2=MINOR — Adds `forge run <spec-id> -- <cmd>` and `forge repro-block <spec-id>` CLI subcommands (additive oper
-- Spec 626 — S2=MINOR — Additive `argument-hint` frontmatter on 19 commands/skills (PATCH-class presentation metadata; no co
-- Spec 627 — S2=MAJOR — Physically deletes the Spec 587 deprecation stubs — `/insights`, `dependency-audit`, `/signal-to-str
+- Spec 558 — S1=MAJOR S2=MAJOR — Deletes `copier.yml`, `copier-hooks/`, and the `template/` tree — Surface 1 is retired outright (rename/remove = MAJOR; here the whole surface dies). S2: `/forge stoke` `--classic` branch removed and `forge-stoke`/`forge-init` rewritten plugin-only (removed options/changed arg contract = MAJOR).
+- Spec 610 — S2=MINOR — Adds the `/forge:ahead` momentum-framed alias dispatching to `/now` (add command, old path preserved = MINOR).
+- Spec 620 — S2=MINOR — Adds `forge run <spec-id> -- <cmd>` and `forge repro-block <spec-id>` CLI subcommands (additive operator-facing surface = MINOR).
+- Spec 626 — S2=MINOR — Additive `argument-hint` frontmatter on 19 commands/skills (PATCH-class presentation metadata; no contract text change) plus empty-args menu-and-stop branches on 6 commands whose bare invocation previously had no documented contract — a new documented behavior where none existed, all existing keywords/flags preserved, so S2 MINOR.
+- Spec 627 — S2=MAJOR — Physically deletes the Spec 587 deprecation stubs — `/insights`, `dependency-audit`, `/signal-to-strategy` (remove command = MAJOR). Replacements already shipped in v3.x: `/implement` dependency-confirmation gate, `/evolve --insights`, `/brainstorm --strategy`.
 
 ### Batched-audit specs in window
 - Spec 588 — classified in a batched audit expansion (see the audit doc's bucket tables)

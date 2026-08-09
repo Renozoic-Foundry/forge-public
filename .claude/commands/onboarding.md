@@ -39,7 +39,7 @@ Before any state load, check whether this repo is already past onboarding's inte
 
 **Heuristic 3 — Customized CLAUDE.md**: read `CLAUDE.md`. If absent → signal does not fire. Otherwise signal fires if either:
   - File contains a heading `# Model override` (operator-specific configuration), OR
-  - Byte size > 2× the template default (`template/CLAUDE.md.jinja` rendered baseline; if the rendered baseline is unavailable, use 8 KB as the conservative threshold — most consumer customizations push past 8 KB quickly).
+  - Byte size > 8 KB (Spec 641: the former `template/CLAUDE.md.jinja` rendered baseline was deleted with the Copier surface in Spec 558, so the 2×-of-rendered-default rule had no baseline to compare against and silently never fired. 8 KB was already the documented fallback; it is now the only threshold).
 
 **Combining rule**: signal count ≥ 2 → repo is **mature**. The 2-of-3 threshold raises the forgery cost from "edit one file" (single-signal) to "produce a 20-spec corpus AND match a commit-graph-resolvable SHA" (or equivalent two-signal forgery). Threat model documented in Spec 315 § Scope. Strict 3-of-3 was rejected because it excludes legitimate consumer projects that customize CLAUDE.md but haven't yet built a 20-spec corpus.
 
@@ -250,8 +250,8 @@ Apply defaults silently for all remaining fields:
 | Field | Greenfield | Brownfield |
 |-------|------------|------------|
 | `primary_stack` | `null` (deferred — use `/interview` later) | Auto-detected value (or `null` if none) |
-| `test_command` | `null` | Auto-detected (or `null`) |
-| `lint_command` | `null` | Auto-detected (or `null`) |
+| `test_command` | **asked once — Step A1** (never silently `null`, Spec 651) | Auto-detected (or asked at Step A1 if detection finds nothing) |
+| `lint_command` | Stack-conventional default for whatever Step A1 resolves (or `null` on skip) | Auto-detected (or same as greenfield) |
 | `autonomy_level` | `L1` | `L1` |
 | `permission_mode` | `default` | `default` |
 | `methodology` | `none` | `none` |
@@ -279,6 +279,39 @@ Set `features`:
 **MCP servers**: Read `.mcp.json`. For each server entry, record `mcp_servers.<name>: true` in `.forge/onboarding.yaml`. Do not modify `.mcp.json` — the servers stay enabled. For each kept server, check for placeholder environment variables (patterns: `YOUR_`, `CHANGEME`, `TODO`, `<`, `>`) and note them for Interaction 2.
 
 `.forge/onboarding.yaml` is the only file modified before the commit prompt — it is the persistence record of the onboarding session itself, not a "real" working-tree write. All other writes are staged.
+
+### [decision] Step A1 — Test command (Spec 651)
+
+A silently-`null` `test_command` makes `/test` inert for the entire life of the project and gives
+the operator nothing to notice. Ask ONCE, here, rather than defaulting quietly.
+
+**Skip condition**: if `project.test_command` is already non-null (brownfield auto-detection found
+one, or a prior session set it), skip this step silently and report the detected value in the
+Interaction-2 summary.
+
+Detect first — file presence only, same set `/test` uses (`package.json` → `npm test`,
+`pyproject.toml`/`setup.py` → `pytest -q`, `go.mod` → `go test ./...`, `Cargo.toml` →
+`cargo test`, `*.csproj`/`*.sln` → `dotnet test`) — then ask one question:
+
+```
+Test command: <detected default, or "nothing detected">
+1. Use it  (only offered when something was detected)
+2. I have a different command (tell me what to run)
+3. Skip — no test command for now
+```
+
+**STOP — wait for response.**
+
+- **1**: write the detected default.
+- **2**: write the operator's command verbatim.
+- **3**: write `null`. This is an explicit operator choice, and it is reported in the
+  Interaction-2 summary as `test_command: none (skipped)` so it stays visible rather than
+  looking like an oversight.
+
+Write to `.forge/onboarding.yaml` under `project.test_command`. Set `project.lint_command` to the
+stack-conventional default for whatever was resolved (Node → `eslint .`, Python → `ruff check .`,
+Go → `golangci-lint run`, Rust → `cargo clippy`, .NET → `dotnet format --verify-no-changes`), or
+`null` on skip. Both are changeable later with `/configure` → Test command / Lint command.
 
 ## [decision] Interaction 1b — Strategic scope (Spec 382)
 
@@ -408,6 +441,11 @@ Staged files (review before accept):
   <list from .deletion-plan.txt, or "none">
 
 All settings above can be changed with `/configure`.
+
+Nothing above has been written to your project yet — it's all sitting in a staging
+directory. If you say no, your working tree is untouched. If you say yes, these exact
+files are what gets written, in one pass; if a write fails partway through, the rest are
+held back and you can review or discard what's staged before trying again.
 ```
 
 ### [decision] Commit prompt
@@ -444,11 +482,90 @@ Apply these staged onboarding changes? (yes / no)
 
   The staging directory is **preserved** on partial failure — do not remove it.
 
-  On full success (all files applied, all deletions done):
+  On full success (all files applied, all deletions done), commit **by exact path** — never the
+  whole working tree (Spec 647, Spec 494 convention). Onboarding explicitly supports brownfield
+  repositories, so the tree may legitimately carry unrelated in-flight work that is not ours to
+  commit; a whole-tree stage here is the SIG-435 defect class (a commit sweeping changes it did
+  not make). The applied manifest is the authority for what belongs in this commit:
+
   ```bash
-  git add -A
-  git commit -m "FORGE onboarding: configure project settings"
+  # forge:spec-647-commit-block:start
+  STAGING=.forge/state/onboarding-staging
+
+  # 1. Applied files — the manifest's mirrored relative paths ARE the live targets.
+  onboarding_paths=()
+  while IFS= read -r rel; do
+    if [[ -n "$rel" ]]; then onboarding_paths+=("$rel"); fi
+  done < <(sed -e '/^#/d' -e 's/^[0-9a-f]\{64\}  //' "$STAGING/.manifest.sha256")
+
+  # 2. The one file written outside staging (Step 1.1 baseline write).
+  onboarding_paths+=(".forge/onboarding.yaml")
+
+  # 3. Deletions — a staged deletion is only committed if its path is named too.
+  if [[ -f "$STAGING/.deletion-plan.txt" ]]; then
+    while IFS= read -r rel; do
+      if [[ -n "$rel" ]]; then onboarding_paths+=("$rel"); fi
+    done < "$STAGING/.deletion-plan.txt"
+  fi
+
+  # Pre-commit notice (Req 3): name what goes in AND what is deliberately left out.
+  # Advisory only — a dirty tree never blocks brownfield onboarding (Constraints).
+  # The pathspec below is authoritative; this listing is for the operator to read.
+  onboarding_excluded=()
+  while IFS= read -r line; do
+    changed="${line:3}"
+    # FORGE's own scratch under .forge/state/ is neither committed nor the
+    # operator's work — reporting it as "unrelated in-flight change" is noise.
+    # (The staging dir is removed immediately after this commit.)
+    if [[ "$changed" == .forge/state/* ]]; then continue; fi
+    included=false
+    for known in "${onboarding_paths[@]}"; do
+      if [[ "$changed" == "$known" ]]; then included=true; break; fi
+    done
+    if [[ "$included" == false ]]; then onboarding_excluded+=("$changed"); fi
+  done < <(git status --porcelain)
+
+  printf 'Onboarding commit — included (%d):\n' "${#onboarding_paths[@]}"
+  printf '  %s\n' "${onboarding_paths[@]}"
+  if [[ ${#onboarding_excluded[@]} -eq 0 ]]; then
+    printf 'Excluded: none — the working tree carried no unrelated changes.\n'
+  else
+    printf 'Excluded (%d) — unrelated working-tree changes, left unstaged and uncommitted:\n' \
+      "${#onboarding_excluded[@]}"
+    printf '  %s\n' "${onboarding_excluded[@]}"
+  fi
+
+  # `git add` with a pathspec stages adds, modifies AND deletions for those paths
+  # (git >= 2.0). The pathspec on `git commit` is the belt-and-braces half: it
+  # commits only these paths even if the operator had unrelated files pre-staged.
+  git add -- "${onboarding_paths[@]}"
+  git commit -m "FORGE onboarding: configure project settings" -- "${onboarding_paths[@]}"
+  # forge:spec-647-commit-block:end
   ```
+
+  **PowerShell / Windows equivalent** (same path list; quoting differs):
+  ```powershell
+  $staging = '.forge/state/onboarding-staging'
+  $paths = @(Get-Content "$staging/.manifest.sha256" |
+    Where-Object { $_ -notmatch '^#' -and $_.Trim() -ne '' } |
+    ForEach-Object { $_ -replace '^[0-9a-f]{64}  ', '' })
+  $paths += '.forge/onboarding.yaml'
+  if (Test-Path "$staging/.deletion-plan.txt") {
+    $paths += @(Get-Content "$staging/.deletion-plan.txt" | Where-Object { $_.Trim() -ne '' })
+  }
+  $excluded = @(git status --porcelain | ForEach-Object { $_.Substring(3) } |
+    Where-Object { $_ -notlike '.forge/state/*' -and $paths -notcontains $_ })
+  "Onboarding commit — included ($($paths.Count)):"; $paths | ForEach-Object { "  $_" }
+  if ($excluded.Count -eq 0) {
+    'Excluded: none — the working tree carried no unrelated changes.'
+  } else {
+    "Excluded ($($excluded.Count)) — unrelated working-tree changes, left unstaged and uncommitted:"
+    $excluded | ForEach-Object { "  $_" }
+  }
+  git add -- $paths
+  git commit -m 'FORGE onboarding: configure project settings' -- $paths
+  ```
+
   Remove the staging directory: `rm -rf .forge/state/onboarding-staging/`.
 
   Report: `Committed: FORGE onboarding changes`.

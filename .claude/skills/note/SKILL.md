@@ -12,6 +12,7 @@ argument-hint: "[signal|bug] text"
      (source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/config.sh, forge_config_load AGENTS.md);
      python: `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py .../runtime_config.py path <key>`. -->
 # Framework: FORGE
+# Model-Tier: haiku
 Add a scratchpad note to be reviewed at the next appropriate process checkpoint.
 
 If $ARGUMENTS is empty, `?`, or `help`:

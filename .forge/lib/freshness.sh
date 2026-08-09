@@ -14,7 +14,7 @@
 # now.md) MUST invoke this helper rather than re-inline the mapping:
 #   slash-command surface   -> docs/command-reference.md
 #   AGENTS.md config block  -> docs/agents-config-reference.md
-#   install/distribution    -> README.md, docs/getting-started.md, docs/VERSIONING.md
+#   install/distribution    -> README.md, docs/getting-started.md, VERSIONING.md, docs/roadmap.md
 #
 # Generated-doc interaction: docs/command-reference.md is gen-command-reference.sh
 # output; a stamp there is erased by the next generator run — that IS the refresh
@@ -40,7 +40,12 @@
 #       Without --baseline, any path hit stamps (recall fallback).
 #   freshness.sh check
 #       Print one `<doc>:<line> — <stale annotation>` line per mapped doc whose marker
-#       carries a STALE stamp (consumed by /now Step 8c). Silent when none.
+#       carries a STALE stamp (consumed by /now Step 8c and the sync-to-public.sh
+#       release-time preflight, Spec 650). Silent when none; exits 0 regardless (signal
+#       only — the release-time caller decides whether a stale front-door doc blocks).
+#   freshness.sh --selftest
+#       Spec 650 AC5 positive control: prove the check can FAIL (stale fixture) and PASS
+#       (fresh fixture). Exit 0 if both fixtures behave as expected, 1 otherwise.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,7 +54,10 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # --- Spec 511 canonical surface→doc mapping (single machine-readable copy; see header) ---
 DOCS_COMMAND="docs/command-reference.md"
 DOCS_CONFIG="docs/agents-config-reference.md"
-DOCS_INSTALL="README.md docs/getting-started.md docs/VERSIONING.md"
+# Spec 650: VERSIONING.md lives at the repo root, not docs/ (the prior "docs/VERSIONING.md"
+# entry never matched a real file, so this doc was silently skipped by cmd_check below).
+# docs/roadmap.md joins the public front-door set per Spec 650 Scope.
+DOCS_INSTALL="README.md docs/getting-started.md VERSIONING.md docs/roadmap.md"
 ALL_MAPPED_DOCS="$DOCS_COMMAND $DOCS_CONFIG $DOCS_INSTALL"
 
 usage() {
@@ -207,10 +215,14 @@ cmd_stamp() {
   exit 0
 }
 
-cmd_check() {
-  local rel f hit
+# check_root <root> — print one `<doc>:<line> — STALE: <reason>` line per mapped doc
+# under <root> whose `Last verified:` marker carries a STALE stamp. Returns 1 if any
+# stale doc was found, 0 otherwise (Spec 650 AC5 — used by both cmd_check, against the
+# real repo, and cmd_selftest's fixture roots, so the two can never drift).
+check_root() {
+  local root="$1" rel f hit found=0
   for rel in $ALL_MAPPED_DOCS; do
-    f="$ROOT/$rel"
+    f="$root/$rel"
     if [[ ! -f "$f" ]]; then
       continue
     fi
@@ -221,14 +233,54 @@ cmd_check() {
       text="${text% -->*}"
       text="${text%$'\r'}"
       echo "$rel:$lineno — STALE: $text"
+      found=1
     fi
   done
+  [[ $found -eq 0 ]]
+}
+
+cmd_check() {
+  check_root "$ROOT" || true
   exit 0
+}
+
+# cmd_selftest — Spec 650 AC5 positive control: prove the front-door freshness check can
+# both FAIL (fixture doc with an unset/stale marker) and PASS (the corrected set), the
+# same pattern scripts/gates/documentation-closure.sh uses for its own selftest.
+cmd_selftest() {
+  local tmp stale_dir fresh_dir rc_stale rc_fresh
+  tmp="$(mktemp -d)"
+
+  stale_dir="$tmp/stale"
+  mkdir -p "$stale_dir"
+  printf '# Fixture\n<!-- Last verified: (unset) | STALE: re-verify — fixture -->\n' > "$stale_dir/README.md"
+
+  fresh_dir="$tmp/fresh"
+  mkdir -p "$fresh_dir"
+  printf '# Fixture\n<!-- Last verified: 2026-08-06 -->\n' > "$fresh_dir/README.md"
+
+  set +e
+  ( ALL_MAPPED_DOCS="README.md"; check_root "$stale_dir" )
+  rc_stale=$?
+  ( ALL_MAPPED_DOCS="README.md"; check_root "$fresh_dir" )
+  rc_fresh=$?
+  set -e
+
+  rm -rf "$tmp"
+  echo "STALE fixture: $([[ $rc_stale -ne 0 ]] && echo 'FAIL (expected)' || echo 'PASS (unexpected)')"
+  echo "FRESH fixture: $([[ $rc_fresh -eq 0 ]] && echo 'PASS (expected)' || echo 'FAIL (unexpected)')"
+  if [[ $rc_stale -ne 0 && $rc_fresh -eq 0 ]]; then
+    echo "SELFTEST OK: positive control confirmed (check can FAIL and can PASS)"
+    return 0
+  fi
+  echo "SELFTEST FAILED: check did not produce the expected FAIL/PASS pair" >&2
+  return 1
 }
 
 case "${1:-}" in
   stamp) shift; cmd_stamp "$@" ;;
   check) shift; cmd_check "$@" ;;
+  --selftest) cmd_selftest ;;
   -h|--help|"") usage; exit 0 ;;
   *) echo "freshness.sh: unknown mode '${1}' (expected: stamp | check)" >&2; exit 2 ;;
 esac

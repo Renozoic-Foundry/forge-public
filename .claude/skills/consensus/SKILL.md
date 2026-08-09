@@ -47,6 +47,13 @@ If no argument provided: stop and report "Usage: /consensus <topic | spec-number
 
 ## [mechanical] Step 2 — Resolve role registry
 
+**Review depth first (Spec 666)**: before resolving the roster, select the review depth from the
+spec's own `R` value and defect class — full round / single-reviewer DA pass / read-through — per
+the tier rule in `docs/process-kit/consensus-protocol.md` § Review-depth proportionality. A REFRAME outcome or security-bearing scope escalates to a full round
+regardless of tier, and the depth is selected in the reviewer role, never by the spec's author
+(there is no frontmatter field for it). The roster resolution below applies at full-round depth; a
+single-reviewer pass dispatches the Devil's Advocate alone, and a read-through dispatches no agents.
+
 Read AGENTS.md and look for a `forge.role_registry` section or `forge.dispatch_rules` configuration.
 
 **If a role registry is configured**: use the listed roles.
@@ -257,6 +264,30 @@ convergent-only SHA. This is what keeps a 3+-round review machine-readably REVIE
    value only with a HIGHER N (monotonic max; re-running an earlier round never lowers it).
 5. **Report**: emit `Consensus-Rounds recorded: N (universal review-evidence marker;
    /implement Step 0d cross-checks it against the session consensus record).`
+6. **Verify the write (Spec 664)**: in this SAME invocation — never deferred to the next
+   command that happens to read the pair — run the existing checker against what steps 3-4
+   just wrote:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/consensus-evidence-check.sh docs/specs/NNN-<slug>.md
+   ```
+   - `PASS rounds=N recorded=M` (exit 0): the marker and the sidecar record agree. Nothing
+     further; report nothing beyond step 5.
+   - Anything else (exit 1/2/3) is **loud** — emit
+     `GATE [consensus-self-verify]: FAIL — <checker output>` and hand the operator the
+     remediation. The artifacts are already on disk at this point, so the fix is to correct
+     them and re-run this step, not to continue silently:
+     - `ADJUDICATE malformed-marker` — the frontmatter value is not a bare digit. A trailing
+       `<!-- ... -->` comment on the marker line is read as part of the value; move any
+       explanation to its own line and re-verify.
+     - `ADJUDICATE unparseable-rounds` — the sidecar record exists but carries no usable
+       `round` field. Step 3's ordering guarantees the record EXISTS; it never guarantees the
+       record is SUFFICIENT. Add `"round": N` to this round's `consensus_reviews[]` entry.
+     - `ADJUDICATE no-record` — step 3's sidecar flush did not land. Write it, then re-verify.
+     - `FAIL inflated` — the marker claims more rounds than the sidecar records. Reconcile
+       before returning; downstream this reads as forgery, not as a bookkeeping slip.
+     - `NONE no-marker` — step 4's write did not land. Write it, then re-verify.
+   This verifies the bookkeeping only. It never gates the consensus round itself: the round
+   already happened and its findings stand (Spec 664 Constraints).
 
 Unlike the SHA, this marker carries no convergence claim — a non-convergent three-round
 review is marked `Consensus-Rounds: 3` and never masquerades as convergent (Spec 389

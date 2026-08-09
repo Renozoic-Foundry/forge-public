@@ -1,3 +1,51 @@
+## v4.1.0 — 2026-08-09
+
+**Bump rationale**: MINOR bump driven by audit-classified surface impacts.
+
+### Surface impacts
+- Surface 1 (copier.yml): none
+- Surface 2 (slash commands): MINOR
+- Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
+
+### Specs in window
+- Spec 635 — S2=PATCH — Overlay content refresh + release gate; `/forge` Usage/args/choice blocks unchanged → internal per S
+- Spec 636 — S2=PATCH — Merge-engine behavior change (ownership manifest); no Usage/arg/choice-block change (diff-verified).
+- Spec 640 — S2=PATCH — `/forge doctor` gains D-DOCTRINE-DRIFT check + stoke advisory sub-step — internal steps; no contract
+- Spec 641 — S2=PATCH — Copier-reference prose removals across command bodies; contract untouched.
+- Spec 647 — S2=PATCH — Internal staging discipline; no contract change.
+- Spec 648 — S2=PATCH — Generator fix + effort guidance prose in command/skill bodies; contract untouched.
+- Spec 649 — S2=PATCH — Goal-mode exit-condition fix + honest-L3 prose; `--goal-mode`/`--abort` arg contract pre-existing an
+- Spec 651 — S2=MINOR — Usage line changed: `/test [path/to/tests] [--cmd "<command>"]` — adds `--cmd` and widens the positi
+- Spec 656 — S2=PATCH — Prompt-template content consumed by commands; no contract change.
+- Spec 663 — S2=PATCH — Validator-pipeline internals referenced from command bodies.
+- Spec 664 — S2=PATCH — Internal verification step added; no operator-facing contract change.
+- Spec 666 — S2=PATCH — Review-depth scaling logic — internal; no new options exposed (diff-verified: zero choice-block row 
+- Spec 668 — S2=PATCH — Internal staging discipline; contract untouched.
+- Spec 670 — S2=PATCH — Scaffold README emission + scratchpad path fix — `/forge init` internals.
+
+### Batched-audit specs in window
+- Spec 628 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 629 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 630 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 631 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 633 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 634 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 638 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 639 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 643 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 645 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 653 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 657 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 658 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 659 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 667 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 669 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 671 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 673 — classified in a batched audit expansion (see the audit doc's bucket tables)
+
+### Audit reference
+ADR-NNN — v4.0.0 → v4.1.0 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
+
 ## v4.0.0 — 2026-08-05
 
 **Bump rationale**: MAJOR bump driven by audit-classified surface impacts.

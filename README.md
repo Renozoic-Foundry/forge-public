@@ -288,7 +288,7 @@ On Windows, `bin\forge.ps1` mirrors `bin/forge` — it auto-detects Git Bash and
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 666 specs across 176 sessions (2026-03-13 through 2026-08-08), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 667 specs across 177 sessions (2026-03-13 through 2026-08-08), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

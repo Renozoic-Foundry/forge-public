@@ -496,7 +496,7 @@ The Step 13 context-aware choice block follows this summary.
 ## [mechanical] Step 0e — Release-eligible + deprecation surfacing (Spec 291)
 
 Surface two release-policy signals so they cannot decay silently between tag
-cuts (see `docs/process-kit/release-policy.md`).
+cuts (see the release policy — FORGE-maintainer reference, not shipped to consumers).
 
 ### Release-eligible count
 
@@ -506,7 +506,7 @@ Read `docs/sessions/signals.md`. Count entries matching `^### SIG-[0-9]+-RE`
 - If count is 0: skip silently.
 - If count is ≥ 1: emit a single one-line advisory:
   ```
-  N release-eligible spec(s) pending tag cut. See docs/process-kit/v1.0.0-to-next-audit.md to audit before running scripts/cut-release.sh.
+  N release-eligible spec(s) pending tag cut. See the live release-audit doc (FORGE-maintainer, not shipped) before running scripts/cut-release.sh.
   ```
 
 ### Deprecation warnings

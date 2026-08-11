@@ -108,7 +108,7 @@ If $ARGUMENTS contains `--guided`: evaluate whether Spec Kit is configured for t
 - If both conditions hold: proceed silently to the addendum section at the end of this file.
 - If either condition fails: print exactly this one-line notice, then continue with Step 1 below:
 
-  > `--guided` flag ignored: Spec Kit is not configured for this project. Running standard `/spec` flow. See docs/process-kit/spec-kit-setup.md to enable guided creation.
+  > `--guided` flag ignored: Spec Kit is not configured for this project. Running standard `/spec` flow. Configure Spec Kit to enable guided creation.
 
 If $ARGUMENTS does not contain `--guided`: continue with Step 1 below.
 

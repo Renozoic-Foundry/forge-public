@@ -1442,7 +1442,7 @@ Append a structured "spec closed" entry to today's session log:
 
 After the spec status transitions to `closed`, scan `## Implementation Summary`
 `Changed files` for any path matching one of the four release-policy trigger
-paths (per `docs/process-kit/release-policy.md` § Tag-cut triggers):
+paths (per the release-policy tag-cut triggers — FORGE-maintainer reference, not shipped to consumers):
 
 - `.forge/commands/**` (canonical command source)
 - `.claude/commands/**`
@@ -1465,7 +1465,7 @@ At least one trigger file present:
    - **Spec**: NNN
    - **Date**: YYYY-MM-DD
    - **Surfaces affected**: S<n>[, S<n>...]
-   - **Proposed bump (initial)**: PATCH — audit (`docs/process-kit/v1.0.0-to-next-audit.md`) is authoritative; may revise upward.
+   - **Proposed bump (initial)**: PATCH — the live release-audit doc (FORGE-maintainer reference, not shipped to consumers) is authoritative; may revise upward.
    - **Changed-file basis**: <comma-separated list of trigger-path files>
    ```
 

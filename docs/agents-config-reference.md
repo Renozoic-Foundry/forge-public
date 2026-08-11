@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: .forge/bin/forge-py scripts/gen-agents-config-reference.py
      Sources: AGENTS.md (live defaults) + scripts/lib/agents-config-reference-content.yaml (descriptions)
-     Source content hash: 467a90c9b25e | FORGE plugin version: 4.1.0
+     Source content hash: 2f06c4f26f9a | FORGE plugin version: 4.1.1
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 
 # AGENTS.md configuration reference
@@ -246,7 +246,7 @@ them into the tables above.
 
 This document is **generated** by `scripts/gen-agents-config-reference.py` — defaults are read live from `AGENTS.md`
 (descriptions from `scripts/lib/agents-config-reference-content.yaml`; source content hash
-`467a90c9b25e`, FORGE plugin v4.1.0). Do not edit it by hand — changes belong in the
+`2f06c4f26f9a`, FORGE plugin v4.1.1). Do not edit it by hand — changes belong in the
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to AGENTS.md:

@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: scripts/gen-command-reference.sh
      Canonical sources: .forge/commands/*.md + invocation-policy.yaml
-     Source content hash: e322073bf9e3 | FORGE plugin version: 4.1.0
+     Source content hash: d7ae9761d05a | FORGE plugin version: 4.1.1
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 # Command Reference
 
@@ -101,18 +101,18 @@ See [QUICK-REFERENCE.md](QUICK-REFERENCE.md) for detailed usage patterns and wor
 ## Provenance and revision history
 
 This document is **generated** by `scripts/gen-command-reference.sh` from the canonical command surface
-(`.forge/commands/` + `invocation-policy.yaml`; source content hash `e322073bf9e3`,
-FORGE plugin v4.1.0). Do not edit it by hand — changes belong in the canonical
+(`.forge/commands/` + `invocation-policy.yaml`; source content hash `d7ae9761d05a`,
+FORGE plugin v4.1.1). Do not edit it by hand — changes belong in the canonical
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to the canonical command surface:
 
 <!-- forge:gen:volatile:start -->
+- 2026-08-09 `5a15c45c` Close Spec 672 — apply process-kit publication set (47 published, 2 re-pointed, 1 dead-ref; CISO-consensus-gated) + file Spec 674 scrub follow-up
 - 2026-08-07 `42b1478a` Spec 636 implemented — /forge stoke apply gated by the ownership manifest (fail-closed), first-merge safety, installed-base backfill, manifest self-governance
 - 2026-08-07 `9a83f8cd` Spec 635 implemented — stale public forge-init overlay deleted (delete+redirect), legacy-upgrade mode plugin-native, getting-started Python claim corrected
 - 2026-08-07 `d21a8dd0` Close Spec 649 — autonomy promise conformance: reachable goal-mode exit, honest L3, worktree reconciliation
 - 2026-08-07 `ac398932` Close Spec 670 — consumer render hygiene: dead scratchpad path, missing project README
-- 2026-08-07 `75efb008` Spec 668 — exact-path staging for /configure and /forge init create-new
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `docs/specs/CHANGELOG.md` and `git log -- .forge/commands/`.

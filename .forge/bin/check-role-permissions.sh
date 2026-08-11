@@ -18,6 +18,20 @@
 
 STATE_FILE=".forge/state/active-role.json"
 
+# Spec 632 R3/R8: resolve the marker at the MAIN checkout (where the orchestrator writes it) so
+# this guard sees it from a linked /parallel worktree or a subdirectory. The pre-632 CWD-relative
+# read missed it there — "no file -> allow" silently disabled the read-only block. Use the shared
+# .git's parent (git-common-dir), NOT --show-toplevel, which resolves to a linked worktree's OWN
+# root (Spec 632 DA finding). R8 failure path: if resolution fails, or the main-root marker is
+# absent, STATE_FILE stays the CWD-relative default — the pre-632 posture, preserved unchanged.
+_fr632_common=$(git rev-parse --git-common-dir 2>/dev/null || true)
+if [ -n "$_fr632_common" ]; then
+  _fr632_abs=$(cd "$_fr632_common" 2>/dev/null && pwd || true)
+  if [ -n "$_fr632_abs" ] && [ -f "$(dirname "$_fr632_abs")/.forge/state/active-role.json" ]; then
+    STATE_FILE="$(dirname "$_fr632_abs")/.forge/state/active-role.json"
+  fi
+fi
+
 # Fast path: no state file means no restrictions
 if [ ! -f "$STATE_FILE" ]; then
   exit 0

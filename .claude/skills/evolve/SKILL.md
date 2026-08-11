@@ -418,7 +418,7 @@ Update `docs/sessions/context-snapshot.md` `## Evolve loop status` with review p
    1. **Release-eligible count**: count `docs/sessions/signals.md` entries matching `^### SIG-[0-9]+-RE`. If ≥1:
       ```
       N release-eligible spec(s) pending tag cut.
-      Audit: docs/process-kit/v1.0.0-to-next-audit.md
+      Audit: the live release-audit doc (FORGE-maintainer, not shipped to consumers)
       Tooling: scripts/cut-release.sh (dry-run by default)
       ```
       Recommend the operator review the audit and decide whether to cut now or keep accumulating. Missing audit doc = process defect (release-policy.md § Post-cut disposition expects it between cuts).

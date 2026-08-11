@@ -1,3 +1,23 @@
+## v4.1.1 — 2026-08-11
+
+**Bump rationale**: PATCH bump driven by audit-classified surface impacts.
+
+### Surface impacts
+- Surface 1 (copier.yml): none
+- Surface 2 (slash commands): PATCH
+- Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
+
+### Specs in window
+- Spec 672 — S2=PATCH — Command-body edits in close/now/evolve/spec are **prose re-points** (literal doc-paths → prose point
+
+### Batched-audit specs in window
+- Spec 632 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 644 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 674 — classified in a batched audit expansion (see the audit doc's bucket tables)
+
+### Audit reference
+ADR-NNN — v4.1.0 → v4.1.1 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
+
 ## v4.1.0 — 2026-08-09
 
 **Bump rationale**: MINOR bump driven by audit-classified surface impacts.

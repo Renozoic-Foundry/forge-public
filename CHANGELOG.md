@@ -1,3 +1,14 @@
+# FORGE Changelog
+
+Releases of the FORGE (Framework for Organized Reliable Gated Engineering) template.
+
+This changelog follows [Semantic Versioning](https://semver.org) bound to three explicit surfaces per the FORGE versioning contract:
+- **Surface 1** — `copier.yml` variable names/types
+- **Surface 2** — Slash-command public contract (`Usage:` line, argument parsing, choice-block options)
+- **Surface 3** — `.forge/templates/project-schema.yaml` (reserved; introduced in future release)
+
+---
+
 ## v4.1.1 — 2026-08-11
 
 **Bump rationale**: PATCH bump driven by audit-classified surface impacts.
@@ -8,7 +19,7 @@
 - Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
 
 ### Specs in window
-- Spec 672 — S2=PATCH — Command-body edits in close/now/evolve/spec are **prose re-points** (literal doc-paths → prose point
+- Spec 672 — S2=PATCH — Command-body edits in close/now/evolve/spec are **prose re-points** (literal doc-paths → prose pointers); no `Usage:`/arg/choice-block change (diff-verified). The publish-set expansion (47 process-kit guides added to `public-manifest.yaml` + taxonomy) is NOT a versioned surface under the three-surface contract, so it contributes no S1/S2/S3 bump on its own.
 
 ### Batched-audit specs in window
 - Spec 632 — classified in a batched audit expansion (see the audit doc's bucket tables)
@@ -16,7 +27,7 @@
 - Spec 674 — classified in a batched audit expansion (see the audit doc's bucket tables)
 
 ### Audit reference
-ADR-NNN — v4.1.0 → v4.1.1 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
+No separate audit ADR — v4.1.1 was a PATCH cut; the preceding audit is ADR-675 (v4.0.0 → v4.1.0). See release-policy.md § Post-cut disposition.
 
 ## v4.1.0 — 2026-08-09
 
@@ -28,18 +39,18 @@ ADR-NNN — v4.1.0 → v4.1.1 audit (FORGE-internal record, not published; creat
 - Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
 
 ### Specs in window
-- Spec 635 — S2=PATCH — Overlay content refresh + release gate; `/forge` Usage/args/choice blocks unchanged → internal per S
+- Spec 635 — S2=PATCH — Overlay content refresh + release gate; `/forge` Usage/args/choice blocks unchanged → internal per S2 rules.
 - Spec 636 — S2=PATCH — Merge-engine behavior change (ownership manifest); no Usage/arg/choice-block change (diff-verified).
-- Spec 640 — S2=PATCH — `/forge doctor` gains D-DOCTRINE-DRIFT check + stoke advisory sub-step — internal steps; no contract
+- Spec 640 — S2=PATCH — `/forge doctor` gains D-DOCTRINE-DRIFT check + stoke advisory sub-step — internal steps; no contract change.
 - Spec 641 — S2=PATCH — Copier-reference prose removals across command bodies; contract untouched.
 - Spec 647 — S2=PATCH — Internal staging discipline; no contract change.
 - Spec 648 — S2=PATCH — Generator fix + effort guidance prose in command/skill bodies; contract untouched.
-- Spec 649 — S2=PATCH — Goal-mode exit-condition fix + honest-L3 prose; `--goal-mode`/`--abort` arg contract pre-existing an
-- Spec 651 — S2=MINOR — Usage line changed: `/test [path/to/tests] [--cmd "<command>"]` — adds `--cmd` and widens the positi
+- Spec 649 — S2=PATCH — Goal-mode exit-condition fix + honest-L3 prose; `--goal-mode`/`--abort` arg contract pre-existing and unchanged.
+- Spec 651 — S2=MINOR — Usage line changed: `/test [path/to/tests] [--cmd "<command>"]` — adds `--cmd` and widens the positional to any path while preserving all prior invocations → S2 add-preserving-old = MINOR (diff-verified, the window's only Usage-line change).
 - Spec 656 — S2=PATCH — Prompt-template content consumed by commands; no contract change.
 - Spec 663 — S2=PATCH — Validator-pipeline internals referenced from command bodies.
 - Spec 664 — S2=PATCH — Internal verification step added; no operator-facing contract change.
-- Spec 666 — S2=PATCH — Review-depth scaling logic — internal; no new options exposed (diff-verified: zero choice-block row 
+- Spec 666 — S2=PATCH — Review-depth scaling logic — internal; no new options exposed (diff-verified: zero choice-block row adds).
 - Spec 668 — S2=PATCH — Internal staging discipline; contract untouched.
 - Spec 670 — S2=PATCH — Scaffold README emission + scratchpad path fix — `/forge init` internals.
 
@@ -64,7 +75,7 @@ ADR-NNN — v4.1.0 → v4.1.1 audit (FORGE-internal record, not published; creat
 - Spec 673 — classified in a batched audit expansion (see the audit doc's bucket tables)
 
 ### Audit reference
-ADR-NNN — v4.0.0 → v4.1.0 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
+ADR-675 — v4.0.0 → v4.1.0 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
 
 ## v4.0.0 — 2026-08-05
 
@@ -108,17 +119,7 @@ ADR-NNN — v4.0.0 → v4.1.0 audit (FORGE-internal record, not published; creat
 - Spec 625 — classified in a batched audit expansion (see the audit doc's bucket tables)
 
 ### Audit reference
-ADR-NNN — v3.3.0 → v4.0.0 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
-# FORGE Changelog
-
-Releases of the FORGE (Framework for Organized Reliable Gated Engineering) template.
-
-This changelog follows [Semantic Versioning](https://semver.org) bound to three explicit surfaces per the FORGE versioning contract:
-- **Surface 1** — `copier.yml` variable names/types
-- **Surface 2** — Slash-command public contract (`Usage:` line, argument parsing, choice-block options)
-- **Surface 3** — `.forge/templates/project-schema.yaml` (reserved; introduced in future release)
-
----
+ADR-630 — v3.3.0 → v4.0.0 audit (FORGE-internal record, not published; created by post-cut audit relocation — see release-policy.md § Post-cut disposition)
 
 ## v3.3.0 — 2026-07-23
 
@@ -130,13 +131,13 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 - Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
 
 ### Specs in window
-- Spec 559 — S2=MINOR — `/forge stoke`'s no-flag default backend changes from Copier `direct-apply` to content-merge (`forge
-- Spec 591 — S2=MINOR — companion half of 559's cutover; renames operator-facing entry point `direct-apply` → `apply --class
-- Spec 560 — S2=MINOR — adds `--to-plugin` one-shot migration flag, explicitly additive (`forge-stoke.md:63`, "No regression
-- Spec 587 — S2=MINOR — new `/forge:doctor` alias + `/forge update` verb (additive); `dependency-audit`/`insights`/`signal-t
-- Spec 595 — S2=PATCH — only the internal `retrofit devendor` phase description gained a safety-scan clause; `retrofit <phas
-- Spec 582 — S2=PATCH — `template/.claude/commands/close.md` diff is a documented stale-mirror sync only; canonical `close.m
-- Spec 583 — S2=PATCH — stale-mirror sync on `implement.md`; new prose is internal step/prompting detail, not a Usage/argume
+- Spec 559 — S2=MINOR — `/forge stoke`'s no-flag default backend changes from Copier `direct-apply` to content-merge (`forge-stoke.md:65`) — strict-letter MAJOR, revised to MINOR by `/consensus` 2026-07-22: this is the intentional pre-v4.0.0 soak-window release Spec 591 itself designed (see Aggregate classification).
+- Spec 591 — S2=MINOR — companion half of 559's cutover; renames operator-facing entry point `direct-apply` → `apply --classic` (`forge-stoke.md:323`); same consensus-revised classification as 559.
+- Spec 560 — S2=MINOR — adds `--to-plugin` one-shot migration flag, explicitly additive (`forge-stoke.md:63`, "No regression to the default path").
+- Spec 587 — S2=MINOR — new `/forge:doctor` alias + `/forge update` verb (additive); `dependency-audit`/`insights`/`signal-to-strategy` become deprecation-stub redirects, self-classified inline in the shipped file as "Deprecated (Spec 587, S2 MINOR — not removed)" with the function preserved elsewhere.
+- Spec 595 — S2=PATCH — only the internal `retrofit devendor` phase description gained a safety-scan clause; `retrofit <phase> [--apply]` argument contract unchanged.
+- Spec 582 — S2=PATCH — `template/.claude/commands/close.md` diff is a documented stale-mirror sync only; canonical `close.md` shows zero diff in-window.
+- Spec 583 — S2=PATCH — stale-mirror sync on `implement.md`; new prose is internal step/prompting detail, not a Usage/argument-section change.
 - Spec 586 — S2=PATCH — generator volatile-block sanitization, internal only (pre-classified 2026-07-20)
 
 ### Batched-audit specs in window
@@ -331,7 +332,7 @@ Full per-spec window classification (v2.1.0 → 2026-07-16, 234 specs): see ADR-
 
 MINOR bump. Two new operator-facing Surface-2 choice blocks; zero breaking changes; no migration required.
 
-**Audit**: `docs/decisions/ADR-NNN-v2.0.0-to-v2.1.0-audit.md` in the private forge repo. Consensus: 2 approve / 1 concern resolved via DA-grounded reclassification (Spec 303 PATCH→MINOR).
+**Audit**: `docs/decisions/ADR-291-v2.0.0-to-v2.1.0-audit.md` in the private forge repo. Consensus: 2 approve / 1 concern resolved via DA-grounded reclassification (Spec 303 PATCH→MINOR).
 
 ### New operator-facing surfaces (MINOR drivers)
 

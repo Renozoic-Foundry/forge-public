@@ -62,8 +62,8 @@ The Spec 591 deprecation window closed with the v4.0.0 cutover: Spec 558 deleted
   a documented converter-pointer error (never a stack trace) naming
   `forge stoke --to-plugin` and this guide.
 - **`/forge stoke --merge-native`**: still an accepted no-op alias.
-- **Six consent-gated keys** (`test_command`, `lint_command`, `harness_command`,
-  `include_nanoclaw`, `include_advanced_autonomy`, `include_two_stage_review`)
+- **Five consent-gated keys** (`test_command`, `lint_command`, `harness_command`,
+  `include_advanced_autonomy`, `include_two_stage_review`)
   resolve through the live consent gate on every apply (Spec 591). The render-time
   `secret: true` / `forge_consent_gate.py` backstop was deleted with the Copier
   surface — the live gate is the sole mechanism.

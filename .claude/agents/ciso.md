@@ -1,6 +1,7 @@
 ---
 description: "Evaluates security implications — attack surfaces, data exposure, credential handling, supply chain"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

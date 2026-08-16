@@ -279,7 +279,7 @@ Claude-authored spec artifacts can assert state that no longer exists at HEAD �
 
 **Gate outcome**:
 - No advisories → `GATE [spec-vs-head]: PASS — <N> layer(s) / <M> surface(s) / <K> step ref(s) verified at HEAD.` Proceed to Step 1.
-- GAP-STEP only → `GATE [spec-vs-head]: WARN — step-reference advisories (non-blocking): <list>.` Proceed to Step 1. GAP-STEP is WARN because prose references to other commands' steps have a high historical-context false-positive rate — rot surfaces but does not halt.
+- GAP-STEP only → `GATE [spec-vs-head]: WARN — non-blocking advisories: <list>.` Proceed to Step 1. WARN because prose references have a high historical-context false-positive rate — rot surfaces but does not halt.
 - Any GAP-LAYER or GAP-SURFACE → FAIL with the actionable list:
   ```
   GATE [spec-vs-head]: FAIL — spec asserts state not present at HEAD.
@@ -471,8 +471,17 @@ g. **Any-FAIL** (any of a–e tripped): log the specific failure mode (which che
 3. **If no DA-Reviewed or expired (>7 days or spec modified since review)**:
    - Report: "Spawning devil's advocate review..."
    - Read `.claude/agents/devils-advocate.md` for the role preamble.
+   - **Pass `model` explicitly, at every separation level (Spec 680).** Read
+     `forge.roles.devils_advocate.model` from AGENTS.md and set it as the dispatch `model` option.
+     This is NOT conditional on `forge.roles.separation` — a model instruction confined to the
+     `context-scoped`/`full` branch never fires in a `separation: none` project, which is how
+     `/close`'s validator came to run on Haiku (SIG-680-02). The Devil's Advocate is the one role
+     where the benchmark says model decides (opus 9.00 vs sonnet 7.00, +2.00), and this is its
+     highest-volume gate. Agent-file frontmatter does NOT supply the model; only the dispatch
+     option does. Effort is not controllable here — the Agent tool exposes no effort parameter —
+     so the DA runs at session effort regardless of what its agent file declares.
    - **Check `forge.roles.separation`** in AGENTS.md (Spec 099):
-     - If `context-scoped` or `full`: Spawn an **isolated** sub-agent — ONLY the role preamble and spec file path, no conversation history or session context (independent judgment, free of anchoring bias). Use `model` from `forge.roles.devils_advocate.model` if set.
+     - If `context-scoped` or `full`: Spawn an **isolated** sub-agent — ONLY the role preamble and spec file path, no conversation history or session context (independent judgment, free of anchoring bias).
      - If `none` (default): Spawn a sub-agent in the current context (existing behavior).
    - **Role state file lifecycle (Spec 100)**: Before spawning the DA sub-agent, write the role state file to activate hook-enforced write blocking:
      ```bash
@@ -1023,6 +1032,12 @@ skip-detection, caching, or "already validated" short-circuit exists here or in 
    exactly as `/close` Step 2d.b does, and spawn the validator sub-agent (read-only, no prior
    conversation context per `forge.roles.separation`, same role-state-file lifecycle as Step 2b).
 
+   **Pass `model` explicitly (Spec 680).** Read `forge.roles.validator.model` from AGENTS.md and
+   set it as the dispatch `model` option, unconditionally — same as `/close` Step 2d. This site
+   runs the SAME validator gate and auto-fires on any `R >= 3` spec, so leaving it unpinned would
+   keep the inline gate at an unverified tier while its `/close` twin is pinned. Surface the
+   observed per-message model with the outcome, as Step 2d does.
+
 6. **Post-check**: parse the validator's JSON, write it to
    `tmp/evidence/SPEC-NNN-YYYYMMDD/validator-report.json`, then run:
    ```bash
@@ -1335,8 +1350,7 @@ See docs/process-kit/implementation-patterns.md § AC mechanism-existence (SIG-5
 <!-- module:compliance -->
    - [ ] **Lane B compliance gate check** (conditional — skip if `docs/compliance/profile.yaml` absent): Load profile `gate_rules`. Verify required evidence artifacts are present. Emit `GATE [lane-b/<gate>]: PASS/FAIL/CONDITIONAL_PASS` for each gate. FAIL is blocking.
 <!-- /module:compliance -->
-<!-- module:nanoclaw -->
-   - [ ] Evidence artifacts captured (optional — run if NanoClaw async review is enabled):
+   - [ ] Evidence artifacts captured (optional — run when a durable, attachable record of this gate is useful):
      ```bash
      source ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/evidence.sh
      forge_evidence_init "NNN"
@@ -1346,7 +1360,6 @@ See docs/process-kit/implementation-patterns.md § AC mechanism-existence (SIG-5
      forge_evidence_attach_format   # paste output into gate message
      ```
      Artifacts saved to `tmp/evidence/SPEC-NNN-YYYYMMDD/` (gitignored).
-<!-- /module:nanoclaw -->
    Emit gate outcomes:
    - `GATE [test-execution]: PASS/FAIL — <test results summary>`. On FAIL: `Remediation: fix failing tests before marking implemented.`
    - `GATE [post-implementation]: PASS/FAIL — <checklist summary>`. On FAIL: `Remediation: complete missing checklist items: <items>.`

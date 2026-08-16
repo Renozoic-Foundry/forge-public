@@ -91,9 +91,3 @@ commands:
   bootstrap:
     action: "bootstrap FORGE into a project (deprecated — use /forge init)"
     triggers: "'bootstrap', '/bootstrap'"
-  configure-nanoclaw:
-    action: "configure NanoClaw async gate integration for this project"
-    triggers: "'configure nanoclaw', 'setup nanoclaw', '/configure-nanoclaw'"
-  nanoclaw:
-    action: "manage NanoClaw gate operations and status"
-    triggers: "'nanoclaw status', 'gate status', '/nanoclaw'"

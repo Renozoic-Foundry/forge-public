@@ -1,6 +1,7 @@
 ---
 description: "Evaluates cost, token spend, ROI, and build-vs-buy trade-offs"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

@@ -1,6 +1,6 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: .forge/bin/forge-py scripts/gen-agents-config-reference.py
      Sources: AGENTS.md (live defaults) + scripts/lib/agents-config-reference-content.yaml (descriptions)
-     Source content hash: 2f06c4f26f9a | FORGE plugin version: 4.1.1
+     Source content hash: a720c725cf85 | FORGE plugin version: 5.0.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 
 # AGENTS.md configuration reference
@@ -36,16 +36,16 @@ These fields appear in the `forge:` YAML block under the **Runtime Configuration
 |-------|------|---------|-------------|----------------------|
 | `forge.methodology` | enum | `none` | Team methodology label. Valid values: `scrum`, `safe`, `kanban`, `devops`, `safety-critical`, `none`. | Adapts command output language to match the team's methodology. Set during `/onboarding`. Language only; no behavioral change. |
 | `forge.lane` | enum | `A` | Active development lane. Currently only `A` is available. | Determines which feature set is active. |
-| `forge.gate.provider` | enum | `prompt` | Gate approval mechanism. Valid values: `prompt`, `pal`, `auto`. | `prompt`: chat-based approval. `pal`: hardware-authenticated (YubiKey). `auto`: use PAL if installed, fall back to prompt. |
+| `forge.gate.provider` | enum | `prompt` | Gate approval mechanism. Valid value: `prompt` (hardware-authenticated gates were deprecated, Spec 654). | `prompt`: chat-based approval. The only supported value. |
 | `forge.gate.timeout` | integer (seconds) | `1800` | Maximum wait time for a gate approval before timing out. | After this duration, a pending gate approval times out and follows the configured fallback behavior. |
 | `forge.roles.separation` | enum | `none` | Role isolation level. Valid values: `none`, `context-scoped`, `full`. | `none` (default): all roles run in the main conversation. `context-scoped`: DA and validator as isolated subagents, implementer in main context. `full`: all roles as isolated subagents (implementer uses worktree). |
 | `forge.roles.devils_advocate.enabled` | boolean | `true` | Enables or disables the Devil's Advocate gate globally. | When `false`, the DA review step is skipped across all specs and lanes. |
 | `forge.roles.devils_advocate.skip_lanes` | list of strings | `[hotfix]` | Lanes that bypass DA review. | Specs in listed lanes skip the DA gate even when DA is enabled. |
 | `forge.roles.devils_advocate.expiry_days` | integer | `7` | Days after which a spec modification triggers DA re-review. | If a spec is modified more than this many days after its last DA review, a new review is required. |
-| `forge.roles.devils_advocate.model` | enum | `sonnet` | Model tier for the DA subagent (when separation is not `none`). | Controls cost and capability of the DA review agent. |
+| `forge.roles.devils_advocate.model` | enum | `opus` | Model tier for the DA subagent (when separation is not `none`). | Controls cost and capability of the DA review agent. |
 | `forge.roles.validator.enabled` | boolean | `true` | Enables or disables the validator gate globally. | When `false`, the independent validation step is skipped. |
 | `forge.roles.validator.skip_lanes` | list of strings | `[]` | Lanes that bypass validator review. | Specs in listed lanes skip the validator gate. |
-| `forge.roles.validator.model` | enum | `haiku` | Model tier for the validator subagent. | Controls cost and capability of the validator agent. |
+| `forge.roles.validator.model` | enum | `sonnet` | Model tier for the validator subagent. | Controls cost and capability of the validator agent. |
 | `forge.roles.implementer.use_worktree` | enum | `auto` | Worktree isolation for implementer agents. Valid values: `auto`, `always`, `never`. | `auto`: uses worktree when running parallel specs. `always`: every implementation runs in a worktree. `never`: all work in the main tree. |
 | `forge.roles.implementer.max_parallel` | integer | `3` | Maximum concurrent implementer agents. | Caps the number of parallel `/implement` sessions to prevent resource exhaustion. |
 | `forge.roles.implementer.max_retries` | integer | `2` | Retry count on test failure before escalating to the operator. | After this many failed attempts, the implementer stops and reports the failure. |
@@ -108,7 +108,7 @@ These blocks tune signal-driven review, the `/now` dashboard, scheduled routines
 | `forge.evolve.admission_hysteresis` | boolean | `true` | Debounce on threshold crossings. | A count hovering at a boundary does not flap admit/skip. |
 | `forge.evolve.time_fallback_days` | integer | `30` | Soft time-based nudge for an overdue review. | Recommendation only — never a hard admission block. |
 | `forge.evolve.rewake_interval_days` | integer | `1` | `/evolve --auto` heartbeat cadence. | How often the scheduled signal-checking heartbeat re-wakes (`ScheduleWakeup` clamps the lower bound). |
-| `forge.evolve.scheduled_rewake` | boolean | `true` | Whether `/evolve` schedules a signal-checking heartbeat. | When `false`, the evolve review is manual-only. |
+| `forge.evolve.scheduled_rewake` | boolean | `false` | Whether `/evolve` schedules a signal-checking heartbeat. | When `false`, the evolve review is manual-only. |
 | `forge.evolve.apply_cool_down_days` | integer | `7` | Minimum days between *applied* self-modifications (ADR-046). | Throttles auto-apply paths; the review itself has no calendar gate. |
 | `forge.routines.enabled` | boolean | `false` | Enables scheduled strategy-only routines. | Off by default; opt-in. Routines produce artifacts only — they never advance the lifecycle or expand autonomy. |
 | `forge.routines.cadence` | enum | `weekly` | Default routine cadence. | Per-routine overrides live in each `.forge/loops/<name>.contract.yml`. |
@@ -215,13 +215,12 @@ Budget ceilings prevent runaway resource consumption. When breached, the agent p
 
 ## Gate enforcement modes
 
-Three enforcement modes determine how gate approval happens:
+Two enforcement modes determine how gate approval happens (a third, hardware-authenticated mode was deprecated — Spec 654; Lane B now uses the same two modes as Lane A):
 
 | Mode | When used | Approval mechanism |
 |------|-----------|-------------------|
 | Delegated | L3/L4, all ACs machine-verifiable, no human-judgment checks | Operator-invoked `/close` skips the Review Brief prompt; a three-layer evidence trail is still recorded |
 | Chat | Default; human judgment needed, no regulatory burden of proof | Human reviews Review Brief in conversation |
-| PAL | High-trust workflows requiring hardware-authenticated approval | Hardware key tap + cryptographic signature (deferred — development paused; subsystem retirement proposed, Spec 654) |
 
 ## Next steps
 
@@ -237,7 +236,7 @@ them into the tables above.
 
 | Field | Current value |
 |-------|---------------|
-| `forge.implement.inline_validation` | `auto` |
+| `forge.implement.inline_validation` | `false` |
 | `forge.now.dormant_in_progress_days` | `21` |
 
 ---
@@ -246,15 +245,15 @@ them into the tables above.
 
 This document is **generated** by `scripts/gen-agents-config-reference.py` — defaults are read live from `AGENTS.md`
 (descriptions from `scripts/lib/agents-config-reference-content.yaml`; source content hash
-`2f06c4f26f9a`, FORGE plugin v4.1.1). Do not edit it by hand — changes belong in the
+`a720c725cf85`, FORGE plugin v5.0.0). Do not edit it by hand — changes belong in the
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to AGENTS.md:
 
 <!-- forge:gen:volatile:start -->
-- 2026-08-07 `d21a8dd0` Close Spec 649 — autonomy promise conformance: reachable goal-mode exit, honest L3, worktree reconciliation
-- 2026-08-07 `432923b4` Close Spec 671 — managed-settings scope correction: the trust root bound paths that do not exist
-- 2026-08-07 `9aa46488` Wave-4 consolidation — Spec 659 AC7 (AGENTS.md bash-safety row), CHANGELOG, session log; add Spec 669 draft
+- 2026-08-15 `122d4ab2` Close Spec 654 — NanoClaw strike + PAL/hardware-gate deprecation
+- 2026-08-14 `18a8ce82` Close Spec 681 — quoted-token guard waiver + AGENTS.md honesty correction
+- 2026-08-13 `7de1eccd` Spec 681 — quoted-token/ANSI-C detector hardening applied and verified (stays in-progress)
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `git log -- AGENTS.md` and `docs/specs/CHANGELOG.md`.

@@ -56,4 +56,3 @@ checks for existence. It does **not** apply to:
 `.forge/bin/*` or `.forge/lib/*` helper, use the idiom above at the point of
 invocation. See `docs/process-kit/plugin-architecture.md` for the companion
 `resolve-root.{sh,ps1}` contract used inside `.sh`/`.ps1` scripts themselves.
-

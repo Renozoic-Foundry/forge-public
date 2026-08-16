@@ -67,22 +67,31 @@ AI verifies these, but escalates to human review when confidence is low. These a
 
 ## Enforcement Modes (the "how")
 
-Three enforcement modes determine how approval happens. Selection depends on autonomy level and spec characteristics.
+Two enforcement modes determine how approval happens. Selection depends on autonomy level and spec characteristics. (A third, hardware-authenticated mode was deprecated — Spec 654; see the Lane B note below.)
 
 | Mode | When Used | Approval Mechanism | Audit Trail |
 |------|-----------|-------------------|-------------|
 | **Delegated** | L3/L4 autonomy AND all ACs machine-verifiable AND no human-judgment checks apply | None — agent validates and closes autonomously | Immutable evidence: spec evidence + SHA-256 hash in audit-log.jsonl + atomic git commit |
 | **Chat** | Default. Human judgment needed but no regulatory burden of proof. | Human reviews Review Brief, approves in conversation. | Session log + spec evidence section. |
-| **PAL** | Lane B projects where regulations require proving which key holder approved. | Review Brief via NanoClaw, hardware key tap, cryptographic signature. | Cryptographic proof of identity + timestamp. Non-repudiable. |
 
 ### Enforcement Mode Selection Matrix
 
-| Autonomy Level | Delegation-eligible specs | Judgment-required specs | Lane B specs |
-|----------------|--------------------------|------------------------|--------------|
-| L0-L1 | Chat (human gates everything) | Chat | PAL if configured |
-| L2 | Chat (human approves decisions) | Chat | PAL if configured |
-| L3 | **Delegated** | Chat (async review) | PAL |
-| L4 | **Delegated** | Delegated with exception reporting | PAL |
+| Autonomy Level | Delegation-eligible specs | Judgment-required specs |
+|----------------|--------------------------|------------------------|
+| L0-L1 | Chat (human gates everything) | Chat |
+| L2 | Chat (human approves decisions) | Chat |
+| L3 | **Delegated** | Chat (async review) |
+| L4 | **Delegated** | Delegated with exception reporting |
+
+**Lane B note (Spec 654).** Lane B previously routed through a dedicated
+hardware-authenticated mode requiring a hardware key tap for regulations that demand
+proof of which key holder
+approved. That hardware-authenticated tier was deprecated — the operator will not use
+it, and Claude Code's native remote-control capability covers the async-review use
+case it served. Lane B specs now select between Delegated and Chat using the same
+rules as any other spec; Lane B keeps every other control (compliance profile,
+sealing, dual validation, traceability). See `docs/sessions/watchlist.md` for the
+re-add trigger.
 
 ### Delegation Eligibility
 

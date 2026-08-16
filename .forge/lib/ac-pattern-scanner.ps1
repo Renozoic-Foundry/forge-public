@@ -84,7 +84,7 @@ $Exclusions = @(
 # Spec 548 — runnable-command pattern set (mode=runnable). Must stay identical
 # to ac-pattern-scanner.sh's RUNNABLE_PATTERNS array. Exclusions do not apply.
 $RunnablePatterns = @(
-  '(bash|sh|pwsh|powershell|python[0-9]*|forge-py|npm|npx|node|copier|shellcheck|grep) [^ ]',
+  '\b(bash|sh|pwsh|powershell|python[0-9]*|forge-py|npm|npx|node|copier|shellcheck|grep) [^ ]',
   '\b(validate|test)-[a-z0-9_-]+\.(sh|ps1|py)\b',
   '\b[a-z0-9_-]+\.(sh|ps1|py)\b',
   '\b(suite|suites|shellcheck|lint|linter) (pass|passes|passed|stays green|stay green|green|clean|PASS)',

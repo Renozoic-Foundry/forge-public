@@ -28,10 +28,8 @@ If $ARGUMENTS is `?` or `help`:
   Usage: /evolve [--auto | --full | --spec NNN | --insights [--errors|--friction|--signals|--velocity] [--since YYYY-MM-DD]]
   Arguments:
     (none)        — interactive: ask which spec triggered this, or periodic review
-<!-- module:nanoclaw -->
     --auto        — automated mode: run per config in docs/sessions/evolve-config.yaml;
-                    deliver results via NanoClaw if configured; require human approval for actions
-<!-- /module:nanoclaw -->
+                    require human approval for actions
     --full        — force full F1-F4 review regardless of trigger mode
     --spec NNN    — fast-path review triggered by closing spec NNN
     --insights    — process-mining mode (folded from the retired insights command, Spec
@@ -41,9 +39,7 @@ If $ARGUMENTS is `?` or `help`:
   Triggers: after each spec reaches `implemented` (fast path F1+F4),
     or monthly (full F1-F4 with KPI review and score calibration).
   Behavior: Checks AC drift, updates backlog, reviews error/insight patterns.
-<!-- module:nanoclaw -->
-  Config: docs/sessions/evolve-config.yaml — trigger mode, NanoClaw delivery, approval gate
-<!-- /module:nanoclaw -->
+  Config: docs/sessions/evolve-config.yaml — trigger mode, approval gate
   See: docs/process-kit/human-validation-runbook.md (section F), CLAUDE.md (evolve loop)
   ```
   Stop — do not execute any further steps.
@@ -752,9 +748,8 @@ Before returning control to the solve loop, verify all evolve-loop work is compl
 
 6. Execute the chosen action.
 
-<!-- module:nanoclaw -->
-## [mechanical] Automated delivery (Spec 043 — conditional)
-If `--auto` was in $ARGUMENTS and the config `notify_via=nanoclaw`, compile results into a NanoClaw digest and send via the configured channel:
+## [mechanical] Automated delivery (Spec 043)
+If `--auto` was in $ARGUMENTS: append results to today's session log under `## Evolve Loop Run`:
 ```
 🔄 FORGE Evolve Loop — <date>
 Specs reviewed: <count>
@@ -765,11 +760,9 @@ Proposed actions (require approval):
 - [ ] <action 1> — approve? (reply "approve <N>" or "skip <N>")
 - [ ] <action 2>
 ```
-Use `mcp__nanoclaw__send_message` or the `nanoclaw_task_id` from config. **Human approval gate**: do NOT execute proposed actions (new specs, score changes, backlog updates) without explicit approval — wait for the operator's reply. Update `docs/sessions/evolve-state.md`: `last_evolve_loop_run: YYYY-MM-DD`, increment `runs_since_start`.
+**Human approval gate**: do NOT execute proposed actions (new specs, score changes, backlog updates) without explicit approval — wait for the operator's reply. Record `last_evolve_loop_run: YYYY-MM-DD` in `docs/sessions/evolve-state.md`, increment `runs_since_start`.
 
-- If `notify_via=log-only`: append results to today's session log under `## Evolve Loop Run`. No NanoClaw message. Record `last_evolve_loop_run` in `docs/sessions/evolve-state.md`.
-- If `docs/sessions/evolve-config.yaml` is absent: treat as `notify_via=log-only`.
-<!-- /module:nanoclaw -->
+- If `docs/sessions/evolve-config.yaml` is absent: same behavior (log-only is the only delivery mode).
 
 ## [mechanical] Step Z — Heartbeat reschedule (Spec 500 — replaces the Spec 464 cool-down-delay rewake; runs at command exit)
 

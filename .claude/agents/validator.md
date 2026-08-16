@@ -1,6 +1,7 @@
 ---
 description: "Independently verifies implementation satisfies all acceptance criteria"
-model: haiku
+model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 isolation: worktree

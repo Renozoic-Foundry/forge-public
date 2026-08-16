@@ -1,6 +1,7 @@
 ---
 description: "Evaluates regulatory alignment, audit trail sufficiency, and compliance implications"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

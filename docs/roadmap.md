@@ -10,7 +10,7 @@ or deferred; this version reconciles the classification with README, FAQ, and VE
 
 Day-to-day prioritization lives in the project backlog and is surfaced by `/now` and `/matrix` —
 this document tracks capability-level status only.
-The framework currently ships 32 active slash commands — see the generated
+The framework currently ships 30 active slash commands — see the generated
 [command reference](command-reference.md) for the authoritative, provenance-stamped list.
 
 ## Released
@@ -31,6 +31,7 @@ The framework currently ships 32 active slash commands — see the generated
 | Generated reference docs with provenance + revision history, drift-gated; audience-scoped link-integrity publish gate | Specs 571, 574 |
 | Multi-agent runtime infrastructure — orchestrator, kill switch, worktree isolation, swarm budgets | v2.x (Spec 042 budgets); see Preview for the autonomy levels that exercise it |
 | MCP documentation servers (Context7, Fetch) declared per-project | v1.0.0 |
+| **NanoClaw removal — final wind-down release** — the public `/nanoclaw` and `/configure-nanoclaw` commands are removed (subsystem retired as non-production; hardware-auth gates / PAL deprecated with it); `gate.provider: prompt` is the only supported gate mode | v5.0.0 (Spec 654; cut Spec 708) |
 
 ## Current
 
@@ -59,15 +60,13 @@ Not in the current public release — do not build compliance processes on these
   ISO 13485, IEC 62443), bidirectional traceability, V&V reports, spec sealing. Lane-gate
   scaffolding exists in the command bodies; the engine itself requires additional validation
   before it ships (see FAQ — "Is the compliance engine production-ready?" → No).
-- **Hardware Authentication (PAL)** — YubiKey challenge-response for gate decisions; was slated
-  as required for Lane B, optional for Lane A. Development is paused and retirement of the
-  hardware-gate subsystem has been proposed (Spec 654, draft — a proposal, not a settled
-  decision); `gate.provider: prompt` is the supported mode today.
-- **Async gate review via NanoClaw messaging** (Telegram/WhatsApp/Slack) — previously listed
-  under Preview as an optional L3+ integration. Not part of the supported distribution: the
-  organization deployment excludes it, no autonomy level depends on it, and retirement of the
-  subsystem has been proposed (Spec 654, draft). Listed here so the removal is explicit rather
-  than silent.
+- **Hardware-authenticated gates and the async messaging bridge** — the YubiKey/FIDO2
+  challenge-response gate-approval tier (was slated as required for Lane B, optional for Lane A)
+  and its async messaging delivery channel (Telegram/WhatsApp/Slack) were **retired** (Spec 654):
+  the operator will not use them, and Claude Code's native remote-control capability covers the
+  async-review use case they served. `gate.provider: prompt` is the only supported mode; Lane B
+  keeps every other control (compliance profile, sealing, dual validation, traceability). See
+  `docs/sessions/watchlist.md` for the re-add trigger.
 - **Server-managed settings trust root** — the agent-immutable enforcement layer that upgrades
   the L3/L4 push-gate from designed to enforced (ADR-453; unlocks chaining above L2).
 - **Public-repo CI** — the maintainer CI workflow runs on the private canonical repo; a public

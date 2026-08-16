@@ -100,7 +100,7 @@ EXCLUSIONS=(
 # Exclusions do NOT apply in runnable mode (different semantics: we WANT
 # fixture/CI/suite vocabulary to match here).
 RUNNABLE_PATTERNS=(
-  '(bash|sh|pwsh|powershell|python[0-9]*|forge-py|npm|npx|node|copier|shellcheck|grep) [^ ]'
+  '\b(bash|sh|pwsh|powershell|python[0-9]*|forge-py|npm|npx|node|copier|shellcheck|grep) [^ ]'
   '\b(validate|test)-[a-z0-9_-]+\.(sh|ps1|py)\b'
   '\b[a-z0-9_-]+\.(sh|ps1|py)\b'
   '\b(suite|suites|shellcheck|lint|linter) (pass|passes|passed|stays green|stay green|green|clean|PASS)'

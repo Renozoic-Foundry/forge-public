@@ -1,12 +1,12 @@
 <!-- GENERATED FILE — do not hand-edit. Regenerate with: scripts/gen-command-reference.sh
      Canonical sources: .forge/commands/*.md + invocation-policy.yaml
-     Source content hash: d7ae9761d05a | FORGE plugin version: 4.1.1
+     Source content hash: 02a544ecfc7d | FORGE plugin version: 5.0.0
      Drift gate: .forge/bin/forge-parity.sh --check (Surface 7, Spec 571) -->
 # Command Reference
 
 Auto-generated reference for all FORGE slash commands, derived from source files in `.forge/commands/`.
 
-**Total commands: 32**
+**Total commands: 30**
 
 **Invocation forms** (Spec 491 policy manifest): `command` — a `.claude/commands` slash command,
 never model-invoked; `skill (auto)` — a skill Claude may invoke opportunistically (read-only /
@@ -71,9 +71,7 @@ what's advertised (Spec 580 lifecycle fold).
 
 | Command | Form | Model tier (advisory) | Description |
 |---------|------|-----------------------|-------------|
-| `/configure-nanoclaw` | command |  | Configure NanoClaw hardware key enrollment and messaging |
 | `/evolve` | skill (explicit) |  | Run the KCS Evolve Loop review |
-| `/nanoclaw` | command |  | Manage the NanoClaw container — start, stop, status, logs |
 | `/synthesize` | skill (explicit) | sonnet | Synthesize accumulated project artifacts into refined documents |
 
 ## /forge subcommands
@@ -101,18 +99,18 @@ See [QUICK-REFERENCE.md](QUICK-REFERENCE.md) for detailed usage patterns and wor
 ## Provenance and revision history
 
 This document is **generated** by `scripts/gen-command-reference.sh` from the canonical command surface
-(`.forge/commands/` + `invocation-policy.yaml`; source content hash `d7ae9761d05a`,
-FORGE plugin v4.1.1). Do not edit it by hand — changes belong in the canonical
+(`.forge/commands/` + `invocation-policy.yaml`; source content hash `02a544ecfc7d`,
+FORGE plugin v5.0.0). Do not edit it by hand — changes belong in the canonical
 sources, then regenerate. Drift fails `.forge/bin/forge-parity.sh --check`.
 
 Recent changes to the canonical command surface:
 
 <!-- forge:gen:volatile:start -->
-- 2026-08-09 `5a15c45c` Close Spec 672 — apply process-kit publication set (47 published, 2 re-pointed, 1 dead-ref; CISO-consensus-gated) + file Spec 674 scrub follow-up
-- 2026-08-07 `42b1478a` Spec 636 implemented — /forge stoke apply gated by the ownership manifest (fail-closed), first-merge safety, installed-base backfill, manifest self-governance
-- 2026-08-07 `9a83f8cd` Spec 635 implemented — stale public forge-init overlay deleted (delete+redirect), legacy-upgrade mode plugin-native, getting-started Python claim corrected
-- 2026-08-07 `d21a8dd0` Close Spec 649 — autonomy promise conformance: reachable goal-mode exit, honest L3, worktree reconciliation
-- 2026-08-07 `ac398932` Close Spec 670 — consumer render hygiene: dead scratchpad path, missing project README
+- 2026-08-15 `8b694462` Spec 676 implemented — commit-guard consumer-readiness (operator-applied fix, delivery verified)
+- 2026-08-15 `122d4ab2` Close Spec 654 — NanoClaw strike + PAL/hardware-gate deprecation
+- 2026-08-14 `9b4e9121` Close Spec 704 — /close blocking-FAIL status reset (deadlock fix)
+- 2026-08-13 `700d7032` Spec 677 implemented — git status --porcelain quoted paths and rename records
+- 2026-08-13 `55ce954b` Close Spec 665 — bulk-draft HEAD re-verification; file Specs 691-697 from the Smiley1 handoff
 <!-- forge:gen:volatile:end -->
 
 For the full change record, see `docs/specs/CHANGELOG.md` and `git log -- .forge/commands/`.

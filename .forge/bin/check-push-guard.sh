@@ -74,11 +74,12 @@ fi
 # git push at command position — force the operator approval prompt (permissionDecision:ask).
 # No on-disk marker is read or trusted; the permission prompt is the operator-provenance
 # primitive. Build the JSON with `jq -n` so the reason text cannot break the payload.
-REASON="PUSH GATE (Spec 498): git push requires your approval at this prompt. "
-REASON+="Deferred-close chaining removes the per-spec human checkpoint, so the push is gated "
-REASON+="here as the backstop for the close/push human-authorization boundary (EA-025/026/027). "
-REASON+="Approve to push, or decline to cancel. No on-disk sign-off can bypass this — only your "
-REASON+="approval at this prompt authorizes the push."
+# NOTE (Spec 650): the REASON below is USER-VISIBLE and is kept jargon-free — no incident
+# IDs, no internal vocabulary. Internal identifiers stay in the code comments above, per
+# Spec 650's constraint (strip jargon from dialogs, not from internal artifacts).
+REASON="Push approval required: this command pushes commits to a remote. "
+REASON+="FORGE gates every push so a person confirms it. Approve to push now, or decline to "
+REASON+="cancel. Nothing on disk or in this session can approve it for you — only your answer here."
 
 jq -nc --arg r "$REASON" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
 exit 0

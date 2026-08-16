@@ -1,6 +1,7 @@
 ---
 description: "Evaluates process efficiency, bottlenecks, throughput, and operational scalability"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

@@ -22,8 +22,22 @@ file, it returns (three-state output contract, Spec 618):
   allowed); the scan read nothing and the empty `flagged_acs` means nothing. Gate
   consumers treat this as **could-not-check** — an operator-visible warning, never a
   silent pass (`/close` Step 2b2 emits a blocking `COULD-NOT-CHECK` outcome).
-- `runnable` mode output is schema-unchanged (`{"flagged_acs":[...]}` only — Spec 618
-  AC6 byte-parity for Spec 548 consumers).
+- `runnable` mode output is **key-set**-unchanged (`{"flagged_acs":[...]}` only, no
+  `section_found`; each entry carrying exactly `ac_number`, `text`, `pattern`). Spec 618 AC6 is
+  often paraphrased as "byte-parity" — **that is inaccurate and Spec 697 corrected it**: the
+  scanner emits the *matching regex verbatim* into the `pattern` field, so any change to a pattern
+  necessarily changes the output bytes. What Spec 548 consumers actually depend on is the key set,
+  and `validator_evidence_postcheck.py` — the sole machine consumer — reads only `ac_number` and
+  `text`, never `pattern`.
+
+> **Known gap (Spec 697 DA gate, 2026-08-13): `runnable` mode has no `section_found`.** The
+> three-state contract above applies to `browser` mode only. In `runnable` mode a spec whose
+> acceptance criteria are written as bullets rather than a numbered list parses to **zero** ACs and
+> returns `{"flagged_acs":[]}` — structurally indistinguishable from "read the section, found no
+> matches". That is the silent pass Spec 618 named as never acceptable, still live on the runnable
+> path. Seven active specs are bullet-only. A successor spec owns both halves (bullet-style AC
+> parsing, and porting `section_found` to runnable mode); until it lands, **a clean runnable-mode
+> result on a bullet-style spec means nothing.**
 
 Two consumers share this one script — neither hosts its own copy of the regex list:
 

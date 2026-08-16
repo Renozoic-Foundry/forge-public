@@ -1,6 +1,7 @@
 ---
 description: "Evaluates technology landscape, vendor updates, competitive positioning, and adoption opportunities"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

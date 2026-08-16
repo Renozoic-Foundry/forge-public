@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FORGE Kill Switch — halt all running agents, preserve state
-# Delegates to PAL for challenge invalidation when available.
+# Invalidates all outstanding gate challenges locally.
 # Usage: forge-kill.sh [--force]
 set -euo pipefail
 
@@ -41,8 +41,7 @@ echo ""
 # Halt all running agents
 forge_runtime_halt_all
 
-# Invalidate all outstanding security challenges
-# Delegates to PAL when available, falls back to local invalidation
+# Invalidate all outstanding security challenges (local invalidation)
 forge_security_init "$PROJECT_DIR"
 forge_gate_kill
 

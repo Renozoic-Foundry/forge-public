@@ -85,7 +85,6 @@ The following Copier answers in FORGE's `copier.yml` are gated by `validator:` e
 | `test_command` | Free-text shell string flowing into rendered scripts (injection vector) |
 | `lint_command` | Free-text shell string flowing into rendered scripts |
 | `harness_command` | Free-text shell string flowing into rendered scripts |
-| `include_nanoclaw` | Adds messaging integration (network surface) to rendered project |
 | `include_advanced_autonomy` | Lowers the operator-review threshold for agent actions |
 | `include_two_stage_review` | Changes the implementation-gating posture from default |
 
@@ -109,7 +108,6 @@ Even when `accept_security_overrides: true`, FORGE's `_message_after_copy` templ
 Spec 090 — security-relevant overrides recorded (accept_security_overrides=True):
   test_command = pytest -v
   harness_command = <redacted: 24 chars>
-  include_nanoclaw = true
 ```
 
 This message renders **after copy** (not before — `_message_before_copy` empirically runs before `--data-file` answers are applied; `_message_after_copy` is the correct primitive). Operators in CI grep for `Spec 090 — security-relevant overrides recorded` to detect any baseline that bypassed the security gate.
@@ -137,7 +135,7 @@ This allowlist exists in writing now so a future implementer cannot re-introduce
 
 ## Migration (`copier update` for pre-Spec-090 consumers)
 
-**Spec 090 is a small breaking change for existing consumers.** If your project's `.copier-answers.yml` carries a non-default value for any of the six gated security-relevant keys (`test_command`, `lint_command`, `harness_command`, `include_nanoclaw`, `include_advanced_autonomy`, `include_two_stage_review`), your next `copier update` will fail with a Copier validator error like:
+**Spec 090 is a small breaking change for existing consumers.** If your project's `.copier-answers.yml` carries a non-default value for any of the five gated security-relevant keys (`test_command`, `lint_command`, `harness_command`, `include_advanced_autonomy`, `include_two_stage_review`), your next `copier update` will fail with a Copier validator error like:
 
 ```
 ValueError: Validation error for question 'test_command': Spec 090 security gate:
@@ -189,7 +187,6 @@ _message_after_copy: |-
   {%-   endif -%}
   {%- endif -%}
   {# ... repeat for lint_command, harness_command (free-text) #}
-  {%- if include_nanoclaw -%}{%- set _ = ns.lines.append('  include_nanoclaw = true') -%}{%- endif -%}
   {# ... repeat for include_advanced_autonomy, include_two_stage_review (booleans) #}
   {%- if ns.lines -%}
   Spec 090 — security-relevant overrides recorded (accept_security_overrides={{ accept_security_overrides }}):

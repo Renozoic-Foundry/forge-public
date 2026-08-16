@@ -1,6 +1,7 @@
 ---
 description: "Evaluates liability exposure, business risk, and technical risk for decisions and changes"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

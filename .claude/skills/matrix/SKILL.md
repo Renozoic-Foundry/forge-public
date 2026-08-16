@@ -119,7 +119,7 @@ If $ARGUMENTS is `?` or `help`:
       Do NOT classify any spec as scope-creep against the sentinel. Proceed to step 9.
    b2. If present (and not the sentinel), use the value as the strategic scope definition. If absent, infer scope from CLAUDE.md's project description.
    b2. **Aging-draft pre-pass (Spec 363)**: Before classifying, scan every `Status: draft` spec for `valid-until: YYYY-MM-DD` in frontmatter. Specs whose `valid-until:` is **populated AND past today** are pre-flagged as expired and added to the strategic-fit table (step e) regardless of their on-mission classification — explicit operator engagement (renewal via /revise or direct edit, OR deprecation via this flow) is the renewal mechanism. Drafts lacking `valid-until:` (pre-backfill state) are NOT pre-flagged — they pass through normal on-mission classification only. Mixed states are handled per-spec.
-   c. **The strategic fit test**: For each draft spec, ask: "Does this spec's objective directly improve the project's core workflow loop as described in CLAUDE.md / `forge.strategic_scope`?" If the spec builds runtime infrastructure, a separate product, or features that belong in another tool <!-- module:nanoclaw -->(e.g., NanoClaw, an MCP server, an IDE extension)<!-- /module:nanoclaw -->, it fails the test.
+   c. **The strategic fit test**: For each draft spec, ask: "Does this spec's objective directly improve the project's core workflow loop as described in CLAUDE.md / `forge.strategic_scope`?" If the spec builds runtime infrastructure, a separate product, or features that belong in another tool (e.g., an MCP server, an IDE extension), it fails the test.
    d. Classify each draft spec:
       - `on-mission` — directly improves the core workflow (spec lifecycle, gates, evidence, process enforcement)
       - `borderline` — useful but expands scope beyond the core loop (may be worth keeping with scope adjustment)
@@ -131,16 +131,12 @@ If $ARGUMENTS is `?` or `help`:
       | Spec | Title | Classification | Rationale |
       |------|-------|----------------|-----------|
       | NNN  | ...   | on-mission     | Improves gate integrity via ... |
-<!-- module:nanoclaw -->
-      | NNN  | ...   | scope-creep    | Builds runtime scheduler — belongs in NanoClaw |
-<!-- /module:nanoclaw -->
+      | NNN  | ...   | scope-creep    | Builds a runtime scheduler — belongs in a separate product |
       | NNN  | ...   | expired        | valid-until: YYYY-MM-DD past today; renew via /revise or deprecate |
       ```
    f. For each `scope-creep` OR `expired` spec, recommend a disposition:
       - `deprecate` — not worth doing in any project (rare for scope-creep; common for expired drafts whose moment has passed)
-<!-- module:nanoclaw -->
-      - `defer-to-<project>` — belongs in a specific other project (e.g., `defer-to-nanoclaw`, `defer-to-mcp-server`)
-<!-- /module:nanoclaw -->
+      - `defer-to-<project>` — belongs in a specific other project (e.g., `defer-to-mcp-server`)
       - `reclassify` — scope can be narrowed to fit (explain how)
       - `renew` (Spec 363, expired-only) — operator wants to keep working it: run `/revise NNN` to refresh `valid-until:` (default today + 90), or edit the field directly. The renewal signal IS the explicit /revise invocation or operator edit.
    g. **Human confirmation gate**: Present dispositions and ask for confirmation before applying. The operator can:

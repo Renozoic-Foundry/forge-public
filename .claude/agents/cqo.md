@@ -1,6 +1,7 @@
 ---
 description: "Evaluates defect prevention, test coverage adequacy, and acceptance criteria rigor"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

@@ -1,6 +1,7 @@
 ---
 description: "Role-plays a fictional rival's reaction to the proposal, framed as leaked competitive intelligence — outside-in adversarial perspective"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

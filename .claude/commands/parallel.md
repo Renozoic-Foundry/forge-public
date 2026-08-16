@@ -318,7 +318,7 @@ b. Report:
    Agents: N
    Per-agent allocation: $Y.YY USD
    Alert thresholds: 50% ($A.AA), 80% ($B.BB), 90% ($C.CC)
-   Notification: <log-only | nanoclaw>
+   Notification: log-only
    ```
 c. If swarm_ceiling_usd is 0 or unset: skip enforcement, report "No swarm budget ceiling configured."
 d. Initialize `docs/sessions/swarm-budget-state.md` with: start time, N agents, per-agent allocation, swarm ceiling, thresholds.
@@ -418,15 +418,13 @@ Monitor all agents until completion. As each agent finishes:
 **Budget tracking (Spec 042 — if swarm-budget.yaml exists)**:
 - As agents report token usage in their mini session logs, aggregate total spend:
   `estimated_cost_usd = (total_input_tokens / 1M × cost_per_1m_input_usd) + (total_output_tokens / 1M × cost_per_1m_output_usd)`
-- At each threshold crossing (50%, 80%, 90%, 100%):
-  - If `notify_via=nanoclaw`: send alert via `mcp__nanoclaw__send_message`:
+- At each threshold crossing (50%, 80%, 90%, 100%): append to `docs/sessions/swarm-budget-state.md`:
     ```
     ⚠️ FORGE Swarm Budget Alert — <threshold>% reached
     Swarm: $X.XX / $Y.YY (N agents, elapsed: T min)
     Per-agent: Spec NNN=$A.AA, Spec MMM=$B.BB
     Action: <info | wrap up | HALTING ALL AGENTS>
     ```
-  - If `notify_via=log-only`: append to `docs/sessions/swarm-budget-state.md`.
 - At 100% ceiling: halt all remaining agents. Set `halt_reason: budget_ceiling_reached` in state file. Report halt to human.
 
 Once all agents have finished (or halted), present the summary:

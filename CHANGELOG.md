@@ -9,6 +9,37 @@ This changelog follows [Semantic Versioning](https://semver.org) bound to three 
 
 ---
 
+## v5.0.0 — 2026-08-16
+
+**Bump rationale**: MAJOR bump driven by audit-classified surface impacts.
+
+### Surface impacts
+- Surface 1 (copier.yml): none
+- Surface 2 (slash commands): MAJOR
+- Surface 3 (project-schema.yaml): N/A (Spec 294 not yet shipped)
+
+### Specs in window
+- Spec 654 — S2=MAJOR — Physically removed the public `/nanoclaw` and `/configure-nanoclaw` commands (deleted `configure-nanoclaw.md` + `nanoclaw.md`). Command removal = Surface 2 MAJOR per release-policy.md § Surface 2. This is the sole MAJOR and the version driver. One-time deprecation waiver recorded in release-policy.md (§ Deprecation waivers).
+- Spec 650 — S2=PATCH — Front-door doc + onboarding prose / string hygiene; command-body edits are prose only — no `Usage:`/arg/choice-block change.
+- Spec 662 — S2=PATCH — Detector/audit scope amendment; a command reference edit only, no public-contract change.
+- Spec 676 — S2=PATCH — `forge-init.md` bootstrap step changed from an agent-run commit to an operator hand-off (internal step); `Usage:`/args unchanged.
+- Spec 677 — S2=PATCH — Internal porcelain-parsing hardening within command bodies; no `Usage:`/arg/choice-block change.
+- Spec 679 — S2=PATCH — Command-file frontmatter measurement (`model:`/`effort:`); frontmatter is not the Surface 2 public contract.
+- Spec 680 — S2=PATCH — `/close` Step 2d + `/implement` Step 2b internal model-dispatch wiring; no contract change.
+- Spec 704 — S2=PATCH — `/close` internal Step 2-reset (status bounce on a blocking-gate FAIL); no `Usage:`/arg/choice-block change.
+- Spec 708 — S2=PATCH — Removed Spec 665's internal Check 4 (fact-freshness) from `/implement` Step 0e and its collision-scan from `/spec` Step 6f (command-body cleanup), preserving Spec 450 Checks 1–3 and the Spec 388 adjacency scan; deleted the thin guide; regenerated the stale overlay. No `Usage:`/arg/choice-block change — public contract unchanged. This cut's own release-preparation spec (self-included per AC11).
+
+### Batched-audit specs in window
+- Spec 637 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 661 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 681 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 683 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 697 — classified in a batched audit expansion (see the audit doc's bucket tables)
+- Spec 707 — classified in a batched audit expansion (see the audit doc's bucket tables)
+
+### Audit reference
+The v4.1.1 → v5.0.0 audit (MAJOR — driven by the Spec 654 public command removal) is a FORGE-internal record relocated to a dedicated ADR post-cut per release-policy.md § Post-cut disposition.
+
 ## v4.1.1 — 2026-08-11
 
 **Bump rationale**: PATCH bump driven by audit-classified surface impacts.

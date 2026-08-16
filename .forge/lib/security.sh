@@ -1,72 +1,40 @@
 #!/usr/bin/env bash
-# FORGE security.sh — Gate authentication library (thin PAL wrapper)
+# FORGE security.sh — Gate authentication library (prompt-based)
 # Sourced by other FORGE scripts. Do not execute directly.
 #
-# NOTE: PAL integration is a feature in development and not yet production-ready.
-# Use gate.provider=prompt for all Lane A workflows.
+# Spec 654: the hardware-authenticated gate tier was deprecated — the operator
+# will not use hardware auth, and Claude Code's native remote-control
+# capability covers the async-review use case that tier served. The
+# only supported gate.provider is `prompt` (chat-based approval). Lane B
+# uses the same prompt-based gates as Lane A now; it keeps every other Lane B
+# control (compliance profile, sealing, dual validation, traceability) and
+# loses only the hardware-authentication tier. See docs/sessions/watchlist.md
+# for the re-add trigger (hardware-authenticated gates).
 #
-# Gate provider modes (configured via gate.provider in AGENTS.md):
-#   prompt — chat-based approval, no hardware auth (default for Lane A)
-#   pal    — hardware-authenticated approval via PAL CLI (required for Lane B)
-#   auto   — use PAL if installed, fall back to prompt
-#
-# When PAL is available, all cryptographic operations delegate to `pal` CLI.
-# When PAL is not available and provider is "prompt" or "auto", falls back
-# to chat-based approval (no hardware auth).
-#
-# Dependencies: jq. Optional: pal CLI (https://github.com/Renozoic-Foundry/pal)
+# Dependencies: jq.
 
 FORGE_SECURITY_DIR=""
 FORGE_CHALLENGES_DIR=""
 FORGE_SECURITY_AUDIT=""
 
 # --- Gate provider configuration ---
-FORGE_GATE_PROVIDER="${FORGE_GATE_PROVIDER:-prompt}"   # prompt | pal | auto
+FORGE_GATE_PROVIDER="${FORGE_GATE_PROVIDER:-prompt}"   # prompt (only supported value)
 FORGE_GATE_TIMEOUT="${FORGE_GATE_TIMEOUT:-1800}"       # 30 minutes default
 FORGE_LANE="${FORGE_LANE:-A}"                          # A or B
 
-# --- PAL Detection ---
-
-_forge_pal_available() {
-  command -v pal &>/dev/null
-}
-
 _forge_resolve_provider() {
-  # Resolve the effective gate provider based on config and PAL availability.
-  # Sets FORGE_EFFECTIVE_PROVIDER to "pal" or "prompt".
+  # Resolve the effective gate provider. Only "prompt" is supported — Lane B
+  # uses the same prompt-based gates as Lane A (hardware authentication was
+  # retired; see docs/sessions/watchlist.md for the re-add trigger).
+  # Sets FORGE_EFFECTIVE_PROVIDER to "prompt".
   local provider="${FORGE_GATE_PROVIDER}"
-  local lane="${FORGE_LANE}"
-
-  # Lane B enforcement (R12): Lane B requires PAL
-  if [[ "$lane" == "B" && "$provider" != "pal" ]]; then
-    echo "ERROR: Lane B requires hardware-authenticated gates (gate.provider: pal)." >&2
-    echo "  Current gate.provider: ${provider}" >&2
-    echo "  Install PAL: pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal" >&2
-    return 1
-  fi
 
   case "$provider" in
-    pal)
-      if ! _forge_pal_available; then
-        echo "ERROR: gate.provider is 'pal' but PAL is not installed." >&2
-        echo "  Install PAL: pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal" >&2
-        echo "  Or set gate.provider to 'prompt' or 'auto' in AGENTS.md." >&2
-        return 1
-      fi
-      FORGE_EFFECTIVE_PROVIDER="pal"
-      ;;
-    auto)
-      if _forge_pal_available; then
-        FORGE_EFFECTIVE_PROVIDER="pal"
-      else
-        FORGE_EFFECTIVE_PROVIDER="prompt"
-      fi
-      ;;
     prompt)
       FORGE_EFFECTIVE_PROVIDER="prompt"
       ;;
     *)
-      echo "ERROR: Unknown gate.provider '${provider}'. Valid values: prompt, pal, auto." >&2
+      echo "ERROR: Unknown gate.provider '${provider}'. Valid value: prompt." >&2
       return 1
       ;;
   esac
@@ -102,11 +70,11 @@ forge_security_log() {
   echo "${timestamp} [${event_type}] ${event}: ${detail} channel=${channel} result=${result}" >> "$FORGE_SECURITY_AUDIT"
 }
 
-# --- Gate Request (R8 — thin PAL wrapper) ---
+# --- Gate Request ---
 
 forge_gate_request() {
-  # Request gate approval for a spec/gate combination.
-  # Delegates to PAL when available, falls back to prompt-based approval.
+  # Request gate approval for a spec/gate combination (prompt-based approval
+  # via chat response).
   local spec_id="$1"
   local gate_type="$2"
   local gate_id="${spec_id}-${gate_type}"
@@ -115,15 +83,9 @@ forge_gate_request() {
     return 1
   fi
 
-  if [[ "$FORGE_EFFECTIVE_PROVIDER" == "pal" ]]; then
-    forge_security_log "gate" "pal-approve-request" "gate=${gate_id}" "local" "pending"
-    pal approve --gate-id "$gate_id" --timeout "$FORGE_GATE_TIMEOUT" --json
-  else
-    # Prompt-based: no hardware auth — approval is via chat response
-    forge_security_log "gate" "prompt-approve-request" "gate=${gate_id}" "local" "pending"
-    printf '{"gate_id":"%s","provider":"prompt","status":"awaiting_approval","message":"Approve gate %s? Reply: approve or reject <reason>"}\n' \
-      "$gate_id" "$gate_id"
-  fi
+  forge_security_log "gate" "prompt-approve-request" "gate=${gate_id}" "local" "pending"
+  printf '{"gate_id":"%s","provider":"prompt","status":"awaiting_approval","message":"Approve gate %s? Reply: approve or reject <reason>"}\n' \
+    "$gate_id" "$gate_id"
 }
 
 forge_gate_reject() {
@@ -137,65 +99,35 @@ forge_gate_reject() {
     return 1
   fi
 
-  if [[ "$FORGE_EFFECTIVE_PROVIDER" == "pal" ]]; then
-    forge_security_log "gate" "pal-reject" "gate=${gate_id} reason=${reason}" "local" "rejected"
-    pal reject --gate-id "$gate_id" --reason "$reason" --json
-  else
-    forge_security_log "gate" "prompt-reject" "gate=${gate_id} reason=${reason}" "local" "rejected"
-    printf '{"gate_id":"%s","provider":"prompt","status":"rejected","reason":"%s"}\n' \
-      "$gate_id" "$reason"
-  fi
+  forge_security_log "gate" "prompt-reject" "gate=${gate_id} reason=${reason}" "local" "rejected"
+  printf '{"gate_id":"%s","provider":"prompt","status":"rejected","reason":"%s"}\n' \
+    "$gate_id" "$reason"
 }
 
 # --- Kill Switch ---
 
 forge_gate_kill() {
   # Invalidate all outstanding gate challenges.
-  if _forge_pal_available; then
-    forge_security_log "gate" "pal-kill" "all challenges" "local" "killed"
-    pal kill --json
-  else
-    # Fallback: invalidate local challenges
-    forge_security_invalidate_all_challenges
-  fi
+  forge_security_invalidate_all_challenges
 }
 
 # --- Detection ---
 
 forge_gate_detect() {
-  # Detect available authentication hardware.
-  if _forge_pal_available; then
-    pal detect --json
-  else
-    printf '{"provider":"prompt","hardware_available":false,"message":"PAL not installed. Using prompt-based approval."}\n'
-  fi
+  # Hardware-authenticated gate detection is retired — always prompt-based.
+  printf '{"provider":"prompt","hardware_available":false,"message":"Hardware-authenticated gates are retired. Using prompt-based approval."}\n'
 }
 
 # --- Status ---
 
 forge_gate_status() {
   # Show gate authentication status.
-  if _forge_pal_available; then
-    pal status --json
-  else
-    local provider="${FORGE_GATE_PROVIDER}"
-    printf '{"provider":"%s","pal_installed":false,"effective_provider":"prompt","message":"PAL not installed. Hardware authentication unavailable."}\n' \
-      "$provider"
-  fi
+  local provider="${FORGE_GATE_PROVIDER}"
+  printf '{"provider":"%s","effective_provider":"prompt","message":"Prompt-based approval (hardware-authenticated gates are retired)."}\n' \
+    "$provider"
 }
 
-# --- Enrollment (delegates to PAL) ---
-
-forge_gate_enroll() {
-  if ! _forge_pal_available; then
-    echo "ERROR: PAL is required for key enrollment." >&2
-    echo "  Install PAL: pip install pal-gate  OR  see https://github.com/Renozoic-Foundry/pal" >&2
-    return 1
-  fi
-  pal enroll "$@"
-}
-
-# --- Challenge Lifecycle (local fallback) ---
+# --- Challenge Lifecycle ---
 
 forge_security_invalidate_all_challenges() {
   if [[ ! -d "$FORGE_CHALLENGES_DIR" ]]; then
@@ -250,31 +182,19 @@ forge_security_render_gate_message() {
     lint_text="issues found"
   fi
 
-  if [[ "$FORGE_EFFECTIVE_PROVIDER" == "pal" ]]; then
-    printf 'FORGE — Spec %s %s\n' "$spec_id" "$gate_type"
-    printf 'Gate: PAL hardware-authenticated\n'
-    echo ""
-    printf 'Tests: %s/%s %s\n' "$test_passed" "$test_total" "$test_icon"
-    printf 'Lint: %s\n' "$lint_text"
-    printf 'Diff: %s files changed, +%s -%s\n' "$files_changed" "$insertions" "$deletions"
-    echo ""
-    printf '→ Tap your hardware key to approve\n'
-    printf '→ Or: pal reject --gate-id %s-%s --reason "<reason>"\n' "$spec_id" "$gate_type"
-  else
-    printf 'FORGE — Spec %s %s\n' "$spec_id" "$gate_type"
-    printf 'Gate: prompt-based approval\n'
-    echo ""
-    printf 'Tests: %s/%s %s\n' "$test_passed" "$test_total" "$test_icon"
-    printf 'Lint: %s\n' "$lint_text"
-    printf 'Diff: %s files changed, +%s -%s\n' "$files_changed" "$insertions" "$deletions"
-    echo ""
-    printf '→ Reply: approve\n'
-    printf '→ Or reply: reject <reason>\n'
-    printf '→ Or reply: show diff | show tests | defer\n'
-  fi
+  printf 'FORGE — Spec %s %s\n' "$spec_id" "$gate_type"
+  printf 'Gate: prompt-based approval\n'
+  echo ""
+  printf 'Tests: %s/%s %s\n' "$test_passed" "$test_total" "$test_icon"
+  printf 'Lint: %s\n' "$lint_text"
+  printf 'Diff: %s files changed, +%s -%s\n' "$files_changed" "$insertions" "$deletions"
+  echo ""
+  printf '→ Reply: approve\n'
+  printf '→ Or reply: reject <reason>\n'
+  printf '→ Or reply: show diff | show tests | defer\n'
 }
 
-# --- Response Parsing (prompt-based fallback) ---
+# --- Response Parsing ---
 
 forge_security_parse_response() {
   local raw_text="$1"

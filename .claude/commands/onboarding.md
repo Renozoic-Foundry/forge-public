@@ -271,7 +271,6 @@ Set `features`:
 
 | Feature | Greenfield | Brownfield |
 |---------|------------|------------|
-| `nanoclaw` | preserve existing value (org policy may have pre-set `false`); otherwise `false` | same |
 | `compliance` | `false` | `true` if any keyword from Step 1.5 matched, else `false` |
 | `publications` | `false` | `false` |
 | `devcontainer` | `false` | `false` |
@@ -421,7 +420,6 @@ Permission mode:  default
 Methodology:      none
 
 Features:
-  NanoClaw:       <enabled | disabled>
   Compliance:     <enabled | disabled>  <auto-detected if brownfield match>
   Publications:   <enabled | disabled>
   Dev Container:  <enabled | disabled>
@@ -512,8 +510,15 @@ Apply these staged onboarding changes? (yes / no)
   # Advisory only — a dirty tree never blocks brownfield onboarding (Constraints).
   # The pathspec below is authoritative; this listing is for the operator to read.
   onboarding_excluded=()
-  while IFS= read -r line; do
-    changed="${line:3}"
+  # Parsed NUL-delimited (Spec 677): `git status --porcelain` is not one-record-
+  # per-line — it C-quotes paths with spaces/special characters, and R/C
+  # rename/copy records carry a second NUL field (the old path) that must be
+  # consumed or it is misread as a bogus status entry.
+  while IFS= read -r -d '' entry; do
+    [[ -z "$entry" ]] && continue
+    xy="${entry:0:2}"
+    changed="${entry#???}"
+    case "$xy" in R*|C*|*R|*C) IFS= read -r -d '' _onboarding_excluded_src ;; esac
     # FORGE's own scratch under .forge/state/ is neither committed nor the
     # operator's work — reporting it as "unrelated in-flight change" is noise.
     # (The staging dir is removed immediately after this commit.)
@@ -523,7 +528,7 @@ Apply these staged onboarding changes? (yes / no)
       if [[ "$changed" == "$known" ]]; then included=true; break; fi
     done
     if [[ "$included" == false ]]; then onboarding_excluded+=("$changed"); fi
-  done < <(git status --porcelain)
+  done < <(git status --porcelain -z)
 
   printf 'Onboarding commit — included (%d):\n' "${#onboarding_paths[@]}"
   printf '  %s\n' "${onboarding_paths[@]}"
@@ -553,8 +558,26 @@ Apply these staged onboarding changes? (yes / no)
   if (Test-Path "$staging/.deletion-plan.txt") {
     $paths += @(Get-Content "$staging/.deletion-plan.txt" | Where-Object { $_.Trim() -ne '' })
   }
-  $excluded = @(git status --porcelain | ForEach-Object { $_.Substring(3) } |
-    Where-Object { $_ -notlike '.forge/state/*' -and $paths -notcontains $_ })
+  # Parsed NUL-delimited (Spec 677): porcelain is not one-record-per-line — it
+  # C-quotes paths with spaces/special characters, and R/C rename/copy records
+  # carry a second NUL field (the old path) that must be skipped or it is
+  # misread as a bogus status entry. Two-arg Substring keeps the field width
+  # explicit rather than a bare start-offset slice.
+  $rawOnboardingStatus = (git status --porcelain -z) -join "`0"
+  $onboardingEntries = @($rawOnboardingStatus -split "`0" | Where-Object { $_ -ne '' })
+  $excludedList = New-Object System.Collections.Generic.List[string]
+  $i = 0
+  while ($i -lt $onboardingEntries.Count) {
+    $entry = $onboardingEntries[$i]
+    $xy = $entry.Substring(0, 2)
+    $changed = $entry.Substring(3, $entry.Length - 3)
+    if ($xy -match '^[RC]' -or $xy -match '[RC]$') { $i++ }
+    if ($changed -notlike '.forge/state/*' -and $paths -notcontains $changed) {
+      $excludedList.Add($changed)
+    }
+    $i++
+  }
+  $excluded = @($excludedList)
   "Onboarding commit — included ($($paths.Count)):"; $paths | ForEach-Object { "  $_" }
   if ($excluded.Count -eq 0) {
     'Excluded: none — the working tree carried no unrelated changes.'

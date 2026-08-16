@@ -576,6 +576,16 @@ for agent in "${AGENTS[@]}"; do
           # preserve rule, byte-untouched. Never a wholesale replacement.
           canonical_hint="$(read_frontmatter_key "$src_file" "argument-hint")"
           mirror_fm="$(upsert_frontmatter_key "$mirror_fm" "argument-hint" "$canonical_hint")"
+          # Spec 679: model/effort track canonical the same way — add/update/remove via the
+          # same single-key upsert, so deleting the declaration from canonical removes it
+          # from the mirror on the next sync. Trailing CR stripped for the reason documented
+          # in forge-sync-skills.sh (read_frontmatter_key's CR strip is a no-op regex).
+          canonical_model="$(read_frontmatter_key "$src_file" "model")"
+          canonical_model="${canonical_model%$'\r'}"
+          mirror_fm="$(upsert_frontmatter_key "$mirror_fm" "model" "$canonical_model")"
+          canonical_effort="$(read_frontmatter_key "$src_file" "effort")"
+          canonical_effort="${canonical_effort%$'\r'}"
+          mirror_fm="$(upsert_frontmatter_key "$mirror_fm" "effort" "$canonical_effort")"
           if $FORCE; then
             # Log every overridden file to stderr for audit visibility (Spec 329 AC 4)
             if ! bodies_equal "$src_file" "$dst_file"; then

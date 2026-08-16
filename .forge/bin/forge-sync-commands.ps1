@@ -478,6 +478,15 @@ foreach ($agent in $agentList) {
                     # (add/update/remove); all other keys stay under the Spec 329 preserve rule.
                     $canonicalHint = Read-FrontmatterKey -FilePath $srcFile.FullName -Key "argument-hint"
                     $mirrorFm = Update-FrontmatterKey -Block $mirrorFm -Key "argument-hint" -Value $canonicalHint
+                    # Spec 679: model/effort track canonical through the same single-key upsert.
+                    # TrimEnd("`r") mirrors the bash twin's CR strip — a CRLF checkout would
+                    # otherwise carry a stray carriage return into the emitted value.
+                    $canonicalModel = (Read-FrontmatterKey -FilePath $srcFile.FullName -Key "model")
+                    if ($null -ne $canonicalModel) { $canonicalModel = $canonicalModel.TrimEnd("`r") }
+                    $mirrorFm = Update-FrontmatterKey -Block $mirrorFm -Key "model" -Value $canonicalModel
+                    $canonicalEffort = (Read-FrontmatterKey -FilePath $srcFile.FullName -Key "effort")
+                    if ($null -ne $canonicalEffort) { $canonicalEffort = $canonicalEffort.TrimEnd("`r") }
+                    $mirrorFm = Update-FrontmatterKey -Block $mirrorFm -Key "effort" -Value $canonicalEffort
                     if ($Force -and -not (Test-BodiesEqual -FileA $srcFile.FullName -FileB $dstFile)) {
                         Write-Warning "FORCE OVERWRITE: $dstFile body replaced from canonical"
                     }

@@ -71,6 +71,14 @@ Read `.claude/agents/<role>.md` for each role's preamble. If a role instruction 
 
 ### Step 3.0 — Workflow-path capability probe (Spec 524)
 
+**Report the selected path (Spec 680 R5g).** Whichever branch is taken, state it in the output
+before dispatching: `Consensus dispatch path: Workflow (per-role effort/model applied)` or
+`Consensus dispatch path: prompt-driven fallback — roles run at SESSION effort (the Agent tool
+exposes no effort parameter; OVERRIDE_BY_ROLE does not apply on this path)`. This exists because
+the only real round measured (2026-08-13) made four Agent-tool calls and zero Workflow calls, and
+narrated nothing about the branch — so a round silently ran every role at session effort with no
+way for the operator to see it. Effort control exists ONLY on the Workflow path.
+
 Before the prompt-driven dispatch below, branch on Workflow-tool availability:
 
 - **Workflow tool present in this session's toolset** (Claude Code) → use the **Workflow path**:

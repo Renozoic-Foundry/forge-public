@@ -1,6 +1,7 @@
 ---
 description: "Critically reviews specs before implementation — adversarial risk analysis across 6 domains"
-model: sonnet
+model: opus
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 isolation: worktree

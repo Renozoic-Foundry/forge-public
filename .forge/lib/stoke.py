@@ -493,7 +493,6 @@ def _detect_fresh_clone_consent_state(live_root: Path, answers: dict | None) -> 
         "test_command": "pytest -q",
         "lint_command": "ruff check .",
         "harness_command": "",
-        "include_nanoclaw": "false",
         "include_advanced_autonomy": "false",
         "include_two_stage_review": "false",
     }
@@ -533,7 +532,7 @@ def _append_activity_log(event: dict, live_root: Path) -> None:
 # ---- Spec 591 Req 1: live wiring of the Spec 559 runtime consent gate ------
 
 def _live_consent_check(key: str, state_file: Path, cli_value: bool, live_root: Path) -> bool:
-    """Live call site for the six named consent-gated keys.
+    """Live call site for the five named consent-gated keys.
 
     Direct in-process call into runtime_consent_gate.check_consent (not a
     subprocess shell-out -- see the sys.path import note at the top of this
@@ -558,7 +557,7 @@ def _live_consent_check(key: str, state_file: Path, cli_value: bool, live_root: 
 def _live_gate_six_keys(live_root: Path, answers: dict | None, consent_kv: list[str]) -> list[str]:
     """Spec 591 Req 1 / AC1 — the single shared live-gate call site invoked by
     `cmd_apply` ahead of the merge-native apply (exhaustive
-    call-site audit: this is the only place in stoke.py that resolves the six
+    call-site audit: this is the only place in stoke.py that resolves the five
     named keys' consent state at apply time; see Spec 591 Evidence for the
     full audit table including copier.yml/forge_consent_gate.py, which remain
     the untouched render-time backstop).
@@ -581,7 +580,7 @@ def _live_gate_six_keys(live_root: Path, answers: dict | None, consent_kv: list[
     if not answers:
         return refused
     # Spec 591: NOT .copier-answers.yml. That file legitimately persists the
-    # six keys' VALUES (test_command etc. are ordinary, persisted copier
+    # five keys' VALUES (test_command etc. are ordinary, persisted copier
     # answers) -- the poisoned-token property runtime_consent_gate.py guards
     # against is about a persisted CONSENT TOKEN, not the value itself
     # (mirrors forge_consent_gate.py: the secret:true token is

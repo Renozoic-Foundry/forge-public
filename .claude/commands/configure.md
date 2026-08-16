@@ -239,10 +239,9 @@ Read `.forge/feature-files.yaml`. Present all features with their current toggle
 
 | # | Feature       | Description | Current |
 |---|---------------|-------------|---------|
-| 1 | NanoClaw      | Async gate decisions via Telegram/WhatsApp/Slack — useful at L3+ | [<enabled/disabled>] |
-| 2 | Compliance    | Regulatory traceability (EU Machinery, ISO 13485, IEC 62443) | [<enabled/disabled>] |
-| 3 | Publications  | HTML article, slide deck, and dashboard templates | [<enabled/disabled>] |
-| 4 | Dev Container | VS Code Codespace configuration | [<enabled/disabled>] |
+| 1 | Compliance    | Regulatory traceability (EU Machinery, ISO 13485, IEC 62443) | [<enabled/disabled>] |
+| 2 | Publications  | HTML article, slide deck, and dashboard templates | [<enabled/disabled>] |
+| 3 | Dev Container | VS Code Codespace configuration | [<enabled/disabled>] |
 
 Type numbers to toggle (e.g., `1 3`), `all`, `none`, or `keep`.
 Type `? <number>` for details on any feature.
@@ -368,10 +367,16 @@ When the user types `done` at the main menu:
      # forge:spec-668-configure-commit-block:start
      configure_candidates=(AGENTS.md CLAUDE.md .claude/settings.json .mcp.json .copier-answers.yml)
      configure_paths=()
-     while IFS= read -r line; do
-       [ -z "$line" ] && continue
-       configure_paths+=("${line:3}")
-     done < <(git status --porcelain -- "${configure_candidates[@]}")
+     # Parsed NUL-delimited (Spec 677): a line-based fixed-offset slice breaks on a
+     # C-quoted path and misreads an R/C rename/copy record's second NUL field
+     # (the old path) as a bogus status entry. `${entry#???}` strips the fixed
+     # 3-char "XY " prefix via pattern removal, not a start-offset slice.
+     while IFS= read -r -d '' entry; do
+       [ -z "$entry" ] && continue
+       xy="${entry:0:2}"
+       configure_paths+=("${entry#???}")
+       case "$xy" in R*|C*|*R|*C) IFS= read -r -d '' _configure_src ;; esac
+     done < <(git status --porcelain -z -- "${configure_candidates[@]}")
      if [ ${#configure_paths[@]} -eq 0 ]; then
        echo "No configuration files changed this session — nothing to commit."
      else
@@ -383,7 +388,22 @@ When the user types `done` at the main menu:
      **PowerShell / Windows equivalent**:
      ```powershell
      $candidates = @('AGENTS.md','CLAUDE.md','.claude/settings.json','.mcp.json','.copier-answers.yml')
-     $paths = @(git status --porcelain -- $candidates | ForEach-Object { $_.Substring(3) })
+     # Parsed NUL-delimited (Spec 677): porcelain is not one-record-per-line — a
+     # C-quoted path or an R/C rename/copy record's second NUL field (the old
+     # path) breaks a naive per-line slice. Two-arg Substring keeps the field
+     # width explicit rather than a bare start-offset slice.
+     $rawConfigureStatus = (git status --porcelain -z -- $candidates) -join "`0"
+     $configureEntries = @($rawConfigureStatus -split "`0" | Where-Object { $_ -ne '' })
+     $pathsList = New-Object System.Collections.Generic.List[string]
+     $i = 0
+     while ($i -lt $configureEntries.Count) {
+       $entry = $configureEntries[$i]
+       $xy = $entry.Substring(0, 2)
+       $pathsList.Add($entry.Substring(3, $entry.Length - 3))
+       if ($xy -match '^[RC]' -or $xy -match '[RC]$') { $i++ }
+       $i++
+     }
+     $paths = @($pathsList)
      if ($paths.Count -eq 0) {
        'No configuration files changed this session — nothing to commit.'
      } else {

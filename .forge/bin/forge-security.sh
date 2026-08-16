@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
-# FORGE Security — Gate authentication CLI
-# Delegates to PAL CLI when available for hardware-authenticated operations.
-# Falls back to local operations when PAL is not installed.
+# FORGE Security — Gate authentication CLI (local hardware-key detection)
+# Hardware-authenticated gate delivery (Spec 654) is retired — this script
+# retains local YubiKey/FIDO2 detection and enrollment bookkeeping, but
+# gate approve/reject is prompt-based (see .forge/lib/security.sh) and no
+# longer routes through this CLI.
 #
-# PAL-delegated subcommands (when PAL is installed):
-#   forge-security.sh --detect --json        → pal detect --json
-#   forge-security.sh --enroll --json        → pal enroll
-#   forge-security.sh --status --json        → pal status --json
-#   forge-security.sh --approve <GATE_ID>    → pal approve --gate-id <GATE_ID> --json
-#   forge-security.sh --reject <GATE_ID>     → pal reject --gate-id <GATE_ID> --json
-#
-# Local-only subcommands (always handled by FORGE):
-#   forge-security.sh --kill                 → pal kill (if available) + local invalidation
-#   forge-security.sh --unlock               → clear local lockout
-#
-# Non-interactive subcommands (legacy, local-only when PAL not available):
+# Non-interactive subcommands (--json output, for AI agent orchestration):
 #   forge-security.sh --detect --json
 #   forge-security.sh --slot-audit --device SERIAL --json
 #   forge-security.sh --program --device SERIAL --slot 2 [--save-secret PATH] --json
@@ -22,8 +13,9 @@
 #   forge-security.sh --challenge CHALLENGE_HEX --device SERIAL --json
 #   forge-security.sh --verify --challenge HEX --expected HEX --device SERIAL --json
 #   forge-security.sh --status --json
+#   forge-security.sh --kill                 Kill switch — invalidate all challenges
 #
-# Interactive subcommands (legacy, for terminal use without AI agent):
+# Interactive subcommands (legacy, for terminal use without an AI agent):
 #   forge-security.sh --enroll [--channel <id>]
 #   forge-security.sh --status
 #   forge-security.sh --revoke <key-id>
@@ -50,12 +42,6 @@ if [[ -f "${FORGE_DIR}/lib/logging.sh" ]]; then
 fi
 forge_security_init "$PROJECT_DIR"
 
-# --- PAL detection ---
-
-pal_available() {
-  command -v pal &>/dev/null
-}
-
 # --- JSON output helpers ---
 
 json_error() {
@@ -70,42 +56,7 @@ json_ok() {
   printf '{"ok":true,%s}\n' "$content"
 }
 
-# --- PAL-delegated subcommands ---
-
-cmd_detect_json_pal() {
-  pal detect --json
-}
-
-cmd_status_json_pal() {
-  pal status --json
-}
-
-cmd_enroll_pal() {
-  pal enroll "$@"
-}
-
-cmd_approve_pal() {
-  local gate_id="$1"
-  if [[ -z "$gate_id" ]]; then
-    json_error "missing gate ID for --approve"
-  fi
-  pal approve --gate-id "$gate_id" --json
-}
-
-cmd_reject_pal() {
-  local gate_id="$1"
-  local reason="${2:-}"
-  if [[ -z "$gate_id" ]]; then
-    json_error "missing gate ID for --reject"
-  fi
-  if [[ -n "$reason" ]]; then
-    pal reject --gate-id "$gate_id" --reason "$reason" --json
-  else
-    pal reject --gate-id "$gate_id" --json
-  fi
-}
-
-# --- Non-interactive subcommands (local fallback when PAL not available) ---
+# --- Non-interactive subcommands (local device management) ---
 
 cmd_detect_json() {
   local devices="[]"
@@ -224,21 +175,19 @@ cmd_detect_json() {
     providers="$(echo "$providers" | jq --arg r "$reason" '. + [{"provider": "fido2", "available": false, "reason": $r}]')"
   fi
 
-  providers="$(echo "$providers" | jq '. + [{"provider": "mobile", "available": true, "reason": "always available via NanoClaw"}]')"
-
   local enrolled="false"
   local enrollment_info="null"
-  if [[ -f "$FORGE_ENROLLED_KEYS" ]]; then
+  local enrolled_keys_file="${FORGE_SECURITY_DIR}/enrolled-keys.json"
+  if [[ -f "$enrolled_keys_file" ]]; then
     local key_count
-    key_count="$(jq '.keys | length' "$FORGE_ENROLLED_KEYS" 2>/dev/null || echo 0)"
+    key_count="$(jq '.keys | length' "$enrolled_keys_file" 2>/dev/null || echo 0)"
     if [[ "$key_count" -ge 2 ]]; then
       enrolled="true"
-      enrollment_info="$(jq '{station: (.keys[] | select(.role=="station") | {key_id, serial, status}), mobile: (.keys[] | select(.role=="mobile") | {key_id, serial, status}), channel_id}' "$FORGE_ENROLLED_KEYS" 2>/dev/null)" || true
+      enrollment_info="$(jq '{station: (.keys[] | select(.role=="station") | {key_id, serial, status}), mobile: (.keys[] | select(.role=="mobile") | {key_id, serial, status}), channel_id}' "$enrolled_keys_file" 2>/dev/null)" || true
     fi
   fi
 
-  printf '{"ok":true,"pal_available":%s,"devices":%s,"fido2_devices":%s,"providers":%s,"enrolled":%s,"enrollment":%s}\n' \
-    "$(if pal_available; then echo "true"; else echo "false"; fi)" \
+  printf '{"ok":true,"devices":%s,"fido2_devices":%s,"providers":%s,"enrolled":%s,"enrollment":%s}\n' \
     "$devices" "$fido2_devices" "$providers" "$enrolled" "${enrollment_info:-null}"
 }
 
@@ -475,8 +424,7 @@ cmd_status_json() {
     done
   fi
 
-  printf '{"ok":true,"pal_available":%s,"enrolled":%s,"station":%s,"mobile":%s,"channel_id":"%s","yubikey_slot":"%s","pending_challenges":%d}\n' \
-    "$(if pal_available; then echo "true"; else echo "false"; fi)" \
+  printf '{"ok":true,"enrolled":%s,"station":%s,"mobile":%s,"channel_id":"%s","yubikey_slot":"%s","pending_challenges":%d}\n' \
     "$enrolled" "$station" "$mobile" "$channel_id" "${slot:-2}" "$pending_count"
 }
 
@@ -485,21 +433,6 @@ cmd_status_json() {
 usage() {
   echo "Usage: forge-security.sh <command> [options]"
   echo ""
-  if pal_available; then
-    echo "PAL detected — hardware-authenticated commands available."
-    echo ""
-    echo "PAL-delegated commands:"
-    echo "  --detect --json                                    List connected devices (via PAL)"
-    echo "  --enroll --json                                    Enroll hardware keys (via PAL)"
-    echo "  --approve <GATE_ID> --json                         Approve a gate (via PAL)"
-    echo "  --reject <GATE_ID> [--reason TEXT] --json          Reject a gate (via PAL)"
-    echo "  --status --json                                    Gate status (via PAL)"
-    echo ""
-  else
-    echo "PAL not detected — using local device management."
-    echo "  Install PAL for hardware-authenticated gates: https://github.com/Renozoic-Foundry/pal"
-    echo ""
-  fi
   echo "Non-interactive commands (--json output, for AI agent orchestration):"
   echo "  --detect --json                                    List connected devices and providers"
   echo "  --slot-audit --device SERIAL --json                Show slot status for a device"
@@ -511,12 +444,11 @@ usage() {
   echo "  --kill                                             Kill switch — invalidate all challenges"
   echo ""
   echo "Interactive commands (legacy, for terminal use):"
-  echo "  --enroll [--channel <id>]   Interactive enrollment ceremony"
+  echo "  --enroll --station SERIAL --mobile SERIAL [--channel <id>]   Non-interactive enrollment"
   echo "  --status                    Human-readable status"
-  echo "  --revoke <key-id>           Revoke an enrolled key"
   echo "  --unlock                    Clear channel lockout"
   echo ""
-  echo "Recommended: use /configure-nanoclaw from your AI agent instead."
+  echo "Gate approve/reject is prompt-based (chat approval) and no longer routes through this CLI."
 }
 
 # --- Argument parsing ---
@@ -538,11 +470,7 @@ MOBILE_SERIAL=""
 CHANNEL_ID=""
 CHALLENGE_HEX=""
 EXPECTED_HEX=""
-KEY_ID=""
-GATE_ID=""
-REASON=""
 
-remaining_args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --json)         JSON_MODE=true; shift ;;
@@ -554,32 +482,20 @@ while [[ $# -gt 0 ]]; do
     --channel)      CHANNEL_ID="${2:-}"; shift 2 ;;
     --challenge)    CHALLENGE_HEX="${2:-}"; shift 2 ;;
     --expected)     EXPECTED_HEX="${2:-}"; shift 2 ;;
-    --gate-id)      GATE_ID="${2:-}"; shift 2 ;;
-    --reason)       REASON="${2:-}"; shift 2 ;;
-    *)              remaining_args+=("$1"); shift ;;
+    *)              shift ;;
   esac
 done
 
-# Use first remaining arg as gate ID if --gate-id not specified
-if [[ -z "$GATE_ID" && ${#remaining_args[@]} -gt 0 ]]; then
-  GATE_ID="${remaining_args[0]}"
-  remaining_args=("${remaining_args[@]:1}")
-fi
-
 if [[ -n "${FORGE_DIR:-}" ]]; then
   if [[ -f "${FORGE_DIR}/lib/logging.sh" ]]; then
-    forge_log_debug "Command: ${COMMAND} json=${JSON_MODE} pal=$(if pal_available; then echo "yes"; else echo "no"; fi)" 2>/dev/null || true
+    forge_log_debug "Command: ${COMMAND} json=${JSON_MODE}" 2>/dev/null || true
   fi
 fi
 
 case "$COMMAND" in
   --detect)
     if $JSON_MODE; then
-      if pal_available; then
-        cmd_detect_json_pal
-      else
-        cmd_detect_json
-      fi
+      cmd_detect_json
     else
       echo "Use --detect --json for structured output."
       exit 1
@@ -605,38 +521,10 @@ case "$COMMAND" in
     ;;
 
   --enroll)
-    if $JSON_MODE; then
-      if pal_available; then
-        cmd_enroll_pal --json
-      else
-        cmd_enroll_json "$STATION_SERIAL" "$MOBILE_SERIAL" "$CHANNEL_ID"
-      fi
+    if [[ -n "$STATION_SERIAL" && -n "$MOBILE_SERIAL" ]]; then
+      cmd_enroll_json "$STATION_SERIAL" "$MOBILE_SERIAL" "$CHANNEL_ID"
     else
-      if pal_available; then
-        cmd_enroll_pal
-      else
-        # Legacy interactive enrollment — requires security.sh with full enrollment
-        echo "PAL not installed. Use --station SERIAL --mobile SERIAL --json for non-interactive enrollment."
-        echo "Or install PAL for guided enrollment: https://github.com/Renozoic-Foundry/pal"
-        exit 1
-      fi
-    fi
-    ;;
-
-  --approve)
-    if pal_available; then
-      cmd_approve_pal "$GATE_ID"
-    else
-      echo "ERROR: --approve requires PAL. Install: https://github.com/Renozoic-Foundry/pal" >&2
-      exit 1
-    fi
-    ;;
-
-  --reject)
-    if pal_available; then
-      cmd_reject_pal "$GATE_ID" "$REASON"
-    else
-      echo "ERROR: --reject requires PAL. Install: https://github.com/Renozoic-Foundry/pal" >&2
+      echo "Use --station SERIAL --mobile SERIAL --json for non-interactive enrollment." >&2
       exit 1
     fi
     ;;
@@ -665,24 +553,14 @@ case "$COMMAND" in
 
   --status)
     if $JSON_MODE; then
-      if pal_available; then
-        cmd_status_json_pal
-      else
-        cmd_status_json
-      fi
+      cmd_status_json
     else
       forge_gate_status
     fi
     ;;
 
   --revoke)
-    if [[ -z "$GATE_ID" ]]; then
-      echo "ERROR: --revoke requires a key-id argument." >&2
-      exit 1
-    fi
-    KEY_ID="$GATE_ID"
-    echo "Key revocation via local fallback is deprecated."
-    echo "Use PAL for key management: pal revoke ${KEY_ID}"
+    echo "ERROR: --revoke is not supported without hardware-authenticated key management." >&2
     exit 1
     ;;
 

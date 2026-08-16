@@ -6,12 +6,23 @@
 # frontmatter `model:` line. FAILs on any mismatch — this exists so a well-meaning
 # edit toward one surface (e.g. "correcting" AGENTS.md's validator entry back to
 # sonnet) cannot silently revert a deliberate per-role tier decision (Spec 462:
-# validator intentionally runs haiku) without a visible, mechanical FAIL.
+# validator runs sonnet since Spec 680) without a visible, mechanical FAIL.
 #
 # Usage:
 #   bash check-roles-model-consistency.sh                # check this repo
 #   bash check-roles-model-consistency.sh --root <DIR>   # check a fixture/copied tree
 # Exit 0 = PASS (or SKIP — surfaces absent), 1 = FAIL (mismatch or missing file).
+#
+# LIMITATION — READ THIS BEFORE QUOTING A PASS AS ASSURANCE (Spec 680, Spec 662).
+# This script compares TWO DECLARATIONS against each other: AGENTS.md and the agent
+# frontmatter. It never compares either against what the harness actually does.
+# Measured 2026-08-13: agent-file `model:`/`effort:` frontmatter is NOT applied by the
+# harness at all — the effective lever is the dispatch-site opts layer. So this check
+# can report green while the configuration it validates has zero runtime effect, which
+# is exactly how a "validator PASS 16/16" was reported from a validator running on
+# claude-haiku-4-5 (SIG-680-02). That is the Spec 662 defect class — detectors that
+# check declaration rather than state — with a live instance. Verifying runtime tier
+# needs a subagent-transcript probe and belongs to Spec 662 or a successor.
 
 set -uo pipefail
 
@@ -95,4 +106,7 @@ if [ "$FAIL" -eq 1 ]; then
 fi
 
 echo "PASS: all forge.roles.*.model values match .claude/agents/*.md frontmatter"
+echo "NOTE: declaration-vs-declaration only — this check never compares either surface against"
+echo "      harness runtime behavior. Agent frontmatter is not applied by the harness (Spec 680);"
+echo "      a green result here does not mean a role runs on its configured model. See Spec 662."
 exit 0

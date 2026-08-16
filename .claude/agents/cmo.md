@@ -1,6 +1,7 @@
 ---
 description: "Evaluates messaging consistency, audience fit, document quality, and brand alignment"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

@@ -174,7 +174,7 @@ These capabilities are built into every FORGE project out of the box:
 - **KCS v6 double-loop learning** — Solve Loop delivers specs. Evolve Loop captures signals, analyzes patterns, and proposes process improvements automatically.
 - **Role-separated agents** — 17 roles (Spec Author, Devil's Advocate, Implementer, Validator, Maverick Thinker, Competitor, CTO, CISO, CFO, CXO, COO, CCO, CQO, CEfO, CMO, CRO, CResO) with runtime tool restrictions via `.claude/agents/`.
 - **Scored backlog** — Priority formula ranks every spec. AI picks the highest-value work. Dependency tracking prevents blocked starts.
-- **32 slash commands** — Full lifecycle coverage with command chaining. Model tiering is advisory; the IDE model picker is the real selector (Spec 316). See [command reference](docs/command-reference.md) for the full list.
+- **30 slash commands** — Full lifecycle coverage with command chaining. Model tiering is advisory; the IDE model picker is the real selector (Spec 316). See [command reference](docs/command-reference.md) for the full list.
 - **Session logging and signal capture** — Every session ends with a log. Retro signals inform priority re-scoring.
 
 ### Enhancing features (opt-in)
@@ -189,7 +189,6 @@ Optional capabilities activated per-project based on needs. The core framework o
 Planned or deferred — not part of the supported feature set in this release. See [docs/roadmap.md](docs/roadmap.md) for the full shipped/preview/deferred classification.
 
 - **Lane B Compliance Engine** — Pluggable compliance profiles for regulated industries (IEC 61508, EU 2023/1230, ISO 13485, IEC 62443). Bidirectional traceability, V&V reports, spec sealing. Lane-gate scaffolding exists in the command bodies; the engine itself requires additional validation before it ships.
-- **Hardware Authentication (PAL)** — YubiKey challenge-response for gate decisions. Development is paused and retirement of the hardware-gate subsystem has been proposed (Spec 654); `gate.provider: prompt` is the supported approval mode today.
 
 ### Foundations
 
@@ -288,7 +287,7 @@ On Windows, `bin\forge.ps1` mirrors `bin/forge` — it auto-detects Git Bash and
 
 ## Reference Implementation
 
-FORGE was built using its own methodology — 667 specs across 177 sessions (2026-03-13 through 2026-08-08), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
+FORGE was built using its own methodology — 700 specs across 193 sessions (2026-03-13 through 2026-08-08), validating the full lifecycle from draft through closure. The development history (specs, session logs, signals, ADRs) demonstrates the methodology in practice.
 
 ## Contributing
 

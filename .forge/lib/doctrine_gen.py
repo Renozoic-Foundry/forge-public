@@ -267,6 +267,16 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _detect_newline(path: Path) -> str:
+    """Spec 707: return the target's on-disk newline convention so a backfill/refresh
+    preserves it (the sha256/drift logic operates on \\n-normalized content and is
+    unaffected). CRLF if any \\r\\n present; else LF. Absent target → LF (new file).
+    A mixed-ending file normalizes to CRLF (dominant-intent default; Constraints)."""
+    if not path.exists():
+        return "\n"
+    return "\r\n" if b"\r\n" in path.read_bytes() else "\n"
+
+
 def _full_block(block_id: str, version: str, content: str) -> str:
     start = f"<!-- FORGE:DOCTRINE-BEGIN id={block_id} version={version} sha256={_sha256(content)} -->"
     end = f"<!-- FORGE:DOCTRINE-END id={block_id} -->"
@@ -287,6 +297,7 @@ def generate(source_path: Path, target_path: Path, block_id: str, version: str, 
     new_block = _full_block(block_id, version, content)
 
     target_text = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
+    nl = _detect_newline(target_path)  # Spec 707: preserve the target's newline convention
     block_re = _block_re(block_id)
     m = block_re.search(target_text)
 
@@ -301,19 +312,19 @@ def generate(source_path: Path, target_path: Path, block_id: str, version: str, 
                 "Not overwritten — resolve manually or re-run with --force."
             )
         new_text = target_text[: m.start()] + new_block + target_text[m.end():]
-        target_path.write_text(new_text, encoding="utf-8", newline="\n")
+        target_path.write_text(new_text, encoding="utf-8", newline=nl)
         return "WRITTEN", f"regenerated managed block id={block_id} in {target_path} (version={version})"
 
     anchor_re = _anchor_re(block_id)
     am = anchor_re.search(target_text)
     if am:
         new_text = target_text[: am.start()] + new_block + target_text[am.end():]
-        target_path.write_text(new_text, encoding="utf-8", newline="\n")
+        target_path.write_text(new_text, encoding="utf-8", newline=nl)
         return "WRITTEN", f"placed managed block id={block_id} in {target_path} at anchor (version={version})"
 
     sep = "" if (not target_text or target_text.endswith("\n\n")) else ("\n" if target_text.endswith("\n") else "\n\n")
     new_text = target_text + sep + new_block + "\n"
-    target_path.write_text(new_text, encoding="utf-8", newline="\n")
+    target_path.write_text(new_text, encoding="utf-8", newline=nl)
     return "WRITTEN", f"appended managed block id={block_id} to {target_path} (version={version})"
 
 

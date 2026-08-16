@@ -8,8 +8,8 @@ for the call-site audit table.
 
 A generic, key-agnostic consent primitive functionally equivalent to
 `scripts/copier-hooks/forge_consent_gate.py`'s poisoned-answers-file defense
-(Spec 090/437/445/447/448 threat model), proven against the six consent-gated
-keys (`test_command`, `lint_command`, `harness_command`, `include_nanoclaw`,
+(Spec 090/437/445/447/448 threat model), proven against the five consent-gated
+keys (`test_command`, `lint_command`, `harness_command`,
 `include_advanced_autonomy`, `include_two_stage_review`) via fixtures/tests,
 and now (Spec 591) also live-invoked from `/forge stoke`'s `apply` subcommand.
 
@@ -45,7 +45,6 @@ NAMED_KEYS = (
     "test_command",
     "lint_command",
     "harness_command",
-    "include_nanoclaw",
     "include_advanced_autonomy",
     "include_two_stage_review",
 )

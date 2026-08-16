@@ -1,6 +1,7 @@
 ---
 description: "Challenges conventional thinking — surfaces radically simpler or more ambitious approaches"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

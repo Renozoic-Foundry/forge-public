@@ -2,7 +2,7 @@
 
 **Spec 066 — FORGE Workspace Write Access Requirements**
 
-Use this protocol when a FORGE agent is running in a read-only environment (CI sandbox, restricted cloud workspace) and cannot write files directly. The agent emits a structured write-request message via NanoClaw; a receiving agent or human applies the changes to the project filesystem.
+Use this protocol when a FORGE agent is running in a read-only environment (CI sandbox, restricted cloud workspace) and cannot write files directly. The agent emits a structured write-request message via the project's configured messaging channel (or presents it inline in conversation); a receiving agent or human applies the changes to the project filesystem.
 
 ---
 
@@ -19,7 +19,7 @@ Only use this protocol when:
 
 ## Message schema
 
-The agent sends a NanoClaw message with the following structure:
+The agent sends a write-request message with the following structure:
 
 ```
 🔧 FORGE WRITE REQUEST — <project-name> / <date>
@@ -71,7 +71,7 @@ When a write-request message arrives:
    git add <listed files>
    git commit -m "<proposed commit message>"
    ```
-4. **Reply** to the NanoClaw message: `"applied — commit <short sha>"` or `"rejected: <reason>"`.
+4. **Reply** to the write-request message: `"applied — commit <short sha>"` or `"rejected: <reason>"`.
 
 ---
 
@@ -80,7 +80,7 @@ When a write-request message arrives:
 When `GATE [write-access]: FAIL`:
 
 1. Collect all pending writes (spec status updates, session log, backlog changes, etc.) into a single write-request message.
-2. Send via `mcp__nanoclaw__send_message` to the configured channel (check `docs/sessions/evolve-config.yaml` → `nanoclaw_task_id`, or send to the main FORGE group).
+2. Send via the project's configured messaging channel, or present it inline in conversation for the operator to relay.
 3. Wait for `"applied"` reply before reporting task complete.
 4. Record in session log: `"Note: changes applied via delegated-write protocol (read-only environment)."`
 

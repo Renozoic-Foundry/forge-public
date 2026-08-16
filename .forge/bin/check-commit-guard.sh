@@ -125,15 +125,49 @@ fi
 #     "do not commit" multi-tab coordination file).
 # Each path is matched individually against an anchored (^...$) regex so a path
 # segment can never satisfy the pattern by appearing inside a longer string.
-SESSION_ARTIFACT_RE='^docs/sessions/([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]+\.(md|json)|error-log\.md|insights-log\.md|scratchpad\.md|watchlist\.md|context-snapshot\.md|pattern-analysis\.md|evolve-state\.md|activity-log\.jsonl|signals\.md)$'
+# Spec 676 (EA-005): forge.paths-aware session-artifact exemption, security-hardened
+# (Spec 676 review). NO dynamic regex is built from config: a configured value containing ERE
+# metacharacters (|, (, ), .*) must not be able to widen the allow surface — the guard's
+# self-authorization property. Directory prefixes are compared LITERALLY (quoted string
+# equality); only the artifact BASENAME is a fixed, config-independent anchored regex. The
+# allowed-dir list is a bash array iterated quoted (no word splitting, no glob expansion), so a
+# configured path with spaces or glob characters is handled as one literal string. Config is
+# resolved in an isolated subshell with PROJECT_DIR bound to the committing worktree
+# (STATE_ROOT), so forge_path validates against it rather than the hook's cwd. The classic
+# docs/sessions dir is always allowed; resolution fails closed to docs/sessions alone.
+SESSION_ARTIFACT_BASENAME_RE='^([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]+\.(md|json)|error-log\.md|insights-log\.md|scratchpad\.md|watchlist\.md|context-snapshot\.md|pattern-analysis\.md|evolve-state\.md|activity-log\.jsonl|signals\.md)$'
+SESSION_DIRS=("docs/sessions")
+if [ -f "$STATE_ROOT/.forge/lib/config.sh" ]; then
+  _cfg_sessions="$(
+    PROJECT_DIR="$STATE_ROOT"
+    # shellcheck disable=SC1090
+    . "$STATE_ROOT/.forge/lib/config.sh" 2>/dev/null \
+      && forge_config_load "$STATE_ROOT/AGENTS.md" 2>/dev/null \
+      && forge_path sessions 2>/dev/null
+  )"
+  _cfg_sessions="${_cfg_sessions%/}"
+  if [ -n "$_cfg_sessions" ] && [ "$_cfg_sessions" != "docs/sessions" ]; then
+    SESSION_DIRS+=("$_cfg_sessions")
+  fi
+fi
 if STAGED=$(git -C "$STATE_ROOT" diff --cached --name-only 2>/dev/null) && [ -n "$STAGED" ]; then
   all_session_artifacts=1
   while IFS= read -r staged_path; do
     [ -z "$staged_path" ] && continue
-    if ! printf '%s\n' "$staged_path" | grep -qE "$SESSION_ARTIFACT_RE"; then
-      all_session_artifacts=0
-      break
+    _base="${staged_path##*/}"
+    _dir="${staged_path%/*}"
+    # A top-level path (no slash) has _dir == staged_path and can never be a session dir.
+    if [ "$_dir" = "$staged_path" ]; then all_session_artifacts=0; break; fi
+    # Basename must match the fixed, config-independent artifact allowlist.
+    if ! printf '%s\n' "$_base" | grep -qE "$SESSION_ARTIFACT_BASENAME_RE"; then
+      all_session_artifacts=0; break
     fi
+    # Directory prefix must LITERALLY equal an allowed session dir (no regex, no globbing).
+    _dir_ok=0
+    for _d in "${SESSION_DIRS[@]}"; do
+      if [ "$_dir" = "$_d" ]; then _dir_ok=1; break; fi
+    done
+    if [ "$_dir_ok" -eq 0 ]; then all_session_artifacts=0; break; fi
   done <<< "$STAGED"
   if [ "$all_session_artifacts" -eq 1 ]; then
     exit 0

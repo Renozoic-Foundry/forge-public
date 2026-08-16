@@ -190,8 +190,7 @@ Identify the spec number from $ARGUMENTS or infer from session context.
    - Change lane is not `hotfix` at L3 (hotfixes delegated only at L4)
 
 4. **Select enforcement mode**:
-   - If Lane B AND `forge.gate.provider` is `pal`: mode = **PAL**
-   - Else if delegation-eligible: mode = **Delegated**
+   - If delegation-eligible: mode = **Delegated**
    - Else: mode = **Chat** (default)
 
 5. Report: "Enforcement mode: **<mode>** — <reason>."
@@ -199,8 +198,6 @@ Identify the spec number from $ARGUMENTS or infer from session context.
 6. **If Delegated mode**: Skip human review steps (Step 2d validator still runs mechanically). After all mechanical gates pass, proceed directly to the delegated close path (Step 3 addendum below). Report: "All ACs are machine-verifiable at L<N>. Closing via delegated mode — no human prompt required."
 
 7. **If Chat mode**: Proceed normally — human reviews the Review Brief at Step 3.
-
-8. **If PAL mode**: Proceed normally but deliver Review Brief via NanoClaw for hardware-authenticated approval.
 
 ### [mechanical] Current Goal tracking (Spec 091)
 After each major step (2, 3, 4, 5, 6, 7, 8, 9), emit a compact progress line at the end of your output:
@@ -246,7 +243,7 @@ If the spec has an `Approved-SHA:` field in frontmatter:
    - Emit `GATE [spec-integrity]: FAIL — SHA-256 mismatch. Approved: <stored hash>, Current: <computed hash>.`
    - Present choice:
      - **(a) "approve with modified spec"** — log override in the Revision Log: `YYYY-MM-DD: Spec integrity override — Approved-SHA mismatch accepted. Old: <stored>, New: <computed>.` Update `Approved-SHA:` to the new hash. Continue closing.
-     - **(b) "halt"** — stop closing. Report: "Run /revise NNN to formally revise the spec, then /implement NNN to re-approve."
+     - **(b) "halt"** — apply the **Step 2-reset (Spec 704)** (return the spec to `in-progress` + log the spec-integrity FAIL), then stop closing. Report: "Run /revise NNN to formally revise the spec, then /implement NNN to re-approve."
 
 No `Approved-SHA:` field (legacy spec): skip verification silently.
 
@@ -384,7 +381,7 @@ Sibling to the Step 2b3/2b4 evidence checks. `/implement` Step 6e *detects* live
 
 4. **Gate outcome**:
    - Evidence present → `GATE [live-smoke]: PASS — live-smoke evidence found for <N> Test-Plan step(s).` Proceed.
-   - Test Plan flagged a live step but no `### Live-smoke evidence` present → `GATE [live-smoke]: FAIL — Test Plan contains a live-smoke step ("<matched text>") but no ### Live-smoke evidence was captured. Remediation: re-run /implement Step 6e and execute the live-smoke step (answer "yes" at the prompt), or record the output manually under ### Live-smoke evidence in the spec's Evidence section.` **This is blocking — halt the close workflow. Do not proceed to Step 3.**
+   - Test Plan flagged a live step but no `### Live-smoke evidence` present → `GATE [live-smoke]: FAIL — Test Plan contains a live-smoke step ("<matched text>") but no ### Live-smoke evidence was captured. Remediation: re-run /implement Step 6e and execute the live-smoke step (answer "yes" at the prompt), or record the output manually under ### Live-smoke evidence in the spec's Evidence section.` **This is blocking — halt the close workflow.** Apply the **Step 2-reset (Spec 704)** first (return the spec to `in-progress` + log the missing live-smoke evidence) so the `/implement` Step 6e remediation route can run; the manual-record route needs no reset. **Do not proceed to Step 3.**
 
 <!-- Step 2b6 (plugin-parity gate, Spec 463/581) retired by Spec 558: the Copier source
      (template/.claude/) it compared against was deleted; .claude/ is now the only payload
@@ -493,13 +490,13 @@ Before transitioning to closed, spawn an independent validator to verify accepta
       - Spawn a read-only review agent with: the spec file, the full codebase diff since the spec's `in-progress` date, test results, and instructions from `.forge/templates/review-checklists/spec-compliance.md`.
       - Agent produces structured JSON findings.
       - PASS/WARN: proceed to Stage 2 (WARN also logs findings).
-      - FAIL: emit `GATE [validator/spec-compliance]: FAIL — <findings summary>`. Stop (do not proceed to Step 3).
+      - FAIL: emit `GATE [validator/spec-compliance]: FAIL — <findings summary>`. Apply the **Step 2-reset (Spec 704)** (return the spec to `in-progress` + log the failed stage), then Stop (do not proceed to Step 3).
 
    b. **Stage 2 — Code Quality Review** (if `code_quality` in `forge.review.stages`):
       - Spawn a separate read-only review agent with: changed files (full content), test files, test results, and instructions from `.forge/templates/review-checklists/code-quality.md`. Do NOT provide the spec file (context isolation — Stage 2 reviews code on its own merits).
       - Agent produces structured JSON findings.
       - PASS/WARN: proceed.
-      - FAIL: emit `GATE [validator/code-quality]: FAIL — <findings summary>`. Stop.
+      - FAIL: emit `GATE [validator/code-quality]: FAIL — <findings summary>`. Apply the **Step 2-reset (Spec 704)** (return the spec to `in-progress` + log the failed stage), then Stop.
 
    c. **Combined result**: Validator gate result = worst of Stage 1 and Stage 2 (FAIL > WARN > PASS).
 
@@ -518,6 +515,7 @@ Before transitioning to closed, spawn an independent validator to verify accepta
    f. **If combined FAIL**:
       - Emit: `GATE [validator]: FAIL — two-stage review failed. Stage 1: <result>, Stage 2: <result>.`
       - Print findings from the failing stage(s).
+      - Apply the **Step 2-reset (Spec 704)** — return the spec to `in-progress` and log the failed stage(s) — so the remediation below can run.
       - Report: "Spec NNN failed two-stage validation. Fix the findings with /implement NNN, then run /close NNN again."
       - Stop. Do not proceed to Step 3.
 
@@ -607,7 +605,25 @@ property both specs depend on.
 
    b. Spawn a validator sub-agent using the single-sourced prompt template at
       `${CLAUDE_PLUGIN_ROOT:-.}/.forge/templates/validator-dispatch-prompt.md` (Spec 608 —
-      the SAME template `/implement`'s inline-validation step uses). Fill its placeholders:
+      the SAME template `/implement`'s inline-validation step uses).
+
+      **Pass `model` explicitly, at every separation level (Spec 680).** Read
+      `forge.roles.validator.model` from AGENTS.md and set it as the dispatch `model` option.
+      This is NOT conditional on `forge.roles.separation` — the only model instruction in this
+      command used to live inside the `context-scoped`/`full` branch at step 2b, and FORGE runs
+      `separation: none`, so the configured tier was read on a branch this project never takes.
+      Measured consequence: `/close 679` on 2026-08-13 reported "validator PASS 16/16" from a
+      validator that had actually run on `claude-haiku-4-5` — the tier Spec 680 supersedes at
+      0.8/10 defect recall (SIG-680-02). Agent-file frontmatter does NOT supply the model; only
+      the dispatch option does.
+
+      **Surface the observed tier with the verdict.** After the validator returns, read its
+      subagent transcript's per-message `model` field and report it alongside the outcome, e.g.
+      `GATE [validator]: PASS — all N criteria verified independently (ran on claude-sonnet-5).`
+      Never report the configured value as though it were the observed one — a value the harness
+      records is not a value the harness applies (Spec 679's lesson).
+
+      Fill its placeholders:
       - `{{REDACTED_SPEC_PATH}}`: `tmp/evidence/SPEC-NNN-YYYYMMDD/NNN-redacted.md`
       - `{{ORIGINAL_SPEC_PATH}}`: `docs/specs/NNN-<slug>.md`
       - `{{EVIDENCE_EXCERPT_BLOCK}}`: the `evidence-excerpt` output from step a5
@@ -678,6 +694,7 @@ property both specs depend on.
    e. **If validation_result is FAIL**:
       - Emit: `GATE [validator]: FAIL — <count> acceptance criteria failed independent verification.`
       - Print each failed criterion with the validator's notes.
+      - Apply the **Step 2-reset (Spec 704)** — return the spec to `in-progress` and log the failed criteria — so the remediation below can run.
       - Report: "Spec NNN failed independent validation. Fix the failed criteria with /implement NNN, then run /close NNN again."
       - Stop. Do not proceed to Step 3.
 
@@ -982,7 +999,6 @@ After all Step 2 gates complete, generate the Review Brief — the primary outpu
 
      Wait for response. `approve`: proceed to Step 3. `reject`: stop and report "Close halted by reviewer." `show`: expand the requested item, then re-present the choice block. `consensus`: run /consensus inline for this spec, log the outcome in the session JSON sidecar, then re-present the choice block with consensus outcome.
    - **Delegated mode**: no "Needs Your Review" items (all machine-verifiable) — skip human prompt, proceed directly to Step 3 with the delegated close addendum.
-   - **PAL mode**: present the Review Brief, deliver via NanoClaw for hardware-authenticated approval, wait for tap/reject, then proceed to Step 3.
 
 Emit: `GATE [review-brief]: PASS — Review Brief generated. Mode: <mode>. Machine-verified: <N>. Needs review: <N>. Machine-handled: <N>.`
 
@@ -1255,6 +1271,47 @@ Propagate today's session-log `## Error autopsies` / `## Chat insights` entries 
 
 See `docs/process-kit/signal-capture-conventions.md` for the propagation invariant and remediation guidance.
 
+## [mechanical] Step 2-reset — Blocking-gate FAIL status reset (Spec 704)
+
+Several gates above HALT `/close` while the spec is at `Status: implemented` and name a remediation
+that routes through `/implement` (or `/revise` then `/implement`). But `/implement`'s Step 2 guard
+refuses a spec at `implemented`, so the prescribed remediation cannot run and the path of least
+resistance becomes `--force` past a finding the gate correctly raised. This reset returns the spec to
+a state its own remediation can act on. **It changes nothing in `/implement`'s guard** — the guard is
+unchanged and still refuses genuinely-finished (`closed`/`deprecated`) work; the fix works only by
+moving the spec back to `in-progress`, which `/implement` Step 2 already admits.
+
+**When to apply (decidable rule).** Apply this reset when a gate HALTS `/close` while the spec is at
+`implemented` **AND** its remediation requires re-running `/implement`. That is exactly this set:
+- Step 2 spec-integrity SHA-mismatch, choice (b) "halt" (`/revise` then `/implement`);
+- Step 2c live-smoke FAIL (re-run `/implement` Step 6e — it also has a manual-record escape, but the
+  `/implement` route needs the reset);
+- Step 2d Stage-1 (spec-compliance) FAIL, Stage-2 (code-quality) FAIL, and combined two-stage FAIL;
+- Step 2d independent-validator FAIL.
+
+**Do NOT apply it** to gates whose remediation is fixed in place and re-checked by re-running
+`/close` — repro-provenance (fix the command, re-run `/close`) and signal-propagation (fix the
+malformed block, re-run `/close`). Those leave the spec at `implemented` correctly, because nothing
+about them requires re-running `/implement`.
+
+**Steps (perform BEFORE the branch's "Stop").**
+1. Set `Status: in-progress` in the spec frontmatter. This is the ONLY status this reset writes; it
+   never writes `closed`.
+2. Refresh `Last updated: YYYY-MM-DD` (today) so the Spec 621 dormancy check (`/now` Step 1c) does
+   not misfire on the bounced-back spec.
+3. Add a Revision Log entry: `YYYY-MM-DD: <gate> FAILed at /close — Status returned to in-progress so
+   the prescribed /implement remediation can run. Failed: <criteria/findings named by the gate>.`
+   Name the specific gate and failed criteria — a status moving backwards silently is
+   indistinguishable from tampering.
+4. Derived views: in split-file mode (`${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py
+   ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --skip-canonical-write` → `skip`, the
+   FORGE-self default) `/close` writes no README/backlog/CHANGELOG row and `/matrix` reconciles the
+   index from frontmatter, so no extra write is needed. In canonical-write mode (`proceed`), set the
+   README row and the backlog row to `in-progress`, mirroring Step 3's forward writes.
+
+Then perform the branch's "Stop — do not proceed to Step 3." The operator runs the prescribed
+`/implement NNN`, which admits the now-`in-progress` spec through its existing Step 2 guard.
+
 ## [mechanical] Step 3 — Status transition
 Perform the `closed` status transition:
 
@@ -1299,7 +1356,7 @@ See: docs/process-kit/close-validator-coverage.md for the full /close 318 incide
 
 a. Set `Status: closed` and add `Closed: YYYY-MM-DD` in the spec file.
 b. Add a dated revision entry based on enforcement mode:
-   - Chat/PAL: `YYYY-MM-DD: Closed via /close (Chat mode). Human confirmed all deliverables.`
+   - Chat: `YYYY-MM-DD: Closed via /close (Chat mode). Human confirmed all deliverables.`
    - Delegated: `YYYY-MM-DD: Closed via /close (Delegated mode). All ACs machine-verified at L<N>. Evidence hash: sha256:<first 16 chars>...`
 b1. **Write-side mode check (Spec 399)**: run `${CLAUDE_PLUGIN_ROOT:-.}/.forge/bin/forge-py ${CLAUDE_PLUGIN_ROOT:-.}/.forge/lib/derived_state.py --skip-canonical-write`. `skip` (split-file mode) → the canonical README/backlog/CHANGELOG writes in c/d/e are SUPPRESSED — the spec frontmatter edit in (a) is the source of truth and the renderer-owned `.generated/` artifacts pick up the new status on next render; the event-stream write in `e1` proceeds unchanged. `proceed` → perform c/d/e (Phase 1 dual-write). Nonzero exit → abort the canonical-write block and surface stderr — do NOT default to either behavior.
 c. **README sync (Spec 086)** [proceed mode only]: read the spec's `Status:` field (authoritative), update its row in `docs/specs/README.md` to match exactly (add one if missing).
@@ -1311,7 +1368,7 @@ e. **CHANGELOG entry** [proceed mode only]: `- YYYY-MM-DD: Spec NNN closed via /
 e1. **Append spec-closed event (Spec 254 — Approach D)**: append to the per-spec event stream:
    ```bash
    mkdir -p .forge/state/events/NNN
-   echo '{"timestamp":"<ISO 8601>","event_type":"spec-closed","payload":{"mode":"<chat|delegated|pal>","message":"<one-line close note>"}}' >> .forge/state/events/NNN/spec-closed.jsonl
+   echo '{"timestamp":"<ISO 8601>","event_type":"spec-closed","payload":{"mode":"<chat|delegated>","message":"<one-line close note>"}}' >> .forge/state/events/NNN/spec-closed.jsonl
    ```
    Append-only; conflict-free. Consumed by `render_changelog.py` for the chronological log. Coexists with the CHANGELOG.md edit above during Phase 1; a Phase 2 spec retires the duplicate canonical write once events burn in.
 e2. **Score-Audit observed record (Spec 368)**: append an `observed` record to the score-audit log via the shared helper — do NOT inline JSON here. The helper computes `wallclock_days`, `session_count`, `revise_rounds`, `validator_outcome`, `da_outcome`, `tc_overrun_derived`, and `creation_ts_source` from artifacts (git timestamps, session JSON sidecars, spec body); Claude does NOT compute or transcribe duration values.

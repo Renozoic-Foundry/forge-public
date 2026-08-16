@@ -1,6 +1,7 @@
 ---
 description: "Evaluates token cost, cycle time, redundancy elimination, and lean process adherence"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

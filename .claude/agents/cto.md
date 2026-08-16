@@ -1,6 +1,7 @@
 ---
 description: "Evaluates architecture, scalability, technical debt, and integration patterns"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

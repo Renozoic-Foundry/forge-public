@@ -49,7 +49,7 @@ QUESTION_SPEC_090_SECURITY = (
 )
 RATIONALE_SPEC_090_SECURITY = (
     "Spec 090 + Spec 437: security-gated keys (test_command, lint_command, "
-    "harness_command, include_nanoclaw, include_advanced_autonomy, "
+    "harness_command, include_advanced_autonomy, "
     "include_two_stage_review) have non-default values in this project's "
     "answers file. Confirming sets both accept_security_overrides=true "
     "(Spec 090) and accept_security_overrides_confirmed=true (Spec 437 "
@@ -91,7 +91,6 @@ SECURITY_GATED_KEYS: tuple[str, ...] = (
     "test_command",
     "lint_command",
     "harness_command",
-    "include_nanoclaw",
     "include_advanced_autonomy",
     "include_two_stage_review",
 )

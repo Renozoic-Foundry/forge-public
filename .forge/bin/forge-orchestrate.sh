@@ -154,7 +154,7 @@ YAML
   echo "Monitor: forge-status.sh --sessions"
   echo "Log:     tail -f ${DETACH_LOG}"
   echo ""
-  echo "Pipeline running in background. Gate decisions will send NanoClaw messages if configured."
+  echo "Pipeline running in background. Check the log for gate decisions."
   exit 0
 fi
 

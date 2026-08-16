@@ -14,8 +14,8 @@ Resolution order (Spec 557 Req 7):
 
 A malformed source falls through to the next one — never a crash.
 
-SECURITY BOUNDARY (consensus R1 reframe, operator-ratified 2026-07-14): the six
-consent-gated keys (test_command, lint_command, harness_command, include_nanoclaw,
+SECURITY BOUNDARY (consensus R1 reframe, operator-ratified 2026-07-14): the five
+consent-gated keys (test_command, lint_command, harness_command,
 include_advanced_autonomy, include_two_stage_review) are deliberately NOT
 resolvable here. They stay render-gated via forge_consent_gate.py (secret:true).
 Requests for them exit 4.
@@ -54,7 +54,6 @@ CONSENT_GATED = (
     "test_command",
     "lint_command",
     "harness_command",
-    "include_nanoclaw",
     "include_advanced_autonomy",
     "include_two_stage_review",
 )

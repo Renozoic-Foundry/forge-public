@@ -1,6 +1,7 @@
 ---
 description: "Evaluates operator experience — cognitive load, learnability, and interaction quality"
 model: sonnet
+effort: high
 tools: Read, Grep, Glob, WebSearch
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

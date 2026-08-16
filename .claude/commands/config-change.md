@@ -27,7 +27,7 @@ If $ARGUMENTS is `?` or `help`:
     --log                                — show the config change audit log
   Behavior:
     - Agent proposes a structured diff of the config change
-    - Human receives diff via NanoClaw (or inline) for approve/reject/modify
+    - Human receives diff inline for approve/reject/modify
     - Approved changes are applied with automatic rollback point saved
     - All proposals, decisions, and outcomes are recorded in the audit log
     - Scope limits and cool-down period are enforced
@@ -46,7 +46,7 @@ Defaults:
 - `allowed_sections: [autonomy-levels, model-tiering, test-commands, permission-mode, autopilot-envelope]` — sections of AGENTS.md/CLAUDE.md that agents may propose changes to (`autopilot-envelope` = the `forge.autopilot` block, Spec 531 — proposals to flip `scheduled.enabled` route here; the applied entry must name `forge.autopilot.scheduled` so the /close envelope validator can match it)
 - `blocked_sections: [two-hard-rules, spec-gate, change-lanes]` — sections that are always out of scope
 - `cool_down_days: 7` — minimum days between applied config changes
-- `notify_via: inline` — `inline` (present in conversation) or `nanoclaw`
+- `notify_via: inline` — presents the proposal inline in conversation
 - `audit_log: docs/sessions/config-change-audit.md`
 
 If `--log` in $ARGUMENTS: read and display `docs/sessions/config-change-audit.md`. Stop.
@@ -124,8 +124,6 @@ Present the proposal to the human (including the Review Brief from Step 3b):
 > | **3** | `modify` | Edit the diff above, then re-present for approval |
 > | **4** | `defer` | Save proposal to audit log as pending; apply later |
 ```
-
-If `notify_via=nanoclaw`: send the proposal via `mcp__nanoclaw__send_message` with the diff. Wait for operator reply before proceeding.
 
 **DO NOT apply the change without explicit human approval.** If the human does not respond, treat as `defer`.
 

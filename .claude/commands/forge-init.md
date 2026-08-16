@@ -110,9 +110,14 @@ argument-hint: "[path] [--layout contained|classic]"
    ```bash
    # forge:spec-668-forge-init-baseline:start
    git init <TARGET>
-   git -C <TARGET> status --porcelain --untracked-files=all > <TARGET>/.git/forge-init-baseline.txt
+   git -C <TARGET> status --porcelain -z --untracked-files=all > <TARGET>/.git/forge-init-baseline.txt
    # forge:spec-668-forge-init-baseline:end
    ```
+   **`-z` (Spec 677)**: `git status --porcelain` is not one-record-per-line — it C-quotes
+   paths with spaces/special characters, and R/C (rename/copy) records carry a second
+   NUL-terminated field (the old path). The baseline snapshot and the Step 11 diff below
+   both parse NUL-delimited output and consume that extra field, so a quoted path or a
+   rename record can never be misread.
    `create-new` mode is only entered when `<TARGET>` did not exist before this run (mode-dispatch
    precondition in Step 0c above), so the baseline is always empty in production — the snapshot
    is defense-in-depth, not a response to an observed defect: it keeps Step 11's commit scoped to
@@ -155,7 +160,6 @@ argument-hint: "[path] [--layout contained|classic]"
       summary: null
 
     features:
-      nanoclaw: null
       compliance: null
       publications: null
       devcontainer: true
@@ -181,26 +185,39 @@ argument-hint: "[path] [--layout contained|classic]"
     # Compared by PATH (not the full status line) so a pre-existing path that changes
     # status class between the baseline snapshot and this commit (e.g. untracked ->
     # modified) is still recognized as pre-existing and excluded.
+    # Parsed NUL-delimited (Spec 677): a line-based fixed-offset slice breaks on a
+    # C-quoted path (spaces/special chars) and misreads an R/C rename/copy record's
+    # second NUL field (the old path) as a bogus status entry. `${entry#???}` strips
+    # the fixed 3-char "XY " prefix via pattern removal, not a start-offset slice.
     forge_init_existing_paths=()
     if [ -f "$baseline" ]; then
-      while IFS= read -r line; do
-        [ -n "$line" ] && forge_init_existing_paths+=("${line:3}")
+      while IFS= read -r -d '' entry; do
+        [ -z "$entry" ] && continue
+        xy="${entry:0:2}"
+        forge_init_existing_paths+=("${entry#???}")
+        case "$xy" in R*|C*|*R|*C) IFS= read -r -d '' _forge_init_baseline_src ;; esac
       done < "$baseline"
     fi
     forge_init_paths=()
-    while IFS= read -r line; do
-      [ -z "$line" ] && continue
-      forge_init_path="${line:3}"
+    while IFS= read -r -d '' entry; do
+      [ -z "$entry" ] && continue
+      xy="${entry:0:2}"
+      forge_init_path="${entry#???}"
+      case "$xy" in R*|C*|*R|*C) IFS= read -r -d '' _forge_init_status_src ;; esac
       forge_init_is_new=true
       for forge_init_prior in "${forge_init_existing_paths[@]}"; do
         if [ "$forge_init_path" = "$forge_init_prior" ]; then forge_init_is_new=false; break; fi
       done
       if [ "$forge_init_is_new" = true ]; then forge_init_paths+=("$forge_init_path"); fi
-    done < <(git -C <TARGET> status --porcelain --untracked-files=all)
+    done < <(git -C <TARGET> status --porcelain -z --untracked-files=all)
     rm -f "$baseline"
     if [ ${#forge_init_paths[@]} -gt 0 ]; then
       git -C <TARGET> add -- "${forge_init_paths[@]}"
-      git -C <TARGET> commit -m "Initial FORGE project scaffold" -- "${forge_init_paths[@]}"
+      # Spec 676 (EA-002): stage only — the initial commit is handed to the operator.
+      # The commit guard correctly denies an agent-run bootstrap commit (no spec
+      # marker at bootstrap; staged paths are scaffold files, not session artifacts).
+      echo "Scaffold staged. Create the initial commit with:"
+      echo "  git -C <TARGET> commit -m \"Initial FORGE project scaffold\""
     fi
     # forge:spec-668-forge-init-commit-block:end
     ```
@@ -211,7 +228,7 @@ argument-hint: "[path] [--layout contained|classic]"
     Target: <TARGET>
     Files created: <count>
     Git initialized: yes
-    Initial commit: yes
+    Initial commit: staged (Spec 676 — run the printed git commit command)
     Onboarding seed: .forge/onboarding.yaml (status: pending)
     Onboarding: .forge/onboarding.yaml planted (status: pending)
     On first agent session, run /onboarding to customize this project.
@@ -357,7 +374,6 @@ argument-hint: "[path] [--layout contained|classic]"
     | `Budget Ceilings` | framework | Take template (new in FORGE) |
     | `Agent Role Separation` | framework | Take template (new in FORGE) |
     | `Runtime Configuration` | framework | Take template (new in FORGE) |
-    | `NanoClaw Integration` | framework | Take template (new — onboarding decides if kept) |
     | `Repo Conventions` | framework | Take template |
     | `Known pitfalls` | project | Preserve entirely |
     | `Changelog gate` | project | Preserve |
@@ -408,7 +424,6 @@ argument-hint: "[path] [--layout contained|classic]"
     mode: legacy-upgrade
 
     features:
-      nanoclaw: null
       compliance: null
       publications: null
       devcontainer: true

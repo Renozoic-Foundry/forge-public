@@ -121,8 +121,8 @@ explicit scripts/muscle memory). Run this branch, then go straight to Step 0pre.
 & ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/bin/forge-py ${env:CLAUDE_PLUGIN_ROOT:-'.'}/.forge/lib/stoke.py apply --live-root . --upstream <scratch-upstream-dir>
 ```
 
-**Live-wired (Spec 591)**: the six consent-gated keys (`test_command`,
-`lint_command`, `harness_command`, `include_nanoclaw`, `include_advanced_autonomy`,
+**Live-wired (Spec 591)**: the five consent-gated keys (`test_command`,
+`lint_command`, `harness_command`, `include_advanced_autonomy`,
 `include_two_stage_review`) now resolve through `runtime_consent_gate.py`'s live gate
 as well — `stoke.py apply`'s shared `_live_gate_six_keys` call site runs ahead of
 every merge, logging one `consent-gate-live` JSONL event per resolved key to

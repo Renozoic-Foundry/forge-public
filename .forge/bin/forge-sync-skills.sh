@@ -143,6 +143,26 @@ write_skill() {
   local arg_hint
   arg_hint="$(read_frontmatter_key "$src" "argument-hint")"
 
+  # Spec 679: pass model/effort through from canonical when present. The trailing-CR strip
+  # is deliberate and not redundant — read_frontmatter_key's `sub(/$/, "", stripped)` is a
+  # no-op regex (it substitutes empty AT end-of-line), so on a CRLF checkout the value would
+  # arrive as `opus[1m]<CR>`. The harness silently ignores an unrecognized model value, so a
+  # stray CR would degrade the declaration to a no-op with no error anywhere.
+  local decl_model decl_effort
+  decl_model="$(read_frontmatter_key "$src" "model")"
+  decl_model="${decl_model%$'\r'}"
+  decl_effort="$(read_frontmatter_key "$src" "effort")"
+  decl_effort="${decl_effort%$'\r'}"
+
+  # Spec 679: reject an unknown effort level at sync time rather than shipping a silently
+  # inert value into a consumer payload. Model values are deliberately NOT validated — the
+  # set of valid aliases and IDs changes over time and a stale allowlist would reject
+  # legitimate values. Runs BEFORE any write, so a violation leaves SKILL.md untouched.
+  if [[ -n "$decl_effort" ]] && [[ ! "$decl_effort" =~ ^(low|medium|high|xhigh|max)$ ]]; then
+    echo "VIOLATION: skill '${name}' declares effort: '${decl_effort}' — must be one of low|medium|high|xhigh|max" >&2
+    return 1
+  fi
+
   mkdir -p "$out_dir"
   {
     printf -- '---\n'
@@ -151,6 +171,14 @@ write_skill() {
     printf 'disable-model-invocation: %s\n' "$dmi"
     if [[ -n "$arg_hint" ]]; then
       printf 'argument-hint: %s\n' "$arg_hint"
+    fi
+    # Spec 679: declared model/effort. Emitted only when canonical declares them, so a
+    # command that declares neither produces byte-identical output to the pre-679 generator.
+    if [[ -n "$decl_model" ]]; then
+      printf 'model: %s\n' "$decl_model"
+    fi
+    if [[ -n "$decl_effort" ]]; then
+      printf 'effort: %s\n' "$decl_effort"
     fi
     printf -- '---\n'
     # Spec 584 (SIG-574-03): the skill lives one directory DEEPER than its canonical command

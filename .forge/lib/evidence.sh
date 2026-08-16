@@ -9,7 +9,7 @@
 #   forge_evidence_diff_summary                          # git diff --stat summary
 #   forge_evidence_ac_checklist "spec_file"             # parse ACs from spec, output checklist
 #   forge_evidence_manifest                             # list all artifacts with sizes
-#   forge_evidence_attach_format                        # output artifact paths for NanoClaw
+#   forge_evidence_attach_format                        # output artifact paths for gate messages
 #
 # Artifacts are stored in: tmp/evidence/SPEC-NNN-YYYYMMDD/
 # All paths are relative to the project root (PROJECT_DIR or CWD).
@@ -249,7 +249,7 @@ forge_evidence_manifest() {
   cat "${_FORGE_EVIDENCE_DIR}/manifest.md"
 }
 
-# --- Format artifact paths for NanoClaw gate messages ---
+# --- Format artifact paths for gate messages ---
 # Output: newline-separated list of absolute artifact paths for attachment
 forge_evidence_attach_format() {
   if [[ -z "$_FORGE_EVIDENCE_DIR" ]]; then
